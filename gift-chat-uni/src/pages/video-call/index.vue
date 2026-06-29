@@ -49,6 +49,16 @@
     </view>
 
     <view class="call-chat">
+      <view v-if="callMessages.length" class="call-chat-feed">
+        <view
+          v-for="message in callMessages"
+          :key="message.id"
+          :class="['call-chat-bubble', isOwnCallMessage(message) && 'is-own']"
+        >
+          <text class="call-chat-author">{{ isOwnCallMessage(message) ? 'Me' : peerLabel }}</text>
+          <text class="call-chat-text">{{ message.content }}</text>
+        </view>
+      </view>
       <input v-model="chatDraft" class="call-chat-input" placeholder="Message..." @confirm="sendCallChat" />
       <button :class="['call-chat-send', canSendChat && 'is-ready']" @click="sendCallChat">Send</button>
       <text v-if="chatNotice" class="call-chat-notice">{{ chatNotice }}</text>
@@ -97,9 +107,10 @@
 import { computed, nextTick, ref } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import TRTC from 'trtc-sdk-v5'
-import type { VideoSessionBootstrap, VideoSessionItem } from '@/types'
+import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoInviteEvent, VideoSessionBootstrap, VideoSessionItem } from '@/types'
 import { useAppStore } from '@/store/app'
 import { uiIcons } from '@/utils/art'
+import { connectChatSocket } from '@/utils/realtime'
 
 const store = useAppStore()
 const bootstrap = ref<VideoSessionBootstrap | null>(null)
@@ -109,6 +120,7 @@ const notice = ref('')
 const chatDraft = ref('')
 const chatSending = ref(false)
 const chatNotice = ref('')
+const callMessages = ref<ChatMessage[]>([])
 const localVideoStarted = ref(false)
 const localAudioStarted = ref(false)
 const localDeviceFailed = ref(false)
@@ -121,6 +133,7 @@ const mutedVideo = ref(false)
 const speakerEnabled = ref(true)
 const trtc = ref<TRTC | null>(null)
 const joined = ref(false)
+const callSocketTask = ref<UniApp.SocketTask | null>(null)
 
 const peerLabel = computed(() => {
   const session = bootstrap.value?.session
@@ -177,6 +190,8 @@ onLoad(async (options) => {
     }
     roomId.value = bootstrap.value?.session.roomId || ''
     sessionId.value = bootstrap.value?.session.id || ''
+    prepareCallChat()
+    connectCallChatSocket()
     await nextTick()
     await joinRoom()
   } catch (error) {
@@ -360,6 +375,81 @@ async function retryLocalDevices() {
   notice.value = ''
   await startLocalDevices(trtc.value)
 }
+
+function prepareCallChat() {
+  const session = bootstrap.value?.session
+  if (!session) return
+
+  if (session.channelType === 'support') {
+    store.setActiveSupportConversation(session.channelId)
+    callMessages.value = store.state.supportMessages.slice(-6)
+    return
+  }
+
+  const friend = store.state.friends.find((item) => item.id === session.channelId)
+  callMessages.value = (friend?.messages || []).slice(-6)
+}
+
+function connectCallChatSocket() {
+  closeCallChatSocket()
+  const session = bootstrap.value?.session
+  if (!session) return
+
+  callSocketTask.value = connectChatSocket(session.channelType, session.channelId, (payload) => {
+    if (isReadReceipt(payload)) {
+      if (payload.readerUsername !== store.state.currentUser?.username) {
+        if (session.channelType === 'support') {
+          store.applySupportReadReceipt(session.channelId)
+        } else {
+          store.applyFriendReadReceipt(session.channelId)
+        }
+      }
+      return
+    }
+
+    if (isVideoInvite(payload) || isPresenceEvent(payload)) {
+      return
+    }
+
+    addCallMessage(payload)
+    if (session.channelType === 'support') {
+      store.pushSupportRealtime(payload, session.channelId)
+      store.markSupportRead().catch(() => {})
+    } else {
+      store.pushFriendRealtime(session.channelId, payload)
+      store.markFriendRead(session.channelId).catch(() => {})
+    }
+  })
+}
+
+function closeCallChatSocket() {
+  callSocketTask.value?.close({})
+  callSocketTask.value = null
+}
+
+function addCallMessage(message: ChatMessage) {
+  if (message.type !== 'text' && message.type !== 'link') return
+  if (!callMessages.value.some((item) => item.id === message.id)) {
+    callMessages.value = [...callMessages.value, message].slice(-6)
+  }
+}
+
+function isOwnCallMessage(message: ChatMessage) {
+  return message.author === 'me'
+}
+
+function isReadReceipt(payload: ChatRealtimePayload): payload is ChatReadReceiptEvent {
+  return 'eventType' in payload && payload.eventType === 'read'
+}
+
+function isVideoInvite(payload: ChatRealtimePayload): payload is VideoInviteEvent {
+  return 'eventType' in payload && payload.eventType === 'video_invite'
+}
+
+function isPresenceEvent(payload: ChatRealtimePayload): payload is PresenceEvent {
+  return 'eventType' in payload && payload.eventType === 'presence'
+}
+
 async function toggleAudio() {
   if (!trtc.value) return
   try {
@@ -410,9 +500,11 @@ async function sendCallChat() {
   try {
     if (session.channelType === 'support') {
       store.setActiveSupportConversation(session.channelId)
-      await store.sendSupport(content)
+      const message = await store.sendSupport(content)
+      addCallMessage(message)
     } else {
-      await store.sendFriendMessage(session.channelId, content)
+      const message = await store.sendFriendMessage(session.channelId, content)
+      addCallMessage(message)
     }
     chatDraft.value = ''
     chatNotice.value = 'Sent'
@@ -433,6 +525,7 @@ async function hangup() {
 
 async function cleanup(updateStatus = false) {
   try {
+    closeCallChatSocket()
     if (trtc.value) {
       await trtc.value.stopRemoteVideo({ userId: '*' }).catch(() => {})
       await trtc.value.stopLocalVideo().catch(() => {})
@@ -771,6 +864,50 @@ async function cleanup(updateStatus = false) {
   grid-template-columns: 1fr 108rpx;
   align-items: center;
   gap: 10rpx;
+}
+
+.call-chat-feed {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 82rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  pointer-events: none;
+}
+
+.call-chat-bubble {
+  max-width: 78%;
+  align-self: flex-start;
+  padding: 10rpx 14rpx;
+  border-radius: 16rpx;
+  background: rgba(0, 0, 0, 0.3);
+  color: #ffffff;
+  box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(12rpx);
+}
+
+.call-chat-bubble.is-own {
+  align-self: flex-end;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2e1616;
+}
+
+.call-chat-author {
+  display: block;
+  margin-bottom: 3rpx;
+  font-size: 18rpx;
+  font-weight: 800;
+  line-height: 1.2;
+  opacity: 0.72;
+}
+
+.call-chat-text {
+  display: block;
+  font-size: 22rpx;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .call-chat-input {

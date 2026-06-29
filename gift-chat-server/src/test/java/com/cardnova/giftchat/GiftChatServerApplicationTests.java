@@ -1,5 +1,7 @@
 package com.cardnova.giftchat;
 
+import com.cardnova.giftchat.api.ForbiddenException;
+import com.cardnova.giftchat.service.WebSocketChannelAuthorizationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -7,14 +9,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -34,6 +40,9 @@ class GiftChatServerApplicationTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private WebSocketChannelAuthorizationService webSocketChannelAuthorizationService;
 
     @Test
     void loginReturnsJwtForActiveUser() throws Exception {
@@ -804,6 +813,60 @@ class GiftChatServerApplicationTests {
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Friendship not accessible"));
+    }
+
+    @Test
+    void websocketChannelAuthorizationRejectsCrossConversationAccess() {
+        assertDoesNotThrow(() ->
+            webSocketChannelAuthorizationService.requireAccess("user-5", "support", "support-2"));
+        assertDoesNotThrow(() ->
+            webSocketChannelAuthorizationService.requireAccess("agent-1", "support", "support-2"));
+        assertDoesNotThrow(() ->
+            webSocketChannelAuthorizationService.requireAccess("admin-1", "support", "support-2"));
+
+        assertThrows(ForbiddenException.class, () ->
+            webSocketChannelAuthorizationService.requireAccess("agent-2", "support", "support-2"));
+        assertThrows(ForbiddenException.class, () ->
+            webSocketChannelAuthorizationService.requireAccess("user-1", "support", "support-2"));
+        assertThrows(ForbiddenException.class, () ->
+            webSocketChannelAuthorizationService.requireAccess("user-5", "friend", "friendship-2"));
+        assertThrows(ForbiddenException.class, () ->
+            webSocketChannelAuthorizationService.requireAccess("user-2", "friend", "friendship-3"));
+    }
+
+    @Test
+    void uploadImageValidatesRealFileContent() throws Exception {
+        String userToken = loginToken("cardnova_user");
+        MockMultipartFile fakeImage = new MockMultipartFile(
+            "file",
+            "fake.png",
+            "image/png",
+            "not really a png".getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/api/uploads/images")
+                .file(fakeImage)
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Unsupported image type"));
+
+        byte[] pngHeaderOnly = new byte[] {
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D
+        };
+        MockMultipartFile realPng = new MockMultipartFile(
+            "file",
+            "avatar.txt",
+            "text/plain",
+            pngHeaderOnly
+        );
+
+        mockMvc.perform(multipart("/api/uploads/images")
+                .file(realPng)
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.mimeType").value("image/png"))
+            .andExpect(jsonPath("$.data.publicUrl", containsString(".png")));
     }
 
     private String loginToken(String identifier) throws Exception {

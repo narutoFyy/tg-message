@@ -50,14 +50,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private String channelKey(WebSocketSession session) {
-        String path = session.getUri() == null ? "" : session.getUri().getPath();
-        String[] parts = path.split("/");
-        if (parts.length < 5) {
+        Object channelType = session.getAttributes().get("channelType");
+        Object channelId = session.getAttributes().get("channelId");
+        if (channelType == null || channelId == null) {
             return "unknown";
         }
-        String type = parts[3];
-        String id = parts[4];
-        return type + ":" + id;
+        return String.valueOf(channelType).toLowerCase() + ":" + channelId;
     }
 
     private String userId(WebSocketSession session) {

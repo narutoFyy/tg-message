@@ -17,9 +17,11 @@ export function connectChatSocket(
   let closedByUser = false
   let attempt = 0
   let socketTask: UniApp.SocketTask | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   const managedSocket = {
     close(options?: Parameters<UniApp.SocketTask['close']>[0]) {
       closedByUser = true
+      clearReconnectTimer()
       if (socketTask) {
         activeSockets.delete(managedSocket as UniApp.SocketTask)
         socketTask.close(options || {})
@@ -28,6 +30,7 @@ export function connectChatSocket(
   } as UniApp.SocketTask
 
   const connect = () => {
+    clearReconnectTimer()
     const task = uni.connectSocket({
       url: buildChatSocketUrl(channelType, channelId)
     })
@@ -80,14 +83,22 @@ export function connectChatSocket(
 
   const scheduleReconnect = () => {
     if (closedByUser) return
+    if (reconnectTimer) return
     attempt += 1
     const delay = Math.min(1000 * attempt, 5000)
     options.onReconnect?.(attempt)
-    setTimeout(() => {
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
       if (!closedByUser) {
         connect()
       }
     }, delay)
+  }
+
+  const clearReconnectTimer = () => {
+    if (!reconnectTimer) return
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
   }
 
   connect()

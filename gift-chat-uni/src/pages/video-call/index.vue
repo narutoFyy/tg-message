@@ -34,6 +34,9 @@
       <text class="caller-status">{{ statusLabel }}</text>
       <text v-if="callHint" class="notice-text">{{ callHint }}</text>
       <text v-if="notice" class="device-notice">{{ notice }}</text>
+      <button v-if="canRetryLocalDevices" class="device-retry-button" @click="retryLocalDevices">
+        {{ deviceRetryLabel }}
+      </button>
       <view class="remote-state-row">
         <text :class="['remote-state-pill', remoteUserJoined && 'is-on']">{{ remoteUserJoined ? 'Peer joined' : 'Waiting peer' }}</text>
         <text :class="['remote-state-pill', remoteAudioAvailable && 'is-on']">{{ remoteAudioAvailable ? 'Peer mic on' : 'Peer mic off' }}</text>
@@ -107,6 +110,8 @@ const chatDraft = ref('')
 const chatSending = ref(false)
 const chatNotice = ref('')
 const localVideoStarted = ref(false)
+const localAudioStarted = ref(false)
+const localDeviceFailed = ref(false)
 const hasRemoteVideo = ref(false)
 const remoteUserJoined = ref(false)
 const remoteAudioAvailable = ref(false)
@@ -155,6 +160,12 @@ const micLabel = computed(() => mutedAudio.value ? 'Mic off' : 'Mic on')
 const cameraLabel = computed(() => mutedVideo.value ? 'Camera off' : 'Camera on')
 const speakerLabel = computed(() => speakerEnabled.value ? 'Speaker on' : 'Speaker off')
 const canSendChat = computed(() => Boolean(chatDraft.value.trim()) && !chatSending.value)
+const canRetryLocalDevices = computed(() => Boolean(trtc.value) && localDeviceFailed.value)
+const deviceRetryLabel = computed(() => {
+  if (mutedAudio.value && mutedVideo.value) return '重新开启麦克风和摄像头'
+  if (mutedAudio.value) return '重新开启麦克风'
+  return '重新开启摄像头'
+})
 
 onLoad(async (options) => {
   try {
@@ -182,6 +193,12 @@ async function joinRoom() {
   if (!currentBootstrap) return
   if (!currentBootstrap.sdkConfigured || !currentBootstrap.userSig) {
     notice.value = currentBootstrap.note || 'TRTC SDKAppID or UserSig is missing'
+    return
+  }
+
+  const environmentNotice = await getEnvironmentNotice()
+  if (environmentNotice) {
+    notice.value = environmentNotice
     return
   }
 
@@ -256,9 +273,11 @@ function bindTrtcEvents(client: TRTC) {
 
 async function startLocalDevices(client: TRTC) {
   const failures: string[] = []
+  localDeviceFailed.value = false
   try {
     await client.startLocalVideo({ view: 'local-video-view' })
     localVideoStarted.value = true
+    mutedVideo.value = false
   } catch (error) {
     mutedVideo.value = true
     failures.push(toDeviceMessage(error, 'camera'))
@@ -266,12 +285,15 @@ async function startLocalDevices(client: TRTC) {
 
   try {
     await client.startLocalAudio()
+    localAudioStarted.value = true
+    mutedAudio.value = false
   } catch (error) {
     mutedAudio.value = true
     failures.push(toDeviceMessage(error, 'microphone'))
   }
 
   if (failures.length) {
+    localDeviceFailed.value = true
     notice.value = failures.join(' ')
   }
 }
@@ -279,24 +301,78 @@ async function startLocalDevices(client: TRTC) {
 function toDeviceMessage(error: unknown, device: 'camera' | 'microphone') {
   const raw = error instanceof Error ? error.message : String(error || '')
   const deviceName = device === 'camera' ? 'Camera' : 'Microphone'
+  if (!isSecureOrigin()) {
+    return '当前页面不是安全连接，浏览器会禁止摄像头和麦克风。请使用 HTTPS 域名访问。'
+  }
   if (/no camera|NotFoundError|not found/i.test(raw)) {
     return `${deviceName} was not found. Check the device connection.`
   }
   if (/permission|NotAllowedError|denied/i.test(raw)) {
     return `${deviceName} permission is blocked. Allow access in the browser address bar.`
   }
+  if (/NotReadableError|TrackStartError|Could not start|already in use|device in use/i.test(raw)) {
+    return `${deviceName} is already in use by another app or browser tab. Close it and retry.`
+  }
   return `${deviceName} failed to start. Check browser permissions and retry.`
+}
+
+async function getEnvironmentNotice() {
+  if (!isSecureOrigin()) {
+    return '当前访问地址不是 HTTPS，浏览器会禁止网页调用摄像头和麦克风。请用 HTTPS 域名重新打开。'
+  }
+
+  try {
+    const checkResult = await TRTC.isSupported()
+    if (checkResult?.result) return ''
+    return buildUnsupportedMessage(checkResult?.detail)
+  } catch {
+    return '当前浏览器环境检测失败，请使用最新版 Chrome、Edge、Safari 或 Firefox 重试。'
+  }
+}
+
+function isSecureOrigin() {
+  if (typeof window === 'undefined') return true
+  const hostname = window.location.hostname
+  return window.isSecureContext || ['localhost', '127.0.0.1', '::1'].includes(hostname)
+}
+
+function buildUnsupportedMessage(detail: Record<string, boolean> = {}) {
+  if (detail.isMediaDevicesSupported === false) {
+    return '当前浏览器不能获取摄像头/麦克风。请确认使用 HTTPS，并换最新版 Chrome、Edge、Safari 或 Firefox。'
+  }
+  if (detail.isWebRTCSupported === false) {
+    return '当前浏览器不支持 WebRTC，无法进行网页视频通话。请换最新版 Chrome、Edge、Safari 或 Firefox。'
+  }
+  if (detail.isBrowserSupported === false) {
+    return '当前浏览器暂不支持 TRTC 网页通话。请换最新版 Chrome、Edge、Safari 或 Firefox。'
+  }
+  if (detail.isH264EncodeSupported === false || detail.isVp8EncodeSupported === false) {
+    return '当前浏览器不支持发布视频所需的编码能力。请更新浏览器或更换设备重试。'
+  }
+  if (detail.isH264DecodeSupported === false || detail.isVp8DecodeSupported === false) {
+    return '当前浏览器不支持播放对方视频所需的解码能力。请更新浏览器或更换设备重试。'
+  }
+  return '当前浏览器环境不支持 TRTC 网页通话。请确认 HTTPS、浏览器版本和摄像头/麦克风权限。'
+}
+
+async function retryLocalDevices() {
+  if (!trtc.value) return
+  notice.value = ''
+  await startLocalDevices(trtc.value)
 }
 async function toggleAudio() {
   if (!trtc.value) return
   try {
     if (mutedAudio.value) {
       await trtc.value.startLocalAudio()
+      localAudioStarted.value = true
       mutedAudio.value = false
     } else {
       await trtc.value.stopLocalAudio()
+      localAudioStarted.value = false
       mutedAudio.value = true
     }
+    localDeviceFailed.value = mutedAudio.value || mutedVideo.value
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Microphone toggle failed'
   }
@@ -314,6 +390,7 @@ async function toggleVideo() {
       localVideoStarted.value = false
       mutedVideo.value = true
     }
+    localDeviceFailed.value = mutedAudio.value || mutedVideo.value
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Camera toggle failed'
   }
@@ -368,6 +445,8 @@ async function cleanup(updateStatus = false) {
     }
     joined.value = false
     localVideoStarted.value = false
+    localAudioStarted.value = false
+    localDeviceFailed.value = false
     hasRemoteVideo.value = false
     remoteUserJoined.value = false
     remoteAudioAvailable.value = false
@@ -618,6 +697,22 @@ async function cleanup(updateStatus = false) {
   color: rgba(255, 255, 255, 0.78);
   font-size: 20rpx;
   line-height: 1.35;
+}
+
+.device-retry-button {
+  min-width: 260rpx;
+  max-width: 72vw;
+  height: 56rpx;
+  margin-top: 12rpx;
+  padding: 0 22rpx;
+  border: 0;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.92);
+  color: #2e1616;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 56rpx;
+  box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, 0.18);
 }
 
 .remote-state-row {

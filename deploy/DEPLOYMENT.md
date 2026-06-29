@@ -55,6 +55,16 @@ If you have a domain:
 
 For a public Android download, HTTPS is strongly recommended even if the first deployment uses only the bare IP.
 
+Video calls require HTTPS in browser deployments. Browser camera/microphone APIs are blocked on plain `http://`
+except for `localhost`, and TRTC Web SDK will not be able to publish local audio/video without media device access.
+After enabling HTTPS, verify:
+
+- The address bar shows a secure HTTPS domain, not a bare IP or HTTP URL.
+- Browser site permissions allow Camera and Microphone for the domain.
+- The browser is a supported modern WebRTC browser such as Chrome, Edge, Safari, or Firefox.
+- No other app or browser tab is occupying the camera or microphone.
+- `/ws/` still upgrades correctly through the HTTPS reverse proxy.
+
 ## 6. Operational notes
 
 - Uploaded chat images, voucher images, and voice messages are stored in the `upload-data` Docker volume.

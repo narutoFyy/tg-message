@@ -1,0 +1,130 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/register/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/admin-login/index",
+      "style": {
+        "navigationBarTitleText": "Admin Login"
+      }
+    },
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/sell-card/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/support/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/support-chat-v2/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/friends/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/transactions/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/me/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/wallet/index",
+      "style": {
+        "navigationBarTitleText": "Wallet"
+      }
+    },
+    {
+      "path": "pages/withdraw/index",
+      "style": {
+        "navigationBarTitleText": "Withdraw"
+      }
+    },
+    {
+      "path": "pages/loan/index",
+      "style": {
+        "navigationBarTitleText": "Loan"
+      }
+    },
+    {
+      "path": "pages/ranking/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/video-call/index",
+      "style": {
+        "navigationBarTitleText": "Video Call"
+      }
+    },
+    {
+      "path": "pages/performance/index",
+      "style": {
+        "navigationBarTitleText": "Performance"
+      }
+    },
+    {
+      "path": "pages/settings/index",
+      "style": {
+        "navigationBarTitleText": "Settings"
+      }
+    },
+    {
+      "path": "pages/blacklist/index",
+      "style": {
+        "navigationBarTitleText": "Blacklist"
+      }
+    },
+    {
+      "path": "pages/admin-rates/index",
+      "style": {
+        "navigationBarTitleText": "Rate Admin"
+      }
+    },
+    {
+      "path": "pages/admin-console/index",
+      "style": {
+        "navigationBarTitleText": "Admin Console"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "CardBrother",
+    "navigationBarBackgroundColor": "#d9ffe7",
+    "backgroundColor": "#ffffff"
+  }
+}

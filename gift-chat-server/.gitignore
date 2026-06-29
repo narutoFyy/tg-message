@@ -1,0 +1,33 @@
+# Build outputs
+target/
+build/
+
+# Logs
+logs/
+*.log
+*.out.log
+*.err.log
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+*.p12
+*.jks
+
+# Runtime uploads / local databases
+uploads/
+*.db
+*.sqlite
+*.mv.db
+*.trace.db
+
+# IDE / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

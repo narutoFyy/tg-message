@@ -1,0 +1,58 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Dependencies / build outputs
+node_modules/
+dist/
+dist-ssr/
+target/
+build/
+.gradle/
+
+# Logs
+logs/
+*.log
+*.out.log
+*.err.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+*.p12
+*.jks
+
+# Runtime data
+uploads/
+*.db
+*.sqlite
+*.mv.db
+*.trace.db
+
+# Generated / temporary test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# Other local project copies / reference workspaces
+card/
+Cardbrother-support-/
+gift-chat/
+superCardMall/
+slide-workspace/

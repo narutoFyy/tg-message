@@ -18,7 +18,7 @@
     <view class="caller-card">
       <image class="caller-avatar" :src="uiIcons.user" mode="aspectFit" />
       <text class="caller-name">{{ peerLabel }}</text>
-      <view class="calling-dots">
+      <view v-if="showCallingDots" class="calling-dots">
         <text></text>
         <text></text>
         <text></text>
@@ -44,6 +44,7 @@
       <view class="primary-controls">
         <view class="control-item">
           <button :class="['round-control', mutedAudio && 'is-off']" @click="toggleAudio">
+            <text class="mic-level-fill" :style="{ height: `${micLevel}%` }"></text>
             <text class="icon-mic"></text>
           </button>
           <text class="control-label">{{ micLabel }}</text>
@@ -105,6 +106,7 @@ const remoteAudioAvailable = ref(false)
 const remoteVideoAvailable = ref(false)
 const mutedAudio = ref(false)
 const mutedVideo = ref(false)
+const micLevel = ref(0)
 const speakerEnabled = ref(true)
 const trtc = ref<TRTC | null>(null)
 const joined = ref(false)
@@ -144,6 +146,11 @@ const remotePlaceholder = computed(() => {
 const callHint = computed(() => {
   if (hasRemoteVideo.value) return ''
   return remotePlaceholder.value
+})
+
+const showCallingDots = computed(() => {
+  const status = bootstrap.value?.session.status || 'created'
+  return status === 'created' || status === 'joining'
 })
 
 const micLabel = computed(() => mutedAudio.value ? 'Mic off' : 'Mic on')
@@ -219,6 +226,15 @@ async function joinRoom() {
 }
 
 function bindTrtcEvents(client: TRTC) {
+  client.on(TRTC.EVENT.AUDIO_VOLUME, (event) => {
+    const localVolume = event?.result?.find((item) => item.userId === '')
+    if (!localVolume || mutedAudio.value || !localAudioStarted.value) {
+      micLevel.value = 0
+      return
+    }
+    micLevel.value = Math.max(0, Math.min(100, Math.round(localVolume.volume || 0)))
+  })
+
   client.on(TRTC.EVENT.REMOTE_USER_ENTER, () => {
     remoteUserJoined.value = true
     clearUnansweredCallTimer()
@@ -281,8 +297,10 @@ async function startLocalDevices(client: TRTC) {
     await client.startLocalAudio()
     localAudioStarted.value = true
     mutedAudio.value = false
+    client.enableAudioVolumeEvaluation(300)
   } catch (error) {
     mutedAudio.value = true
+    micLevel.value = 0
     failures.push(toDeviceMessage(error, 'microphone'))
   }
 
@@ -412,10 +430,14 @@ async function toggleAudio() {
       await trtc.value.startLocalAudio()
       localAudioStarted.value = true
       mutedAudio.value = false
+      micLevel.value = 0
+      trtc.value.enableAudioVolumeEvaluation(300)
     } else {
       await trtc.value.stopLocalAudio()
       localAudioStarted.value = false
       mutedAudio.value = true
+      micLevel.value = 0
+      trtc.value.enableAudioVolumeEvaluation(-1)
     }
     localDeviceFailed.value = mutedAudio.value || mutedVideo.value
   } catch (error) {
@@ -504,6 +526,7 @@ async function cleanup(updateStatus = false) {
 
   await runCleanupStep('close call status socket', async () => closeCallStatusSocket(), cleanupErrors)
   if (client) {
+    await runCleanupStep('stop audio volume meter', async () => client.enableAudioVolumeEvaluation(-1), cleanupErrors)
     await runCleanupStep('stop remote video', async () => client.stopRemoteVideo({ userId: '*' }), cleanupErrors)
     await runCleanupStep('stop local video', async () => client.stopLocalVideo(), cleanupErrors)
     await runCleanupStep('stop local audio', async () => client.stopLocalAudio(), cleanupErrors)
@@ -524,6 +547,7 @@ async function cleanup(updateStatus = false) {
   remoteUserJoined.value = false
   remoteAudioAvailable.value = false
   remoteVideoAvailable.value = false
+  micLevel.value = 0
 
   if (updateStatus && sessionId.value) {
     try {
@@ -816,6 +840,7 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .round-control,
 .soft-control,
 .hangup-control {
+  position: relative;
   width: 124rpx;
   height: 124rpx;
   border: 0;
@@ -825,6 +850,7 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   justify-content: center;
   padding: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .round-control {
@@ -835,6 +861,21 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .round-control.is-off {
   background: rgba(255, 255, 255, 0.32);
   color: rgba(255, 255, 255, 0.82);
+}
+
+.mic-level-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  background: linear-gradient(180deg, rgba(0, 168, 132, 0.34), rgba(0, 168, 132, 0.74));
+  transition: height 0.18s ease;
+  pointer-events: none;
+}
+
+.round-control.is-off .mic-level-fill {
+  height: 0 !important;
 }
 
 .control-label {
@@ -875,6 +916,7 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .icon-phone,
 .icon-switch {
   position: relative;
+  z-index: 1;
   display: block;
   width: 58rpx;
   height: 58rpx;

@@ -1,7 +1,10 @@
 import type { ChatRealtimePayload } from '@/types'
 import { buildChatSocketUrl } from '@/utils/api'
 
-const activeSockets = new Set<UniApp.SocketTask>()
+type SocketCloseOptions = Parameters<UniApp.SocketTask['close']>[0]
+type ManagedSocket = Pick<UniApp.SocketTask, 'close'>
+
+const activeSockets = new Set<ManagedSocket>()
 
 export function connectChatSocket(
   channelType: 'friend' | 'support',
@@ -17,20 +20,32 @@ export function connectChatSocket(
   let closedByUser = false
   let attempt = 0
   let socketTask: UniApp.SocketTask | null = null
+  let webSocket: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   const managedSocket = {
-    close(options?: Parameters<UniApp.SocketTask['close']>[0]) {
+    close(options?: SocketCloseOptions) {
       closedByUser = true
       clearReconnectTimer()
-      if (socketTask) {
-        activeSockets.delete(managedSocket as UniApp.SocketTask)
+      activeSockets.delete(managedSocket)
+      if (webSocket) {
+        const code = options?.code || 1000
+        const reason = options?.reason || ''
+        webSocket.close(code, reason)
+        webSocket = null
+      }
+      if (socketTask && typeof socketTask.close === 'function') {
         socketTask.close(options || {})
       }
     }
-  } as UniApp.SocketTask
+  } as ManagedSocket
 
   const connect = () => {
     clearReconnectTimer()
+    if (useNativeWebSocket()) {
+      connectNativeSocket()
+      return
+    }
+
     const task = uni.connectSocket({
       url: buildChatSocketUrl(channelType, channelId)
     })
@@ -46,9 +61,13 @@ export function connectChatSocket(
     socketTask = task as unknown as UniApp.SocketTask
     activeSockets.add(managedSocket)
 
-    // 检查必要的方法是否存在
-    if (typeof socketTask.onOpen !== 'function') {
-      console.error('socketTask 缺少 onOpen 方法')
+    if (
+      typeof socketTask.onOpen !== 'function'
+      || typeof socketTask.onMessage !== 'function'
+      || typeof socketTask.onClose !== 'function'
+      || typeof socketTask.onError !== 'function'
+    ) {
+      console.error('socketTask 缺少必要的事件方法')
       options.onError?.()
       scheduleReconnect()
       return
@@ -60,12 +79,7 @@ export function connectChatSocket(
     })
 
     socketTask.onMessage((event: { data: string }) => {
-      try {
-        const payload = JSON.parse(event.data as string) as ChatRealtimePayload
-        onMessage(payload)
-      } catch {
-        // ignore malformed payloads
-      }
+      handleMessage(event.data, onMessage)
     })
 
     socketTask.onClose(() => {
@@ -79,6 +93,37 @@ export function connectChatSocket(
       options.onError?.()
       scheduleReconnect()
     })
+  }
+
+  const connectNativeSocket = () => {
+    activeSockets.add(managedSocket)
+    const socket = new WebSocket(buildChatSocketUrl(channelType, channelId))
+    webSocket = socket
+
+    socket.onopen = () => {
+      attempt = 0
+      options.onOpen?.()
+    }
+
+    socket.onmessage = (event) => {
+      handleMessage(event.data, onMessage)
+    }
+
+    socket.onclose = () => {
+      if (webSocket === socket) {
+        webSocket = null
+      }
+      activeSockets.delete(managedSocket)
+      options.onClose?.()
+      scheduleReconnect()
+    }
+
+    socket.onerror = () => {
+      options.onError?.()
+      if (socket.readyState === WebSocket.CLOSED || socket.readyState === WebSocket.CLOSING) {
+        scheduleReconnect()
+      }
+    }
   }
 
   const scheduleReconnect = () => {
@@ -103,7 +148,7 @@ export function connectChatSocket(
 
   connect()
 
-  return managedSocket
+  return managedSocket as UniApp.SocketTask
 }
 
 export function closeAllChatSockets() {
@@ -116,4 +161,17 @@ export function closeAllChatSockets() {
       activeSockets.delete(socket)
     }
   })
+}
+
+function useNativeWebSocket() {
+  return typeof window !== 'undefined' && typeof window.WebSocket === 'function'
+}
+
+function handleMessage(data: unknown, onMessage?: (message: ChatRealtimePayload) => void) {
+  try {
+    const payload = JSON.parse(String(data)) as ChatRealtimePayload
+    onMessage?.(payload)
+  } catch {
+    // ignore malformed payloads
+  }
 }

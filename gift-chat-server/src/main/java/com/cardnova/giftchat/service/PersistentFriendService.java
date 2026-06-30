@@ -7,6 +7,7 @@ import com.cardnova.giftchat.entity.DirectMessageEntity;
 import com.cardnova.giftchat.entity.FriendshipEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.model.ChatMessage;
+import com.cardnova.giftchat.model.ChatMessageSync;
 import com.cardnova.giftchat.model.FriendProfile;
 import com.cardnova.giftchat.model.FriendRequestItem;
 import com.cardnova.giftchat.repository.DirectMessageRepository;
@@ -15,6 +16,8 @@ import com.cardnova.giftchat.repository.BlacklistEntryRepository;
 import com.cardnova.giftchat.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -38,6 +41,8 @@ public class PersistentFriendService {
     private final CurrentUserService currentUserService;
     private final ConversationReadService conversationReadService;
     private final RealtimeChatService realtimeChatService;
+    private final TencentMessageMirrorService tencentMessageMirrorService;
+    private final MessageRateLimitService messageRateLimitService;
 
     public PersistentFriendService(
         FriendshipRepository friendshipRepository,
@@ -46,7 +51,9 @@ public class PersistentFriendService {
         UserRepository userRepository,
         CurrentUserService currentUserService,
         ConversationReadService conversationReadService,
-        RealtimeChatService realtimeChatService
+        RealtimeChatService realtimeChatService,
+        TencentMessageMirrorService tencentMessageMirrorService,
+        MessageRateLimitService messageRateLimitService
     ) {
         this.friendshipRepository = friendshipRepository;
         this.directMessageRepository = directMessageRepository;
@@ -55,6 +62,8 @@ public class PersistentFriendService {
         this.currentUserService = currentUserService;
         this.conversationReadService = conversationReadService;
         this.realtimeChatService = realtimeChatService;
+        this.tencentMessageMirrorService = tencentMessageMirrorService;
+        this.messageRateLimitService = messageRateLimitService;
     }
 
     public List<FriendProfile> getFriends() {
@@ -261,6 +270,7 @@ public class PersistentFriendService {
         if (!isParticipant(friendship, currentUser.getId()) || !"ACCEPTED".equals(friendship.getStatusCode())) {
             throw new IllegalArgumentException("Friendship not accessible");
         }
+        messageRateLimitService.checkSendAllowed(currentUser.getId());
         UserEntity targetUser = friendship.getRequesterUser().getId().equals(currentUser.getId())
             ? friendship.getAddresseeUser()
             : friendship.getRequesterUser();
@@ -268,26 +278,39 @@ public class PersistentFriendService {
             throw new IllegalArgumentException("Direct message blocked by blacklist relationship");
         }
 
+        String clientMessageId = normalizeClientMessageId(request.clientMessageId());
+        if (!clientMessageId.isEmpty()) {
+            DirectMessageEntity existing = directMessageRepository
+                .findBySenderUser_IdAndClientMessageId(currentUser.getId(), clientMessageId)
+                .orElse(null);
+            if (existing != null) {
+                return toOwnChatMessage(existing);
+            }
+        }
+
+        LocalDateTime now = LocalDateTime.now();
         DirectMessageEntity entity = new DirectMessageEntity();
         entity.setId(UUID.randomUUID().toString());
         entity.setFriendship(friendship);
         entity.setSenderUser(currentUser);
         entity.setMessageType(request.messageType().trim().toUpperCase());
         entity.setContent(request.content().trim());
-        entity.setCreatedAt(LocalDateTime.now());
+        entity.setClientMessageId(clientMessageId.isEmpty() ? null : clientMessageId);
+        entity.setServerSeq(directMessageRepository.findMaxServerSeqByFriendshipId(friendship.getId()) + 1);
+        entity.setDeliveryStatus("DELIVERED");
+        entity.setDeliveredAt(now);
+        entity.setFailedReason("");
+        entity.setTencentMirrorStatus("SKIPPED");
+        entity.setTencentMessageKey("");
+        entity.setTencentMirrorError("");
+        entity.setCreatedAt(now);
         DirectMessageEntity saved = directMessageRepository.save(entity);
 
-        friendship.setUpdatedAt(LocalDateTime.now());
+        friendship.setUpdatedAt(now);
         friendshipRepository.save(friendship);
 
-        ChatMessage message = new ChatMessage(
-            saved.getId(),
-            "me",
-            saved.getMessageType().toLowerCase(),
-            saved.getContent(),
-            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
-            "sent"
-        );
+        ChatMessage message = toOwnChatMessage(saved);
+        mirrorAfterCommit(saved);
         realtimeChatService.broadcast(
             RealtimeChatService.friendChannel(friendshipId),
             currentUser.getId(),
@@ -296,9 +319,69 @@ public class PersistentFriendService {
             saved.getMessageType().toLowerCase(),
             saved.getContent(),
             saved.getId(),
-            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt())
+            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
+            saved.getClientMessageId(),
+            saved.getServerSeq(),
+            saved.getDeliveryStatus(),
+            saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
+            saved.getFailedReason()
         );
         return message;
+    }
+
+    public List<ChatMessage> getMessagesAfter(String friendshipId, String afterId) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        FriendshipEntity friendship = friendshipRepository.findById(friendshipId)
+            .orElseThrow(() -> new IllegalArgumentException("Friendship not found"));
+        if (!isParticipant(friendship, currentUser.getId()) || !"ACCEPTED".equals(friendship.getStatusCode())) {
+            throw new IllegalArgumentException("Friendship not accessible");
+        }
+
+        UserEntity counterpart = friendship.getRequesterUser().getId().equals(currentUser.getId())
+            ? friendship.getAddresseeUser()
+            : friendship.getRequesterUser();
+        LocalDateTime counterpartReadAt = conversationReadService.getReadAt("friend", friendship.getId(), counterpart.getId());
+        List<DirectMessageEntity> messages = directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendship.getId());
+        int startIndex = cursorStartIndex(messages.stream().map(DirectMessageEntity::getId).toList(), afterId);
+        return messages.stream()
+            .skip(startIndex)
+            .map(message -> toChatMessage(message, currentUser.getId(), counterpartReadAt))
+            .toList();
+    }
+
+    public ChatMessageSync syncMessages(String friendshipId, long sinceSeq) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        FriendshipEntity friendship = friendshipRepository.findById(friendshipId)
+            .orElseThrow(() -> new IllegalArgumentException("Friendship not found"));
+        if (!isParticipant(friendship, currentUser.getId()) || !"ACCEPTED".equals(friendship.getStatusCode())) {
+            throw new IllegalArgumentException("Friendship not accessible");
+        }
+
+        UserEntity counterpart = friendship.getRequesterUser().getId().equals(currentUser.getId())
+            ? friendship.getAddresseeUser()
+            : friendship.getRequesterUser();
+        LocalDateTime lastReadAt = conversationReadService.getLastReadAt("friend", friendshipId, currentUser.getId());
+        LocalDateTime counterpartReadAt = conversationReadService.getReadAt("friend", friendship.getId(), counterpart.getId());
+        long normalizedSinceSeq = Math.max(0L, sinceSeq);
+        List<DirectMessageEntity> syncMessages = normalizedSinceSeq == 0L
+            ? directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendshipId)
+            : directMessageRepository.findByFriendshipIdSinceSeq(friendshipId, normalizedSinceSeq);
+        long latestSeq = directMessageRepository.findMaxServerSeqByFriendshipId(friendshipId);
+        long readSeq = lastReadAt == null ? 0L : directMessageRepository.findReadSeqByFriendshipId(friendshipId, lastReadAt);
+        int unreadCount = countUnread(
+            directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendshipId),
+            currentUser.getId(),
+            lastReadAt
+        );
+
+        return new ChatMessageSync(
+            syncMessages.stream()
+                .map(message -> toChatMessage(message, currentUser.getId(), counterpartReadAt))
+                .toList(),
+            latestSeq,
+            readSeq,
+            unreadCount
+        );
     }
 
     private FriendProfile toFriendProfile(FriendshipEntity friendship, String currentUserId) {
@@ -318,16 +401,7 @@ public class PersistentFriendService {
             "ACTIVE".equals(counterpart.getStatusCode()) ? "online" : "offline",
             FRIEND_TAGS,
             messages.stream()
-                .map(message -> new ChatMessage(
-                    message.getId(),
-                    message.getSenderUser().getId().equals(currentUserId) ? "me" : "friend",
-                    message.getMessageType().toLowerCase(),
-                    message.getContent(),
-                    MESSAGE_TIME_FORMATTER.format(message.getCreatedAt()),
-                    message.getSenderUser().getId().equals(currentUserId)
-                        ? ((counterpartReadAt != null && !message.getCreatedAt().isAfter(counterpartReadAt)) ? "read" : "sent")
-                        : "none"
-                ))
+                .map(message -> toChatMessage(message, currentUserId, counterpartReadAt))
                 .toList(),
             (int) messages.stream()
                 .filter(message -> !message.getSenderUser().getId().equals(currentUserId))
@@ -340,6 +414,81 @@ public class PersistentFriendService {
     private boolean isParticipant(FriendshipEntity friendship, String currentUserId) {
         return friendship.getRequesterUser().getId().equals(currentUserId)
             || friendship.getAddresseeUser().getId().equals(currentUserId);
+    }
+
+    private ChatMessage toChatMessage(DirectMessageEntity message, String currentUserId, LocalDateTime counterpartReadAt) {
+        boolean ownMessage = message.getSenderUser().getId().equals(currentUserId);
+        return new ChatMessage(
+            message.getId(),
+            ownMessage ? "me" : "friend",
+            message.getMessageType().toLowerCase(),
+            message.getContent(),
+            MESSAGE_TIME_FORMATTER.format(message.getCreatedAt()),
+            ownMessage && counterpartReadAt != null && !message.getCreatedAt().isAfter(counterpartReadAt) ? "read" : ownMessage ? "sent" : "none",
+            message.getClientMessageId() == null ? "" : message.getClientMessageId(),
+            message.getServerSeq() == null ? 0L : message.getServerSeq(),
+            normalizeDeliveryStatus(message.getDeliveryStatus()),
+            message.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(message.getDeliveredAt()),
+            message.getFailedReason() == null ? "" : message.getFailedReason()
+        );
+    }
+
+    private ChatMessage toOwnChatMessage(DirectMessageEntity message) {
+        return new ChatMessage(
+            message.getId(),
+            "me",
+            message.getMessageType().toLowerCase(),
+            message.getContent(),
+            MESSAGE_TIME_FORMATTER.format(message.getCreatedAt()),
+            "sent",
+            message.getClientMessageId() == null ? "" : message.getClientMessageId(),
+            message.getServerSeq() == null ? 0L : message.getServerSeq(),
+            normalizeDeliveryStatus(message.getDeliveryStatus()),
+            message.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(message.getDeliveredAt()),
+            message.getFailedReason() == null ? "" : message.getFailedReason()
+        );
+    }
+
+    private String normalizeClientMessageId(String clientMessageId) {
+        String normalized = clientMessageId == null ? "" : clientMessageId.trim();
+        if (normalized.length() > 64) {
+            throw new IllegalArgumentException("clientMessageId must be 64 characters or less");
+        }
+        return normalized;
+    }
+
+    private String normalizeDeliveryStatus(String deliveryStatus) {
+        return deliveryStatus == null || deliveryStatus.isBlank() ? "delivered" : deliveryStatus.toLowerCase();
+    }
+
+    private int countUnread(List<DirectMessageEntity> messages, String currentUserId, LocalDateTime lastReadAt) {
+        return (int) messages.stream()
+            .filter(message -> !message.getSenderUser().getId().equals(currentUserId))
+            .filter(message -> lastReadAt == null || message.getCreatedAt().isAfter(lastReadAt))
+            .count();
+    }
+
+    private void mirrorAfterCommit(DirectMessageEntity message) {
+        message.setTencentMirrorStatus("PENDING");
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            tencentMessageMirrorService.mirrorDirectMessage(message.getId());
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                tencentMessageMirrorService.mirrorDirectMessage(message.getId());
+            }
+        });
+    }
+
+    private int cursorStartIndex(List<String> messageIds, String afterId) {
+        String normalized = afterId == null ? "" : afterId.trim();
+        if (normalized.isEmpty()) {
+            return 0;
+        }
+        int index = messageIds.indexOf(normalized);
+        return index < 0 ? 0 : index + 1;
     }
 
     private String relationshipStatus(UserEntity currentUser, UserEntity targetUser) {

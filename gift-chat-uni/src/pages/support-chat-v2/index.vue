@@ -120,7 +120,13 @@
               <!-- 消息元信息 -->
               <view v-if="msg.author !== 'system'" class="message-meta">
                 <text class="msg-time">{{ msg.createdAt }}</text>
-                <text v-if="isMine(msg)" class="msg-status">{{ msg.readState === 'read' ? '✓✓' : '✓' }}</text>
+                <text
+                  v-if="isMine(msg)"
+                  :class="['msg-status', { failed: msg.readState === 'failed' }]"
+                  @click.stop="msg.readState === 'failed' && retryMessage(msg)"
+                >
+                  {{ messageStatusLabel(msg) }}
+                </text>
               </view>
             </view>
 
@@ -333,17 +339,28 @@
         <text>{{ workbenchText.selectCustomer }}</text>
       </view>
     </view>
+
+    <view v-if="incomingVideoInvite" class="incoming-call-mask">
+      <view class="incoming-call-dialog">
+        <text class="incoming-call-title">Video call</text>
+        <text class="incoming-call-copy">{{ incomingVideoInvite.initiatorUsername }} is calling you.</text>
+        <view class="incoming-call-actions">
+          <button class="incoming-call-btn decline" @click="declineIncomingVideo">Decline</button>
+          <button class="incoming-call-btn answer" @click="answerIncomingVideo">Answer</button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { createBroadcast, translateToChinese, uploadImage } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { uiIcons } from '@/utils/art'
-import type { ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem } from '@/types'
+import type { ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
 import type { TransactionItem, WithdrawalItem } from '@/types'
 
@@ -366,8 +383,10 @@ const isMobile = ref(false)
 const activeConversationId = ref('')
 const handledVideoInvites = new Set<string>()
 const localVideoStatuses = ref<Record<string, VideoSessionItem['status']>>({})
+const incomingVideoInvite = ref<VideoInviteEvent | null>(null)
 const translations = reactive<Record<string, string>>({})
 const translatingIds = new Set<string>()
+const pendingRouteConversationId = ref('')
 
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT')
@@ -491,12 +510,18 @@ const profileDisplayName = computed(() => {
   return activeCustomer.value ? customerDisplayName(activeCustomer.value) : workbenchText.value.noCustomer
 })
 
+onLoad((query) => {
+  pendingRouteConversationId.value = typeof query?.conversationId === 'string' ? query.conversationId : ''
+})
+
 onShow(() => {
   checkMobile()
   store.bootstrap().then(() => {
     applyPendingSupportDraft()
     if (store.state.supportConversations.length > 0) {
-      activeConversationId.value = store.state.supportConversations[0].conversationId
+      const routeConversation = store.state.supportConversations.find(item => item.conversationId === pendingRouteConversationId.value)
+      activeConversationId.value = routeConversation?.conversationId || store.state.supportConversations[0].conversationId
+      pendingRouteConversationId.value = ''
       store.setActiveSupportConversation(activeConversationId.value)
       store.refreshSupportCustomerProfile(activeConversationId.value).catch(() => {})
       connectSocket()
@@ -862,6 +887,11 @@ function connectSocket() {
         return
       }
 
+      if (isVideoSessionStatus(payload)) {
+        handleVideoSessionStatus(payload)
+        return
+      }
+
       // 处理普通消息
       if (shouldPlayIncomingSound(payload, conversationId)) {
         playIncomingSound()
@@ -872,6 +902,7 @@ function connectSocket() {
     }, {
       onOpen: () => {
         socketStatus.value = 'online'
+        store.recoverSupportMessages(conversationId).catch(() => {})
         refreshPresence()
       },
       onClose: () => {
@@ -881,6 +912,9 @@ function connectSocket() {
       onError: () => {
         socketStatus.value = 'offline'
         refreshPresence()
+      },
+      onReconnect: () => {
+        store.recoverSupportMessages(conversationId).catch(() => {})
       }
     })
   } catch (error) {
@@ -961,8 +995,20 @@ function isVideoInvite(payload: ChatRealtimePayload): payload is VideoInviteEven
   return 'eventType' in payload && payload.eventType === 'video_invite'
 }
 
+function isVideoSessionStatus(payload: ChatRealtimePayload): payload is VideoSessionStatusEvent {
+  return 'eventType' in payload && payload.eventType === 'video_session_status'
+}
+
 function isPresenceEvent(payload: ChatRealtimePayload): payload is PresenceEvent {
   return 'eventType' in payload && payload.eventType === 'presence'
+}
+
+function handleVideoSessionStatus(event: VideoSessionStatusEvent) {
+  const updated = store.applyVideoSessionStatus(event)
+  setLocalVideoStatus(event.sessionId, updated?.status || event.status)
+  if (incomingVideoInvite.value?.sessionId === event.sessionId && isTerminalVideoStatus(event.status)) {
+    incomingVideoInvite.value = null
+  }
 }
 
 function handleVideoInvite(invite: VideoInviteEvent) {
@@ -973,31 +1019,36 @@ function handleVideoInvite(invite: VideoInviteEvent) {
   const currentUsername = store.state.currentUser?.username
   if (!currentUsername || invite.initiatorUsername === currentUsername) return
 
-  uni.showModal({
-    title: '视频通话',
-    content: `${invite.initiatorUsername} 正在呼叫您...`,
-    confirmText: '接听',
-    cancelText: '拒绝',
-    async success(result) {
-      if (!result.confirm) {
-        await store.updateVideoSessionStatus(invite.sessionId, 'rejected').catch(() => {})
-        setLocalVideoStatus(invite.sessionId, 'rejected')
-        return
-      }
-      try {
-        await store.updateVideoSessionStatus(invite.sessionId, 'joining')
-        setLocalVideoStatus(invite.sessionId, 'joining')
-        const bootstrap = await store.getVideoSessionBootstrap(invite.sessionId)
-        const encoded = encodeURIComponent(JSON.stringify(bootstrap))
-        uni.navigateTo({ url: `/pages/video-call/index?bootstrap=${encoded}` })
-      } catch (error) {
-        uni.showToast({
-          title: error instanceof Error ? error.message : '无法加入通话',
-          icon: 'none'
-        })
-      }
+  incomingVideoInvite.value = invite
+}
+
+function isTerminalVideoStatus(status: VideoSessionItem['status']) {
+  return ['ended', 'missed', 'rejected'].includes(status)
+}
+
+async function declineIncomingVideo() {
+  const invite = incomingVideoInvite.value
+  if (!invite) return
+  incomingVideoInvite.value = null
+  await store.updateVideoSessionStatus(invite.sessionId, 'rejected').catch(() => {})
+  setLocalVideoStatus(invite.sessionId, 'rejected')
+}
+
+async function answerIncomingVideo() {
+  const invite = incomingVideoInvite.value
+  if (!invite) return
+  incomingVideoInvite.value = null
+  try {
+    const session = await store.updateVideoSessionStatus(invite.sessionId, 'joining')
+    setLocalVideoStatus(invite.sessionId, session.status)
+    if (isTerminalVideoStatus(session.status)) {
+      uni.showToast({ title: 'Call is no longer available', icon: 'none' })
+      return
     }
-  })
+    await openVideoSession(invite.sessionId)
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : 'Unable to join call', icon: 'none' })
+  }
 }
 
 function enableAudio() {
@@ -1083,8 +1134,25 @@ async function handleSend() {
     scrollMessagesToBottom()
     startReadRefresh()
   } catch (error) {
-    uni.showToast({ title: '发送失败', icon: 'none' })
+    uni.showToast({ title: 'Send failed. Tap Retry.', icon: 'none' })
   }
+}
+
+async function retryMessage(message: ChatMessage) {
+  try {
+    await store.retrySupportMessage(message.id)
+    scrollMessagesToBottom()
+    startReadRefresh()
+  } catch (error) {
+    uni.showToast({ title: 'Retry failed', icon: 'none' })
+  }
+}
+
+function messageStatusLabel(message: ChatMessage) {
+  if (message.readState === 'read') return '✓✓'
+  if (message.readState === 'sending') return '✓'
+  if (message.readState === 'failed') return 'Retry'
+  return '✓'
 }
 
 async function sendPendingImage() {
@@ -2112,6 +2180,78 @@ function previewImage(url: string) {
 .msg-status {
   font-size: 12px;
   color: #07c160;
+}
+
+.msg-status.failed {
+  color: #d92d20;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.incoming-call-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(17, 28, 23, 0.48);
+  box-sizing: border-box;
+}
+
+.incoming-call-dialog {
+  width: min(340px, 100%);
+  padding: 20px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 46px rgba(20, 36, 29, 0.24);
+  box-sizing: border-box;
+}
+
+.incoming-call-title,
+.incoming-call-copy {
+  display: block;
+}
+
+.incoming-call-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1f3328;
+}
+
+.incoming-call-copy {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #53645b;
+  word-break: break-word;
+}
+
+.incoming-call-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.incoming-call-btn {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 40px;
+}
+
+.incoming-call-btn.answer {
+  background: #00a884;
+}
+
+.incoming-call-btn.decline {
+  background: #ff5e57;
 }
 
 .image-preview-bar {

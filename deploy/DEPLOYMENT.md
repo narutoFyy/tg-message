@@ -27,6 +27,7 @@ Services:
 - `frontend`: Nginx serving the H5 bundle and reverse-proxying `/api`, `/ws`, and `/uploads`
 - `backend`: Spring Boot app running with `prod` profile
 - `mysql`: MySQL 8 persistent database
+- `redis`: WebSocket fanout bus for multi-instance chat/read/video/presence events
 
 ## 4. Verify the deployment
 
@@ -52,6 +53,8 @@ If you have a domain:
 3. Update:
    - `APP_CORS_ALLOWED_ORIGINS`
    - `APP_UPLOAD_PUBLIC_BASE_URL`
+   - `APP_REALTIME_REDIS_ENABLED`
+   - Tencent Chat values if hybrid mobile delivery/push is enabled: `APP_TENCENT_CHAT_ENABLED`, `APP_TENCENT_CHAT_SDK_APP_ID`, `APP_TENCENT_CHAT_SECRET_KEY` or `APP_TENCENT_CHAT_ADMIN_USER_SIG`
 
 For a public Android download, HTTPS is strongly recommended even if the first deployment uses only the bare IP.
 
@@ -69,5 +72,7 @@ After enabling HTTPS, verify:
 
 - Uploaded chat images, voucher images, and voice messages are stored in the `upload-data` Docker volume.
 - Database state is stored in the `mysql-data` Docker volume.
+- Redis fanout state is transient, but append-only persistence is enabled in the `redis-data` Docker volume for safer restarts.
+- Tencent Chat hybrid mode is disabled by default; when enabled, local messages remain authoritative and Tencent failures are recorded for retry.
 - Flyway runs automatically on backend startup.
 - Production disables demo-user fallback and requires JWT access tokens.

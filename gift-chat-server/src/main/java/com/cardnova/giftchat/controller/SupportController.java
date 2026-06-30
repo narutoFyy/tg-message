@@ -4,6 +4,7 @@ import com.cardnova.giftchat.api.ApiResponse;
 import com.cardnova.giftchat.dto.SendSupportMessageRequest;
 import com.cardnova.giftchat.dto.UpdateSupportConversationNoteRequest;
 import com.cardnova.giftchat.model.ChatMessage;
+import com.cardnova.giftchat.model.ChatMessageSync;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.model.SupportCustomerProfile;
 import com.cardnova.giftchat.model.SupportLedgerReport;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -46,6 +48,22 @@ public class SupportController {
     @PostMapping("/conversations/{conversationId}/read")
     public ApiResponse<SupportConversation> markRead(@PathVariable String conversationId) {
         return ApiResponse.success("support_conversation_read", persistentSupportService.markConversationRead(conversationId));
+    }
+
+    @GetMapping("/conversations/{conversationId}/messages")
+    public ApiResponse<List<ChatMessage>> messagesAfter(
+        @PathVariable String conversationId,
+        @RequestParam(required = false, defaultValue = "") String afterId
+    ) {
+        return ApiResponse.success(persistentSupportService.getMessagesAfter(conversationId, afterId));
+    }
+
+    @GetMapping("/conversations/{conversationId}/messages/sync")
+    public ApiResponse<ChatMessageSync> syncMessages(
+        @PathVariable String conversationId,
+        @RequestParam(required = false, defaultValue = "0") long sinceSeq
+    ) {
+        return ApiResponse.success(persistentSupportService.syncMessages(conversationId, sinceSeq));
     }
 
     @PostMapping("/conversations/{conversationId}/note")

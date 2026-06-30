@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onLaunch } from '@dcloudio/uni-app'
+import { registerNativePushDevice } from '@/utils/push'
 
 onLaunch(() => {
   console.log('Gift Chat Uni Launch')
+  registerNativePushDevice().catch(() => {})
 })
 </script>
 

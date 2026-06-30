@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS app_user (
     password_hash VARCHAR(255) NOT NULL,
     role_code VARCHAR(32) NOT NULL,
     status_code VARCHAR(32) NOT NULL,
+    tencent_user_id VARCHAR(32) UNIQUE,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );
@@ -40,6 +41,15 @@ CREATE TABLE IF NOT EXISTS support_message (
     sender_role VARCHAR(32) NOT NULL,
     message_type VARCHAR(32) NOT NULL,
     content TEXT NOT NULL,
+    client_message_id VARCHAR(64),
+    server_seq BIGINT NOT NULL,
+    delivery_status VARCHAR(32) NOT NULL DEFAULT 'DELIVERED',
+    delivered_at TIMESTAMP,
+    failed_reason VARCHAR(255),
+    tencent_mirror_status VARCHAR(32) NOT NULL DEFAULT 'SKIPPED',
+    tencent_message_key VARCHAR(128),
+    tencent_mirrored_at TIMESTAMP,
+    tencent_mirror_error VARCHAR(255),
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_support_message_conversation FOREIGN KEY (conversation_id) REFERENCES support_conversation (id),
     CONSTRAINT fk_support_message_sender FOREIGN KEY (sender_user_id) REFERENCES app_user (id)
@@ -74,6 +84,15 @@ CREATE TABLE IF NOT EXISTS direct_message (
     sender_user_id VARCHAR(36) NOT NULL,
     message_type VARCHAR(32) NOT NULL,
     content TEXT NOT NULL,
+    client_message_id VARCHAR(64),
+    server_seq BIGINT NOT NULL,
+    delivery_status VARCHAR(32) NOT NULL DEFAULT 'DELIVERED',
+    delivered_at TIMESTAMP,
+    failed_reason VARCHAR(255),
+    tencent_mirror_status VARCHAR(32) NOT NULL DEFAULT 'SKIPPED',
+    tencent_message_key VARCHAR(128),
+    tencent_mirrored_at TIMESTAMP,
+    tencent_mirror_error VARCHAR(255),
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_direct_message_friendship FOREIGN KEY (friendship_id) REFERENCES friendship (id),
     CONSTRAINT fk_direct_message_sender FOREIGN KEY (sender_user_id) REFERENCES app_user (id)
@@ -134,6 +153,22 @@ CREATE TABLE IF NOT EXISTS app_notification (
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_notification_recipient FOREIGN KEY (recipient_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_notification_actor FOREIGN KEY (actor_user_id) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS push_device (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    platform VARCHAR(32) NOT NULL,
+    provider VARCHAR(32) NOT NULL,
+    device_token VARCHAR(255) NOT NULL,
+    device_model VARCHAR(128),
+    app_version VARCHAR(32),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    last_seen_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_push_device_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    CONSTRAINT uq_push_device_token UNIQUE (provider, device_token)
 );
 
 CREATE TABLE IF NOT EXISTS withdrawal_request (

@@ -160,15 +160,48 @@ public class VideoSessionService {
             throw new IllegalArgumentException("Unsupported video session status");
         }
 
+        String currentStatus = entity.getStatusCode().toLowerCase();
+        if (isTerminalStatus(currentStatus)) {
+            return toItem(entity);
+        }
+        if ("active".equals(currentStatus) && "joining".equals(normalized)) {
+            return toItem(entity);
+        }
+
         entity.setStatusCode(normalized.toUpperCase());
         entity.setUpdatedAt(LocalDateTime.now());
         if ("active".equals(normalized) && entity.getStartedAt() == null) {
             entity.setStartedAt(LocalDateTime.now());
         }
-        if (List.of("ended", "missed", "rejected").contains(normalized)) {
+        if (isTerminalStatus(normalized)) {
             entity.setEndedAt(LocalDateTime.now());
         }
-        return toItem(videoSessionRepository.save(entity));
+        VideoSessionEntity saved = videoSessionRepository.save(entity);
+        broadcastVideoSessionStatus(saved);
+        return toItem(saved);
+    }
+
+    private boolean isTerminalStatus(String status) {
+        return List.of("ended", "missed", "rejected").contains(status);
+    }
+
+    private void broadcastVideoSessionStatus(VideoSessionEntity entity) {
+        String channelKey = channelKeyFor(entity);
+        if (channelKey.isBlank()) {
+            return;
+        }
+        VideoSessionItem item = toItem(entity);
+        realtimeChatService.broadcastVideoSessionStatus(
+            channelKey,
+            item.channelType(),
+            item.channelId(),
+            item.id(),
+            item.roomId(),
+            item.status(),
+            item.startedAt(),
+            item.endedAt(),
+            item.updatedAt()
+        );
     }
 
     private VideoSessionEntity createSupportSession(UserEntity currentUser, String conversationId) {
@@ -291,6 +324,14 @@ public class VideoSessionService {
         String safeUsername = username.replaceAll("[^A-Za-z0-9_-]", "_");
         String userId = "u_" + user.getId().replaceAll("[^A-Za-z0-9_-]", "_") + "_" + safeUsername;
         return userId.length() <= 32 ? userId : userId.substring(0, 32);
+    }
+
+    private String channelKeyFor(VideoSessionEntity entity) {
+        return switch (entity.getChannelType().toLowerCase()) {
+            case "support" -> RealtimeChatService.supportChannel(entity.getChannelId());
+            case "friend" -> RealtimeChatService.friendChannel(entity.getChannelId());
+            default -> "";
+        };
     }
 
     private void ensureParticipantOrAdmin(UserEntity currentUser, VideoSessionEntity entity) {

@@ -50,6 +50,10 @@ coverage/
 playwright-report/
 test-results/
 
+# Codex local workflow state
+.codex/
+WORK_STATE.md
+
 # Other local project copies / reference workspaces
 card/
 Cardbrother-support-/

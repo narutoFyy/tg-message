@@ -32,6 +32,9 @@ public class UserEntity {
     @Column(name = "status_code", nullable = false, length = 32)
     private String statusCode;
 
+    @Column(name = "tencent_user_id", length = 32, unique = true)
+    private String tencentUserId;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -92,6 +95,14 @@ public class UserEntity {
 
     public void setStatusCode(String statusCode) {
         this.statusCode = statusCode;
+    }
+
+    public String getTencentUserId() {
+        return tencentUserId;
+    }
+
+    public void setTencentUserId(String tencentUserId) {
+        this.tencentUserId = tencentUserId;
     }
 
     public LocalDateTime getCreatedAt() {

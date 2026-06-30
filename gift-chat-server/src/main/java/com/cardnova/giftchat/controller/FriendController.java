@@ -5,6 +5,7 @@ import com.cardnova.giftchat.dto.CreateFriendRequest;
 import com.cardnova.giftchat.dto.SearchFriendResponse;
 import com.cardnova.giftchat.dto.SendDirectMessageRequest;
 import com.cardnova.giftchat.model.ChatMessage;
+import com.cardnova.giftchat.model.ChatMessageSync;
 import com.cardnova.giftchat.model.FriendProfile;
 import com.cardnova.giftchat.model.FriendRequestItem;
 import com.cardnova.giftchat.service.PersistentFriendService;
@@ -68,6 +69,22 @@ public class FriendController {
     @PostMapping("/{friendshipId}/read")
     public ApiResponse<FriendProfile> markRead(@PathVariable String friendshipId) {
         return ApiResponse.success("friend_read", persistentFriendService.markConversationRead(friendshipId));
+    }
+
+    @GetMapping("/{friendshipId}/messages")
+    public ApiResponse<List<ChatMessage>> messagesAfter(
+        @PathVariable String friendshipId,
+        @RequestParam(required = false, defaultValue = "") String afterId
+    ) {
+        return ApiResponse.success(persistentFriendService.getMessagesAfter(friendshipId, afterId));
+    }
+
+    @GetMapping("/{friendshipId}/messages/sync")
+    public ApiResponse<ChatMessageSync> syncMessages(
+        @PathVariable String friendshipId,
+        @RequestParam(required = false, defaultValue = "0") long sinceSeq
+    ) {
+        return ApiResponse.success(persistentFriendService.syncMessages(friendshipId, sinceSeq));
     }
 
     @PostMapping("/{friendshipId}/messages")

@@ -88,6 +88,17 @@
       </view>
     </view>
 
+    <view v-if="incomingVideoInvite" class="incoming-call-mask">
+      <view class="incoming-call-dialog">
+        <text class="incoming-call-title">Video call</text>
+        <text class="incoming-call-copy">{{ incomingVideoInvite.initiatorUsername }} is calling you.</text>
+        <view class="incoming-call-actions">
+          <button class="incoming-call-btn decline" @click="declineIncomingVideo">Decline</button>
+          <button class="incoming-call-btn answer" @click="answerIncomingVideo">Answer</button>
+        </view>
+      </view>
+    </view>
+
     <text v-if="notice" class="notice-text">{{ notice }}</text>
   </view>
 </template>
@@ -98,7 +109,7 @@ import { useAppStore } from '@/store/app'
 import { createBroadcast, fetchVideoSessionBootstrap, uploadImage } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { uiIcons } from '@/utils/art'
-import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem } from '@/types'
+import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 
 const store = useAppStore()
 const draft = ref('')
@@ -111,6 +122,7 @@ const messageScrollTarget = ref('msg-bottom')
 const audioEnabled = ref(false)
 const handledVideoInvites = new Set<string>()
 const localVideoStatuses = ref<Record<string, VideoSessionItem['status']>>({})
+const incomingVideoInvite = ref<VideoInviteEvent | null>(null)
 
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT')
@@ -177,8 +189,25 @@ function isVideoInvite(payload: ChatRealtimePayload): payload is VideoInviteEven
   return 'eventType' in payload && payload.eventType === 'video_invite'
 }
 
+function isVideoSessionStatus(payload: ChatRealtimePayload): payload is VideoSessionStatusEvent {
+  return 'eventType' in payload && payload.eventType === 'video_session_status'
+}
+
 function isPresenceEvent(payload: ChatRealtimePayload): payload is PresenceEvent {
   return 'eventType' in payload && payload.eventType === 'presence'
+}
+
+function handleVideoSessionStatus(event: VideoSessionStatusEvent) {
+  if (event.channelId !== store.state.supportConversationId) return
+  const updated = store.applyVideoSessionStatus(event)
+  setLocalVideoStatus(event.sessionId, updated?.status || event.status)
+  if (incomingVideoInvite.value?.sessionId === event.sessionId && isTerminalVideoStatus(event.status)) {
+    incomingVideoInvite.value = null
+  }
+}
+
+function isTerminalVideoStatus(status: VideoSessionItem['status']) {
+  return ['ended', 'missed', 'rejected'].includes(status)
 }
 
 function connectSocket() {
@@ -204,6 +233,11 @@ function connectSocket() {
         return
       }
 
+      if (isVideoSessionStatus(payload)) {
+        handleVideoSessionStatus(payload)
+        return
+      }
+
       if (shouldPlayIncomingSound(payload, conversationId)) {
         playIncomingSound()
       }
@@ -213,6 +247,7 @@ function connectSocket() {
     }, {
       onOpen: () => {
         socketStatus.value = 'online'
+        store.recoverSupportMessages(conversationId).catch(() => {})
       },
       onClose: () => {
         socketStatus.value = 'offline'
@@ -222,6 +257,7 @@ function connectSocket() {
       },
       onReconnect: () => {
         socketStatus.value = 'connecting'
+        store.recoverSupportMessages(conversationId).catch(() => {})
       }
     })
   } catch {
@@ -250,26 +286,32 @@ function handleVideoInvite(invite: VideoInviteEvent) {
   const currentUsername = store.state.currentUser?.username
   if (!currentUsername || invite.initiatorUsername === currentUsername) return
 
-  uni.showModal({
-    title: 'Video call',
-    content: `${invite.initiatorUsername} is calling you.`,
-    confirmText: 'Answer',
-    cancelText: 'Decline',
-    async success(result) {
-      if (!result.confirm) {
-        await store.updateVideoSessionStatus(invite.sessionId, 'rejected').catch(() => {})
-        setLocalVideoStatus(invite.sessionId, 'rejected')
-        return
-      }
-      try {
-        await store.updateVideoSessionStatus(invite.sessionId, 'joining')
-        setLocalVideoStatus(invite.sessionId, 'joining')
-        await openVideoSession(invite.sessionId)
-      } catch (error) {
-        showNotice(error instanceof Error ? error.message : 'Unable to join call')
-      }
+  incomingVideoInvite.value = invite
+}
+
+async function declineIncomingVideo() {
+  const invite = incomingVideoInvite.value
+  if (!invite) return
+  incomingVideoInvite.value = null
+  await store.updateVideoSessionStatus(invite.sessionId, 'rejected').catch(() => {})
+  setLocalVideoStatus(invite.sessionId, 'rejected')
+}
+
+async function answerIncomingVideo() {
+  const invite = incomingVideoInvite.value
+  if (!invite) return
+  incomingVideoInvite.value = null
+  try {
+    const session = await store.updateVideoSessionStatus(invite.sessionId, 'joining')
+    setLocalVideoStatus(invite.sessionId, session.status)
+    if (isTerminalVideoStatus(session.status)) {
+      showNotice('Call is no longer available')
+      return
     }
-  })
+    await openVideoSession(invite.sessionId)
+  } catch (error) {
+    showNotice(error instanceof Error ? error.message : 'Unable to join call')
+  }
 }
 
 function stopReadRefresh() {
@@ -1100,6 +1142,72 @@ function showNotice(message: string) {
 .send-btn.active {
   background: #00a884;
   color: #ffffff;
+}
+
+.incoming-call-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(17, 28, 23, 0.48);
+  box-sizing: border-box;
+}
+
+.incoming-call-dialog {
+  width: min(340px, 100%);
+  padding: 20px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 46px rgba(20, 36, 29, 0.24);
+  box-sizing: border-box;
+}
+
+.incoming-call-title,
+.incoming-call-copy {
+  display: block;
+}
+
+.incoming-call-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1f3328;
+}
+
+.incoming-call-copy {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #53645b;
+  word-break: break-word;
+}
+
+.incoming-call-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.incoming-call-btn {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 40px;
+}
+
+.incoming-call-btn.answer {
+  background: #00a884;
+}
+
+.incoming-call-btn.decline {
+  background: #ff5e57;
 }
 
 .notice-text {

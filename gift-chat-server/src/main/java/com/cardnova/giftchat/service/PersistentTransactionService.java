@@ -253,7 +253,7 @@ public class PersistentTransactionService {
         }
 
         boolean valid = switch (current) {
-            case "pending" -> nextStatus.equals("processing") || nextStatus.equals("disputed");
+            case "pending" -> nextStatus.equals("processing") || nextStatus.equals("completed") || nextStatus.equals("disputed");
             case "processing" -> nextStatus.equals("completed") || nextStatus.equals("disputed");
             case "completed", "disputed" -> false;
             default -> false;

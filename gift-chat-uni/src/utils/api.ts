@@ -5,10 +5,12 @@ import type {
   AgentItem,
   BroadcastItem,
   ChatMessage,
+  ChatMessageSync,
   FriendProfile,
   FriendRequest,
   LoanApplicationItem,
   NotificationItem,
+  PushDeviceItem,
   RankingBoard,
   RateItem,
   SearchFriendResult,
@@ -185,6 +187,16 @@ export function markSupportConversationRead(conversationId: string) {
   return request<SupportConversationItem>(`/support/conversations/${conversationId}/read`, 'POST')
 }
 
+export function fetchSupportMessagesAfter(conversationId: string, afterId?: string) {
+  const query = afterId ? `?afterId=${encodeURIComponent(afterId)}` : ''
+  return request<ChatMessage[]>(`/support/conversations/${conversationId}/messages${query}`)
+}
+
+export function syncSupportMessages(conversationId: string, sinceSeq = 0) {
+  const query = `?sinceSeq=${encodeURIComponent(String(Math.max(0, sinceSeq || 0)))}`
+  return request<ChatMessageSync>(`/support/conversations/${conversationId}/messages/sync${query}`)
+}
+
 export function fetchSupportCustomerProfile(conversationId: string) {
   return request<SupportCustomerProfile>(`/support/conversations/${conversationId}/customer-profile`)
 }
@@ -233,6 +245,20 @@ export function fetchRanking(mode: 'sales' | 'invitation', month?: string) {
 
 export function fetchNotifications() {
   return request<NotificationItem[]>('/notifications')
+}
+
+export function registerPushDevice(payload: {
+  platform: string
+  provider: string
+  deviceToken: string
+  deviceModel?: string
+  appVersion?: string
+}) {
+  return request<PushDeviceItem>('/push/devices', 'POST', payload)
+}
+
+export function disablePushDevice(deviceId: string) {
+  return request<PushDeviceItem>(`/push/devices/${deviceId}`, 'DELETE')
 }
 
 export function fetchBroadcasts() {
@@ -390,7 +416,7 @@ export function assignSupportConversation(conversationId: string, agentUsername:
   return request<SupportConversationItem>(`/admin/support/conversations/${conversationId}/assign`, 'POST', { agentUsername })
 }
 
-export function sendSupportMessage(conversationId: string, payload: { content: string; messageType: string }) {
+export function sendSupportMessage(conversationId: string, payload: { content: string; messageType: string; clientMessageId?: string }) {
   return request<ChatMessage>(
     `/support/conversations/${conversationId}/messages`,
     'POST',
@@ -398,12 +424,22 @@ export function sendSupportMessage(conversationId: string, payload: { content: s
   )
 }
 
-export function sendDirectMessage(friendshipId: string, payload: { content: string; messageType: string }) {
+export function sendDirectMessage(friendshipId: string, payload: { content: string; messageType: string; clientMessageId?: string }) {
   return request<ChatMessage>(
     `/friends/${friendshipId}/messages`,
     'POST',
     payload
   )
+}
+
+export function fetchFriendMessagesAfter(friendshipId: string, afterId?: string) {
+  const query = afterId ? `?afterId=${encodeURIComponent(afterId)}` : ''
+  return request<ChatMessage[]>(`/friends/${friendshipId}/messages${query}`)
+}
+
+export function syncFriendMessages(friendshipId: string, sinceSeq = 0) {
+  const query = `?sinceSeq=${encodeURIComponent(String(Math.max(0, sinceSeq || 0)))}`
+  return request<ChatMessageSync>(`/friends/${friendshipId}/messages/sync${query}`)
 }
 
 export function markFriendConversationRead(friendshipId: string) {

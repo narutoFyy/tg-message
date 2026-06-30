@@ -260,6 +260,143 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void supportMessageDeltaReturnsOnlyMessagesAfterKnownCursor() throws Exception {
+        String user1Token = loginToken("cardnova_user");
+
+        MvcResult firstResult = mockMvc.perform(post("/api/support/conversations/support-1/messages")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Cursor baseline",
+                      "messageType": "text"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        String firstMessageId = objectMapper.readTree(firstResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+
+        mockMvc.perform(post("/api/support/conversations/support-1/messages")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Cursor delta",
+                      "messageType": "text"
+                    }
+                    """))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/support/conversations/support-1/messages")
+                .param("afterId", firstMessageId)
+                .header("Authorization", bearer(user1Token)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("Cursor delta")))
+            .andExpect(jsonPath("$.data[?(@.content == 'Cursor baseline')]").doesNotExist());
+    }
+
+    @Test
+    void supportMessageDeltaRejectsCrossConversationAccess() throws Exception {
+        String otherUserToken = loginToken("gift_hunter");
+
+        mockMvc.perform(get("/api/support/conversations/support-1/messages")
+                .header("Authorization", bearer(otherUserToken)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Support conversation not accessible"));
+    }
+
+    @Test
+    void supportMessageSyncUsesServerSeqCursorAndReadAck() throws Exception {
+        String userToken = loginToken("john_smith");
+        String agentToken = loginToken("support_luna");
+
+        MvcResult firstResult = mockMvc.perform(post("/api/support/conversations/support-2/messages")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Support sync baseline",
+                      "messageType": "text"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        long firstSeq = objectMapper.readTree(firstResult.getResponse().getContentAsString())
+            .at("/data/serverSeq")
+            .asLong();
+
+        mockMvc.perform(post("/api/support/conversations/support-2/read")
+                .header("Authorization", bearer(agentToken)))
+            .andExpect(status().isOk());
+
+        MvcResult secondResult = mockMvc.perform(post("/api/support/conversations/support-2/messages")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Support sync delta",
+                      "messageType": "text"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        long secondSeq = objectMapper.readTree(secondResult.getResponse().getContentAsString())
+            .at("/data/serverSeq")
+            .asLong();
+
+        mockMvc.perform(get("/api/support/conversations/support-2/messages/sync")
+                .param("sinceSeq", Long.toString(firstSeq))
+                .header("Authorization", bearer(agentToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.messages[?(@.content == 'Support sync delta')]").exists())
+            .andExpect(jsonPath("$.data.messages[?(@.content == 'Support sync baseline')]").doesNotExist())
+            .andExpect(jsonPath("$.data.latestSeq").value(secondSeq))
+            .andExpect(jsonPath("$.data.readSeq").value(firstSeq))
+            .andExpect(jsonPath("$.data.unreadCount").value(1));
+    }
+
+    @Test
+    void supportMessageClientMessageIdIsIdempotent() throws Exception {
+        String user1Token = loginToken("cardnova_user");
+        String clientMessageId = "support-client-" + UUID.randomUUID();
+
+        MvcResult firstResult = mockMvc.perform(post("/api/support/conversations/support-1/messages")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Idempotent support message",
+                      "messageType": "text",
+                      "clientMessageId": "%s"
+                    }
+                    """.formatted(clientMessageId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.clientMessageId").value(clientMessageId))
+            .andExpect(jsonPath("$.data.serverSeq").isNumber())
+            .andExpect(jsonPath("$.data.deliveryStatus").value("delivered"))
+            .andReturn();
+
+        JsonNode firstData = objectMapper.readTree(firstResult.getResponse().getContentAsString()).path("data");
+
+        mockMvc.perform(post("/api/support/conversations/support-1/messages")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Idempotent support message duplicate body ignored",
+                      "messageType": "text",
+                      "clientMessageId": "%s"
+                    }
+                    """.formatted(clientMessageId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(firstData.path("id").asText()))
+            .andExpect(jsonPath("$.data.serverSeq").value(firstData.path("serverSeq").asLong()))
+            .andExpect(jsonPath("$.data.content").value("Idempotent support message"));
+    }
+
+    @Test
     void supportVideoSessionCreatesActionableVideoMessage() throws Exception {
         String user1Token = loginToken("cardnova_user");
 
@@ -299,6 +436,187 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void friendMessageDeltaReturnsOnlyMessagesAfterKnownCursor() throws Exception {
+        String user1Token = loginToken("cardnova_user");
+        String user2Token = loginToken("gift_hunter");
+
+        MvcResult firstResult = mockMvc.perform(post("/api/friends/friendship-1/messages")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Friend cursor baseline",
+                      "messageType": "text"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        String firstMessageId = objectMapper.readTree(firstResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+
+        mockMvc.perform(post("/api/friends/friendship-1/messages")
+                .header("Authorization", bearer(user2Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Friend cursor delta",
+                      "messageType": "text"
+                    }
+                    """))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/friends/friendship-1/messages")
+                .param("afterId", firstMessageId)
+                .header("Authorization", bearer(user1Token)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("Friend cursor delta")))
+            .andExpect(jsonPath("$.data[?(@.content == 'Friend cursor baseline')]").doesNotExist());
+    }
+
+    @Test
+    void friendMessageSyncUsesServerSeqCursorAndReadAck() throws Exception {
+        String user1Token = loginToken("cardnova_user");
+        String user2Token = loginToken("gift_hunter");
+
+        MvcResult firstResult = mockMvc.perform(post("/api/friends/friendship-1/messages")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Friend sync baseline",
+                      "messageType": "text"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        long firstSeq = objectMapper.readTree(firstResult.getResponse().getContentAsString())
+            .at("/data/serverSeq")
+            .asLong();
+
+        mockMvc.perform(post("/api/friends/friendship-1/read")
+                .header("Authorization", bearer(user2Token)))
+            .andExpect(status().isOk());
+
+        MvcResult secondResult = mockMvc.perform(post("/api/friends/friendship-1/messages")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Friend sync delta",
+                      "messageType": "text"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        long secondSeq = objectMapper.readTree(secondResult.getResponse().getContentAsString())
+            .at("/data/serverSeq")
+            .asLong();
+
+        mockMvc.perform(get("/api/friends/friendship-1/messages/sync")
+                .param("sinceSeq", Long.toString(firstSeq))
+                .header("Authorization", bearer(user2Token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.messages[?(@.content == 'Friend sync delta')]").exists())
+            .andExpect(jsonPath("$.data.messages[?(@.content == 'Friend sync baseline')]").doesNotExist())
+            .andExpect(jsonPath("$.data.latestSeq").value(secondSeq))
+            .andExpect(jsonPath("$.data.readSeq").value(firstSeq))
+            .andExpect(jsonPath("$.data.unreadCount").value(1));
+    }
+
+    @Test
+    void directMessageClientMessageIdIsIdempotent() throws Exception {
+        String user1Token = loginToken("cardnova_user");
+        String clientMessageId = "direct-client-" + UUID.randomUUID();
+
+        MvcResult firstResult = mockMvc.perform(post("/api/friends/friendship-1/messages")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Idempotent direct message",
+                      "messageType": "text",
+                      "clientMessageId": "%s"
+                    }
+                    """.formatted(clientMessageId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.clientMessageId").value(clientMessageId))
+            .andExpect(jsonPath("$.data.serverSeq").isNumber())
+            .andExpect(jsonPath("$.data.deliveryStatus").value("delivered"))
+            .andReturn();
+
+        JsonNode firstData = objectMapper.readTree(firstResult.getResponse().getContentAsString()).path("data");
+
+        mockMvc.perform(post("/api/friends/friendship-1/messages")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "Idempotent direct message duplicate body ignored",
+                      "messageType": "text",
+                      "clientMessageId": "%s"
+                    }
+                    """.formatted(clientMessageId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(firstData.path("id").asText()))
+            .andExpect(jsonPath("$.data.serverSeq").value(firstData.path("serverSeq").asLong()))
+            .andExpect(jsonPath("$.data.content").value("Idempotent direct message"));
+    }
+
+    @Test
+    void pushDeviceRegistrationIsIdempotentAndScopedToCurrentUser() throws Exception {
+        String user1Token = loginToken("cardnova_user");
+        String user2Token = loginToken("gift_hunter");
+        String deviceToken = "native-token-" + UUID.randomUUID();
+
+        MvcResult firstResult = mockMvc.perform(post("/api/push/devices")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "platform": "ios",
+                      "provider": "tencent",
+                      "deviceToken": "%s",
+                      "deviceModel": "iPhone",
+                      "appVersion": "1.0.0"
+                    }
+                    """.formatted(deviceToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.platform").value("ios"))
+            .andExpect(jsonPath("$.data.provider").value("tencent"))
+            .andReturn();
+        String deviceId = objectMapper.readTree(firstResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+
+        mockMvc.perform(post("/api/push/devices")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "platform": "ios",
+                      "provider": "tencent",
+                      "deviceToken": "%s",
+                      "deviceModel": "iPhone 15",
+                      "appVersion": "1.0.1"
+                    }
+                    """.formatted(deviceToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(deviceId))
+            .andExpect(jsonPath("$.data.deviceModel").value("iPhone 15"));
+
+        mockMvc.perform(delete("/api/push/devices/" + deviceId)
+                .header("Authorization", bearer(user2Token)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Push device not accessible"));
+
+        mockMvc.perform(delete("/api/push/devices/" + deviceId)
+                .header("Authorization", bearer(user1Token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.enabled").value(false));
+    }
+
+    @Test
     void transactionsEndpointReturnsScopedOrders() throws Exception {
         String user1Token = loginToken("cardnova_user");
         String user2Token = loginToken("gift_hunter");
@@ -329,6 +647,17 @@ class GiftChatServerApplicationTests {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.status").value("processing"));
+
+        mockMvc.perform(post("/api/transactions/trade-2/status")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "status": "completed"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("completed"));
 
         mockMvc.perform(post("/api/transactions/trade-3/status")
                 .header("Authorization", bearer(user1Token))

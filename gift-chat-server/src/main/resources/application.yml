@@ -26,6 +26,13 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      repositories:
+        enabled: false
 
 app:
   cors:
@@ -43,3 +50,16 @@ app:
     trtc-sdk-app-id: ${APP_VIDEO_TRTC_SDK_APP_ID:1600147465}
     trtc-secret-key: ${APP_VIDEO_TRTC_SECRET_KEY:}
     trtc-user-sig-expire-seconds: ${APP_VIDEO_TRTC_USER_SIG_EXPIRE_SECONDS:604800}
+  realtime:
+    redis:
+      enabled: ${APP_REALTIME_REDIS_ENABLED:false}
+      channel: ${APP_REALTIME_REDIS_CHANNEL:gift-chat:realtime}
+  tencent:
+    chat:
+      enabled: ${APP_TENCENT_CHAT_ENABLED:false}
+      sdk-app-id: ${APP_TENCENT_CHAT_SDK_APP_ID:}
+      secret-key: ${APP_TENCENT_CHAT_SECRET_KEY:}
+      admin-identifier: ${APP_TENCENT_CHAT_ADMIN_IDENTIFIER:administrator}
+      admin-user-sig: ${APP_TENCENT_CHAT_ADMIN_USER_SIG:}
+      user-sig-expire-seconds: ${APP_TENCENT_CHAT_USER_SIG_EXPIRE_SECONDS:604800}
+      rest-base-url: ${APP_TENCENT_CHAT_REST_BASE_URL:https://console.tim.qq.com}

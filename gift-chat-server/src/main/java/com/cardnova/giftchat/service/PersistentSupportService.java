@@ -5,12 +5,15 @@ import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.SupportMessageEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.model.ChatMessage;
+import com.cardnova.giftchat.model.ChatMessageSync;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
 import com.cardnova.giftchat.repository.SupportMessageRepository;
 import com.cardnova.giftchat.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -29,6 +32,8 @@ public class PersistentSupportService {
     private final CurrentUserService currentUserService;
     private final ConversationReadService conversationReadService;
     private final RealtimeChatService realtimeChatService;
+    private final TencentMessageMirrorService tencentMessageMirrorService;
+    private final MessageRateLimitService messageRateLimitService;
     private final UserPresenceService userPresenceService;
     private final UserRepository userRepository;
 
@@ -38,6 +43,8 @@ public class PersistentSupportService {
         CurrentUserService currentUserService,
         ConversationReadService conversationReadService,
         RealtimeChatService realtimeChatService,
+        TencentMessageMirrorService tencentMessageMirrorService,
+        MessageRateLimitService messageRateLimitService,
         UserPresenceService userPresenceService,
         UserRepository userRepository
     ) {
@@ -46,6 +53,8 @@ public class PersistentSupportService {
         this.currentUserService = currentUserService;
         this.conversationReadService = conversationReadService;
         this.realtimeChatService = realtimeChatService;
+        this.tencentMessageMirrorService = tencentMessageMirrorService;
+        this.messageRateLimitService = messageRateLimitService;
         this.userPresenceService = userPresenceService;
         this.userRepository = userRepository;
     }
@@ -121,14 +130,7 @@ public class PersistentSupportService {
             conversation.getAssignedAgent() == null ? "" : conversation.getAssignedAgent().getUsername(),
             conversation.getAgentNote() == null ? "" : conversation.getAgentNote(),
             messages.stream()
-                .map(message -> new ChatMessage(
-                    message.getId(),
-                    resolveAuthor(message, currentUser),
-                    message.getMessageType().toLowerCase(),
-                    message.getContent(),
-                    MESSAGE_TIME_FORMATTER.format(message.getCreatedAt()),
-                    resolveReadState(message.getSenderUser(), currentUser, message.getCreatedAt(), counterpartReadAt)
-                ))
+                .map(message -> toChatMessage(message, currentUser, counterpartReadAt))
                 .toList(),
             (int) messages.stream()
                 .filter(message -> message.getSenderUser() != null)
@@ -151,6 +153,51 @@ public class PersistentSupportService {
         return conversation;
     }
 
+    public List<ChatMessage> getMessagesAfter(String conversationId, String afterId) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        SupportConversationEntity conversation = supportConversationRepository.findById(conversationId)
+            .orElseThrow(() -> new IllegalArgumentException("Support conversation not found"));
+        if (!canAccessConversation(currentUser, conversation)) {
+            throw new IllegalArgumentException("Support conversation not accessible");
+        }
+
+        LocalDateTime counterpartReadAt = resolveSupportCounterpartReadAt(conversation, currentUser);
+        List<SupportMessageEntity> messages = supportMessageRepository.findByConversation_IdOrderByCreatedAtAsc(conversationId);
+        int startIndex = cursorStartIndex(messages.stream().map(SupportMessageEntity::getId).toList(), afterId);
+        return messages.stream()
+            .skip(startIndex)
+            .map(message -> toChatMessage(message, currentUser, counterpartReadAt))
+            .toList();
+    }
+
+    public ChatMessageSync syncMessages(String conversationId, long sinceSeq) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        SupportConversationEntity conversation = supportConversationRepository.findById(conversationId)
+            .orElseThrow(() -> new IllegalArgumentException("Support conversation not found"));
+        if (!canAccessConversation(currentUser, conversation)) {
+            throw new IllegalArgumentException("Support conversation not accessible");
+        }
+
+        long normalizedSinceSeq = Math.max(0L, sinceSeq);
+        LocalDateTime lastReadAt = conversationReadService.getLastReadAt("support", conversationId, currentUser.getId());
+        LocalDateTime counterpartReadAt = resolveSupportCounterpartReadAt(conversation, currentUser);
+        List<SupportMessageEntity> syncMessages = normalizedSinceSeq == 0L
+            ? supportMessageRepository.findByConversation_IdOrderByCreatedAtAsc(conversationId)
+            : supportMessageRepository.findByConversationIdSinceSeq(conversationId, normalizedSinceSeq);
+        long latestSeq = supportMessageRepository.findMaxServerSeqByConversationId(conversationId);
+        long readSeq = lastReadAt == null ? 0L : supportMessageRepository.findReadSeqByConversationId(conversationId, lastReadAt);
+        int unreadCount = countUnread(syncMessagesForUnread(conversationId), currentUser, lastReadAt);
+
+        return new ChatMessageSync(
+            syncMessages.stream()
+                .map(message -> toChatMessage(message, currentUser, counterpartReadAt))
+                .toList(),
+            latestSeq,
+            readSeq,
+            unreadCount
+        );
+    }
+
     @Transactional
     public ChatMessage sendMessage(String conversationId, SendSupportMessageRequest request) {
         UserEntity currentUser = currentUserService.getCurrentUser();
@@ -161,23 +208,29 @@ public class PersistentSupportService {
         if (!canAccessConversation(currentUser, conversation)) {
             throw new IllegalArgumentException("Support conversation not accessible");
         }
+        messageRateLimitService.checkSendAllowed(currentUser.getId());
+
+        String clientMessageId = normalizeClientMessageId(request.clientMessageId());
+        if (!clientMessageId.isEmpty()) {
+            SupportMessageEntity existing = supportMessageRepository
+                .findBySenderUser_IdAndClientMessageId(currentUser.getId(), clientMessageId)
+                .orElse(null);
+            if (existing != null) {
+                return normalizeOwnSupportMessage(existing);
+            }
+        }
 
         SupportMessageEntity saved = appendMessageEntity(
             conversation,
             currentUser,
             isAgent(currentUser) ? "SUPPORT" : "ME",
             request.messageType(),
-            request.content()
+            request.content(),
+            clientMessageId
         );
 
-        ChatMessage message = new ChatMessage(
-            saved.getId(),
-            "me",
-            saved.getMessageType().toLowerCase(),
-            saved.getContent(),
-            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
-            "sent"
-        );
+        ChatMessage message = normalizeOwnSupportMessage(saved);
+        mirrorAfterCommit(saved);
         realtimeChatService.broadcast(
             RealtimeChatService.supportChannel(conversationId),
             currentUser.getId(),
@@ -186,7 +239,12 @@ public class PersistentSupportService {
             saved.getMessageType().toLowerCase(),
             saved.getContent(),
             saved.getId(),
-            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt())
+            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
+            saved.getClientMessageId(),
+            saved.getServerSeq(),
+            saved.getDeliveryStatus(),
+            saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
+            saved.getFailedReason()
         );
         return message;
     }
@@ -200,7 +258,7 @@ public class PersistentSupportService {
         String content
     ) {
         String normalizedRole = senderRole == null ? "SUPPORT" : senderRole.trim().toUpperCase();
-        SupportMessageEntity saved = appendMessageEntity(conversation, sender, normalizedRole, messageType, content);
+        SupportMessageEntity saved = appendMessageEntity(conversation, sender, normalizedRole, messageType, content, "");
         String author = "ADMIN".equals(normalizedRole) ? "support" : normalizedRole.toLowerCase();
 
         realtimeChatService.broadcast(
@@ -211,7 +269,12 @@ public class PersistentSupportService {
             saved.getMessageType().toLowerCase(),
             saved.getContent(),
             saved.getId(),
-            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt())
+            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
+            saved.getClientMessageId(),
+            saved.getServerSeq(),
+            saved.getDeliveryStatus(),
+            saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
+            saved.getFailedReason()
         );
 
         return new ChatMessage(
@@ -260,7 +323,7 @@ public class PersistentSupportService {
 
     @Transactional
     public void appendSystemMessage(SupportConversationEntity conversation, String content) {
-        SupportMessageEntity saved = appendMessageEntity(conversation, null, "SYSTEM", "TEXT", content);
+        SupportMessageEntity saved = appendMessageEntity(conversation, null, "SYSTEM", "TEXT", content, "");
 
         realtimeChatService.broadcast(
             RealtimeChatService.supportChannel(conversation.getId()),
@@ -270,7 +333,12 @@ public class PersistentSupportService {
             "text",
             saved.getContent(),
             saved.getId(),
-            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt())
+            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
+            saved.getClientMessageId(),
+            saved.getServerSeq(),
+            saved.getDeliveryStatus(),
+            saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
+            saved.getFailedReason()
         );
     }
 
@@ -279,8 +347,10 @@ public class PersistentSupportService {
         UserEntity sender,
         String senderRole,
         String messageType,
-        String content
+        String content,
+        String clientMessageId
     ) {
+        LocalDateTime now = LocalDateTime.now();
         SupportMessageEntity entity = new SupportMessageEntity();
         entity.setId(UUID.randomUUID().toString());
         entity.setConversation(conversation);
@@ -288,10 +358,19 @@ public class PersistentSupportService {
         entity.setSenderRole(senderRole.trim().toUpperCase());
         entity.setMessageType(messageType.trim().toUpperCase());
         entity.setContent(content.trim());
-        entity.setCreatedAt(LocalDateTime.now());
+        String normalizedClientMessageId = normalizeClientMessageId(clientMessageId);
+        entity.setClientMessageId(normalizedClientMessageId.isEmpty() ? null : normalizedClientMessageId);
+        entity.setServerSeq(supportMessageRepository.findMaxServerSeqByConversationId(conversation.getId()) + 1);
+        entity.setDeliveryStatus("DELIVERED");
+        entity.setDeliveredAt(now);
+        entity.setFailedReason("");
+        entity.setTencentMirrorStatus("SKIPPED");
+        entity.setTencentMessageKey("");
+        entity.setTencentMirrorError("");
+        entity.setCreatedAt(now);
         SupportMessageEntity saved = supportMessageRepository.save(entity);
 
-        conversation.setUpdatedAt(LocalDateTime.now());
+        conversation.setUpdatedAt(now);
         supportConversationRepository.save(conversation);
         return saved;
     }
@@ -341,6 +420,88 @@ public class PersistentSupportService {
             return null;
         }
         return conversationReadService.getReadAt("support", conversation.getId(), counterpart.getId());
+    }
+
+    private ChatMessage toChatMessage(SupportMessageEntity message, UserEntity currentUser, LocalDateTime counterpartReadAt) {
+        return new ChatMessage(
+            message.getId(),
+            resolveAuthor(message, currentUser),
+            message.getMessageType().toLowerCase(),
+            message.getContent(),
+            MESSAGE_TIME_FORMATTER.format(message.getCreatedAt()),
+            resolveReadState(message.getSenderUser(), currentUser, message.getCreatedAt(), counterpartReadAt),
+            message.getClientMessageId() == null ? "" : message.getClientMessageId(),
+            message.getServerSeq() == null ? 0L : message.getServerSeq(),
+            normalizeDeliveryStatus(message.getDeliveryStatus()),
+            message.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(message.getDeliveredAt()),
+            message.getFailedReason() == null ? "" : message.getFailedReason()
+        );
+    }
+
+    private ChatMessage normalizeOwnSupportMessage(SupportMessageEntity saved) {
+        return new ChatMessage(
+            saved.getId(),
+            "me",
+            saved.getMessageType().toLowerCase(),
+            saved.getContent(),
+            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
+            "sent",
+            saved.getClientMessageId() == null ? "" : saved.getClientMessageId(),
+            saved.getServerSeq() == null ? 0L : saved.getServerSeq(),
+            normalizeDeliveryStatus(saved.getDeliveryStatus()),
+            saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
+            saved.getFailedReason() == null ? "" : saved.getFailedReason()
+        );
+    }
+
+    private String normalizeClientMessageId(String clientMessageId) {
+        String normalized = clientMessageId == null ? "" : clientMessageId.trim();
+        if (normalized.length() > 64) {
+            throw new IllegalArgumentException("clientMessageId must be 64 characters or less");
+        }
+        return normalized;
+    }
+
+    private String normalizeDeliveryStatus(String deliveryStatus) {
+        return deliveryStatus == null || deliveryStatus.isBlank() ? "delivered" : deliveryStatus.toLowerCase();
+    }
+
+    private List<SupportMessageEntity> syncMessagesForUnread(String conversationId) {
+        return supportMessageRepository.findByConversation_IdOrderByCreatedAtAsc(conversationId);
+    }
+
+    private int countUnread(List<SupportMessageEntity> messages, UserEntity currentUser, LocalDateTime lastReadAt) {
+        return (int) messages.stream()
+            .filter(message -> message.getSenderUser() != null)
+            .filter(message -> !message.getSenderUser().getId().equals(currentUser.getId()))
+            .filter(message -> lastReadAt == null || message.getCreatedAt().isAfter(lastReadAt))
+            .count();
+    }
+
+    private void mirrorAfterCommit(SupportMessageEntity message) {
+        if (message.getSenderUser() == null) {
+            return;
+        }
+        message.setTencentMirrorStatus("PENDING");
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            tencentMessageMirrorService.mirrorSupportMessage(message.getId());
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                tencentMessageMirrorService.mirrorSupportMessage(message.getId());
+            }
+        });
+    }
+
+    private int cursorStartIndex(List<String> messageIds, String afterId) {
+        String normalized = afterId == null ? "" : afterId.trim();
+        if (normalized.isEmpty()) {
+            return 0;
+        }
+        int index = messageIds.indexOf(normalized);
+        return index < 0 ? 0 : index + 1;
     }
 
     private UserEntity selectBalancedAgent() {

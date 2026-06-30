@@ -17,6 +17,7 @@ import type {
   SupportLedgerReport,
   TransactionItem,
   VideoSessionBootstrap,
+  VideoSessionStatusEvent,
   VideoSessionItem,
   WithdrawalItem
 } from '@/types'
@@ -62,6 +63,8 @@ import {
   setStoredSessionUser,
   sendDirectMessage,
   sendSupportMessage,
+  syncFriendMessages,
+  syncSupportMessages,
   updateLoanStatus as updateLoanStatusRequest,
   updateRateStatus as updateRateStatusRequest,
   updateRate as updateRateRequest,
@@ -106,6 +109,58 @@ const state = reactive({
 
 const SUPPORT_READ_CACHE_KEY = 'support-read-message-cache'
 const SUPPORT_MESSAGE_READ_STATE_KEY = 'support-message-read-state-cache'
+const CHAT_CURSOR_CACHE_KEY = 'chat-message-cursor-cache'
+
+type ChannelType = 'friend' | 'support'
+
+function cursorKey(channelType: ChannelType, channelId: string) {
+  return `${channelType}:${channelId}`
+}
+
+function getChatCursorCache() {
+  return (uni.getStorageSync(CHAT_CURSOR_CACHE_KEY) || {}) as Record<string, number>
+}
+
+function getChatCursor(channelType: ChannelType, channelId: string) {
+  return getChatCursorCache()[cursorKey(channelType, channelId)] || 0
+}
+
+function setChatCursor(channelType: ChannelType, channelId: string, seq?: number) {
+  if (!channelId || !seq || seq <= 0) return
+  const cache = getChatCursorCache()
+  const key = cursorKey(channelType, channelId)
+  cache[key] = Math.max(cache[key] || 0, seq)
+  uni.setStorageSync(CHAT_CURSOR_CACHE_KEY, cache)
+}
+
+function rememberMessageCursor(channelType: ChannelType, channelId: string, message: ChatMessage) {
+  setChatCursor(channelType, channelId, message.serverSeq)
+}
+
+function latestMessageSeq(messages: ChatMessage[]) {
+  return messages.reduce((latest, message) => Math.max(latest, message.serverSeq || 0), 0)
+}
+
+function rememberSupportConversationCursors(conversations: SupportConversationItem[]) {
+  conversations.forEach((conversation) => {
+    setChatCursor('support', conversation.conversationId, latestMessageSeq(conversation.messages))
+  })
+}
+
+function rememberFriendConversationCursors(friends: FriendProfile[]) {
+  friends.forEach((friend) => {
+    setChatCursor('friend', friend.id, latestMessageSeq(friend.messages))
+  })
+}
+
+function applyReadSeq(messages: ChatMessage[], readSeq: number) {
+  if (!readSeq || readSeq <= 0) return
+  messages.forEach((message) => {
+    if (message.author === 'me' && (message.serverSeq || 0) > 0 && (message.serverSeq || 0) <= readSeq) {
+      message.readState = 'read'
+    }
+  })
+}
 
 function getInitialUser() {
   const storedUser = getStoredSessionUser()
@@ -120,7 +175,54 @@ function mergeUniqueMessage(messages: ChatMessage[], incoming: ChatMessage) {
   if (messages.some((message) => message.id === incoming.id)) {
     return
   }
+  const pendingIndex = messages.findIndex((message) =>
+    message.id.startsWith('local-')
+    && message.author === incoming.author
+    && message.author === 'me'
+    && (
+      (!!message.clientMessageId && message.clientMessageId === incoming.clientMessageId)
+      || (message.type === incoming.type && message.content === incoming.content)
+    )
+    && message.readState === 'sending'
+  )
+  if (pendingIndex >= 0) {
+    messages.splice(pendingIndex, 1, incoming)
+    return
+  }
   messages.push(incoming)
+}
+
+function replaceMessage(messages: ChatMessage[], localId: string, message: ChatMessage) {
+  const localIndex = messages.findIndex((item) => item.id === localId)
+  if (localIndex >= 0) {
+    messages.splice(localIndex, 1, message)
+    return
+  }
+  mergeUniqueMessage(messages, message)
+}
+
+function markMessageFailed(messages: ChatMessage[], localId: string) {
+  const message = messages.find((item) => item.id === localId)
+  if (message) {
+    message.readState = 'failed'
+  }
+}
+
+function makeClientMessageId() {
+  return `cm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function makeLocalMessage(content: string, type: ChatMessage['type'], clientMessageId = makeClientMessageId()) {
+  return {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    author: 'me',
+    content,
+    type,
+    createdAt: 'Sending',
+    readState: 'sending',
+    clientMessageId,
+    deliveryStatus: 'pending'
+  } as ChatMessage
 }
 
 function getSupportMessageReadStateCache() {
@@ -247,9 +349,11 @@ export function useAppStore() {
       ])
 
       state.rates = rates
+      rememberFriendConversationCursors(friends)
       state.friends = friends
       state.blacklist = blacklist
       state.supportConversations = applySupportReadCache(support)
+      rememberSupportConversationCursors(state.supportConversations)
       state.transactions = transactions
       state.withdrawals = withdrawals
       state.loans = loans
@@ -279,6 +383,7 @@ export function useAppStore() {
     const support = await fetchSupportMessages()
     const previousSupportConversationId = state.supportConversationId
     state.supportConversations = applySupportReadCache(support)
+    rememberSupportConversationCursors(state.supportConversations)
     state.supportConversationId = support.some((conversation) => conversation.conversationId === previousSupportConversationId)
       ? previousSupportConversationId
       : support[0]?.conversationId || state.supportConversationId
@@ -339,6 +444,7 @@ export function useAppStore() {
       setSessionToken(undefined)
       setStoredSessionUser(null)
       uni.removeStorageSync(SUPPORT_MESSAGE_READ_STATE_KEY)
+      uni.removeStorageSync(CHAT_CURSOR_CACHE_KEY)
     }
   }
 
@@ -399,22 +505,18 @@ export function useAppStore() {
     return request
   }
 
-  function appendSupportMessage(content: string, type: ChatMessage['type'] = 'text') {
-    const fallback = {
-      id: `${Date.now()}`,
-      author: 'me',
-      content,
-      type,
-      createdAt: 'Just now'
-    } as ChatMessage
+  function appendSupportMessage(content: string, type: ChatMessage['type'] = 'text', clientMessageId?: string) {
+    const fallback = makeLocalMessage(content, type, clientMessageId)
     mergeUniqueMessage(state.supportMessages, fallback)
     const active = state.supportConversations.find((conversation) => conversation.conversationId === state.supportConversationId)
     if (active) {
       mergeUniqueMessage(active.messages, fallback)
     }
+    return fallback
   }
 
   function pushSupportRealtime(message: ChatMessage, conversationId = state.supportConversationId) {
+    rememberMessageCursor('support', conversationId, message)
     const conversation = state.supportConversations.find((item) => item.conversationId === conversationId)
     if (conversation) {
       mergeUniqueMessage(conversation.messages, message)
@@ -460,17 +562,86 @@ export function useAppStore() {
   }
 
   async function sendSupport(content: string, messageType: ChatMessage['type'] = 'text') {
-    const sent = await sendSupportMessage(state.supportConversationId, {
-      content,
-      messageType
-    })
-    const message = normalizeOwnSupportMessage(sent)
-    mergeUniqueMessage(state.supportMessages, message)
+    const conversationId = state.supportConversationId
+    const local = appendSupportMessage(content, messageType)
+    const active = state.supportConversations.find((conversation) => conversation.conversationId === state.supportConversationId)
+    try {
+      const sent = await sendSupportMessage(conversationId, {
+        content,
+        messageType,
+        clientMessageId: local.clientMessageId
+      })
+      const message = normalizeOwnSupportMessage(sent)
+      rememberMessageCursor('support', conversationId, message)
+      replaceMessage(state.supportMessages, local.id, message)
+      if (active) {
+        replaceMessage(active.messages, local.id, message)
+      }
+      return message
+    } catch (error) {
+      markMessageFailed(state.supportMessages, local.id)
+      if (active) {
+        markMessageFailed(active.messages, local.id)
+      }
+      throw error
+    }
+  }
+
+  async function retrySupportMessage(messageId: string) {
+    const message = state.supportMessages.find((item) => item.id === messageId)
+    if (!message || message.author !== 'me' || message.readState !== 'failed') {
+      return null
+    }
+    state.supportMessages = state.supportMessages.filter((item) => item.id !== messageId)
     const active = state.supportConversations.find((conversation) => conversation.conversationId === state.supportConversationId)
     if (active) {
-      mergeUniqueMessage(active.messages, message)
+      active.messages = active.messages.filter((item) => item.id !== messageId)
     }
-    return message
+    const clientMessageId = message.clientMessageId || makeClientMessageId()
+    const local = appendSupportMessage(message.content, message.type, clientMessageId)
+    try {
+      const sent = await sendSupportMessage(state.supportConversationId, {
+        content: message.content,
+        messageType: message.type,
+        clientMessageId
+      })
+      const canonical = normalizeOwnSupportMessage(sent)
+      rememberMessageCursor('support', state.supportConversationId, canonical)
+      replaceMessage(state.supportMessages, local.id, canonical)
+      if (active) {
+        replaceMessage(active.messages, local.id, canonical)
+      }
+      return canonical
+    } catch (error) {
+      markMessageFailed(state.supportMessages, local.id)
+      if (active) {
+        markMessageFailed(active.messages, local.id)
+      }
+      throw error
+    }
+  }
+
+  async function recoverSupportMessages(conversationId = state.supportConversationId) {
+    const conversation = state.supportConversations.find((item) => item.conversationId === conversationId)
+    const cachedSeq = getChatCursor('support', conversationId)
+    const localSeq = latestMessageSeq((conversation?.messages || []).filter((message) => !message.id.startsWith('local-')))
+    const sync = await syncSupportMessages(conversationId, Math.max(cachedSeq, localSeq))
+    sync.messages.forEach((message) => {
+      pushSupportRealtime(message, conversationId)
+    })
+    setChatCursor('support', conversationId, sync.latestSeq)
+    if (conversation) {
+      applyReadSeq(conversation.messages, sync.readSeq)
+      conversation.unreadCount = conversationId === state.supportConversationId ? 0 : sync.unreadCount
+    }
+    if (conversationId === state.supportConversationId) {
+      applyReadSeq(state.supportMessages, sync.readSeq)
+    }
+    if (sync.messages.length > 0 && conversationId === state.supportConversationId) {
+      await markSupportRead().catch(() => {})
+    }
+    state.supportUnreadCount = totalSupportUnread()
+    return sync.messages
   }
 
   async function markSupportRead() {
@@ -537,6 +708,7 @@ export function useAppStore() {
   }
 
   function pushFriendRealtime(friendshipId: string, message: ChatMessage) {
+    rememberMessageCursor('friend', friendshipId, message)
     const friend = state.friends.find((item) => item.id === friendshipId)
     if (friend) {
       mergeUniqueMessage(friend.messages, message)
@@ -557,13 +729,31 @@ export function useAppStore() {
   async function sendFriendMessage(friendshipId: string, content: string, messageType: ChatMessage['type'] = 'text') {
     const message = await sendDirectMessage(friendshipId, {
       content,
-      messageType
+      messageType,
+      clientMessageId: makeClientMessageId()
     })
+    rememberMessageCursor('friend', friendshipId, message)
     const friend = state.friends.find((item) => item.id === friendshipId)
     if (friend) {
       mergeUniqueMessage(friend.messages, message)
     }
     return message
+  }
+
+  async function recoverFriendMessages(friendshipId: string) {
+    const friend = state.friends.find((item) => item.id === friendshipId)
+    const cachedSeq = getChatCursor('friend', friendshipId)
+    const localSeq = latestMessageSeq((friend?.messages || []).filter((message) => !message.id.startsWith('local-')))
+    const sync = await syncFriendMessages(friendshipId, Math.max(cachedSeq, localSeq))
+    sync.messages.forEach((message) => {
+      pushFriendRealtime(friendshipId, message)
+    })
+    setChatCursor('friend', friendshipId, sync.latestSeq)
+    if (friend) {
+      applyReadSeq(friend.messages, sync.readSeq)
+      friend.unreadCount = sync.unreadCount
+    }
+    return sync.messages
   }
 
   async function markFriendRead(friendshipId: string) {
@@ -691,13 +881,33 @@ export function useAppStore() {
 
   async function updateVideoSessionStatus(sessionId: string, status: VideoSessionItem['status']) {
     const updated = await updateVideoSessionStatusRequest(sessionId, status)
-    const index = state.videoSessions.findIndex((item) => item.id === sessionId)
+    upsertVideoSession(updated)
+    return updated
+  }
+
+  function applyVideoSessionStatus(event: VideoSessionStatusEvent) {
+    const index = state.videoSessions.findIndex((item) => item.id === event.sessionId)
+    if (index < 0) {
+      return null
+    }
+    const updated: VideoSessionItem = {
+      ...state.videoSessions[index],
+      status: event.status,
+      startedAt: event.startedAt,
+      endedAt: event.endedAt,
+      updatedAt: event.updatedAt
+    }
+    upsertVideoSession(updated)
+    return updated
+  }
+
+  function upsertVideoSession(updated: VideoSessionItem) {
+    const index = state.videoSessions.findIndex((item) => item.id === updated.id)
     if (index >= 0) {
       state.videoSessions.splice(index, 1, updated)
     } else {
       state.videoSessions.unshift(updated)
     }
-    return updated
   }
 
   async function refreshRanking(mode: 'sales' | 'invitation' = 'sales', month?: string) {
@@ -755,6 +965,8 @@ export function useAppStore() {
     applySupportReadReceipt,
     applySupportPresence,
     sendSupport,
+    retrySupportMessage,
+    recoverSupportMessages,
     markSupportRead,
     updateSupportNote,
     refreshSupportCustomerProfile,
@@ -767,6 +979,7 @@ export function useAppStore() {
     pushFriendRealtime,
     applyFriendReadReceipt,
     sendFriendMessage,
+    recoverFriendMessages,
     markFriendRead,
     removeFriendship,
     createTransaction,
@@ -782,6 +995,7 @@ export function useAppStore() {
     createVideoSession,
     getVideoSessionBootstrap,
     updateVideoSessionStatus,
+    applyVideoSessionStatus,
     refreshRanking,
     blockUser,
     unblockUser,

@@ -13,7 +13,19 @@ export interface ChatMessage {
   content: string
   type: 'text' | 'image' | 'voice' | 'gif' | 'link' | 'video'
   createdAt: string
-  readState?: 'none' | 'sent' | 'read'
+  readState?: 'none' | 'sending' | 'sent' | 'read' | 'failed'
+  clientMessageId?: string
+  serverSeq?: number
+  deliveryStatus?: 'pending' | 'delivered' | 'failed'
+  deliveredAt?: string
+  failedReason?: string
+}
+
+export interface ChatMessageSync {
+  messages: ChatMessage[]
+  latestSeq: number
+  readSeq: number
+  unreadCount: number
 }
 
 export interface VideoCallMessagePayload {
@@ -46,6 +58,18 @@ export interface VideoInviteEvent {
   createdAt: string
 }
 
+export interface VideoSessionStatusEvent {
+  eventType: 'video_session_status'
+  channelType: 'friend' | 'support'
+  channelId: string
+  sessionId: string
+  roomId: string
+  status: VideoSessionItem['status']
+  startedAt: string
+  endedAt: string
+  updatedAt: string
+}
+
 export interface PresenceEvent {
   eventType: 'presence'
   channelType: 'friend' | 'support'
@@ -54,7 +78,7 @@ export interface PresenceEvent {
   online: boolean
 }
 
-export type ChatRealtimePayload = ChatMessage | ChatReadReceiptEvent | VideoInviteEvent | PresenceEvent
+export type ChatRealtimePayload = ChatMessage | ChatReadReceiptEvent | VideoInviteEvent | VideoSessionStatusEvent | PresenceEvent
 
 export interface FriendProfile {
   id: string
@@ -244,6 +268,16 @@ export interface NotificationItem {
   targetId: string
   read: boolean
   createdAt: string
+}
+
+export interface PushDeviceItem {
+  id: string
+  platform: 'ios' | 'android' | string
+  provider: 'tencent' | 'unipush' | string
+  deviceModel: string
+  appVersion: string
+  enabled: boolean
+  lastSeenAt: string
 }
 
 export interface UploadAsset {

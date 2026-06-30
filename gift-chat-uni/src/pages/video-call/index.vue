@@ -107,10 +107,13 @@
 import { computed, nextTick, ref } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import TRTC from 'trtc-sdk-v5'
-import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoInviteEvent, VideoSessionBootstrap, VideoSessionItem } from '@/types'
+import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoInviteEvent, VideoSessionBootstrap, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import { useAppStore } from '@/store/app'
 import { uiIcons } from '@/utils/art'
 import { connectChatSocket } from '@/utils/realtime'
+
+const UNANSWERED_CALL_TIMEOUT_MS = 45000
+const TERMINAL_STATUSES: VideoSessionItem['status'][] = ['ended', 'missed', 'rejected']
 
 const store = useAppStore()
 const bootstrap = ref<VideoSessionBootstrap | null>(null)
@@ -134,6 +137,8 @@ const speakerEnabled = ref(true)
 const trtc = ref<TRTC | null>(null)
 const joined = ref(false)
 const callSocketTask = ref<UniApp.SocketTask | null>(null)
+const terminalStatusHandled = ref(false)
+let unansweredCallTimer: ReturnType<typeof setTimeout> | null = null
 
 const peerLabel = computed(() => {
   const session = bootstrap.value?.session
@@ -237,6 +242,7 @@ async function joinRoom() {
 
   const session = await store.updateVideoSessionStatus(sessionId.value, 'active')
   bootstrap.value = { ...currentBootstrap, session }
+  startUnansweredCallTimer()
   if (!notice.value) {
     notice.value = ''
   }
@@ -245,11 +251,13 @@ async function joinRoom() {
 function bindTrtcEvents(client: TRTC) {
   client.on(TRTC.EVENT.REMOTE_USER_ENTER, () => {
     remoteUserJoined.value = true
+    clearUnansweredCallTimer()
   })
 
   client.on(TRTC.EVENT.REMOTE_VIDEO_AVAILABLE, async ({ userId, streamType }) => {
     remoteUserJoined.value = true
     remoteVideoAvailable.value = true
+    clearUnansweredCallTimer()
     try {
       await client.startRemoteVideo({ userId, streamType, view: 'remote-video-view' })
       hasRemoteVideo.value = true
@@ -267,6 +275,7 @@ function bindTrtcEvents(client: TRTC) {
   client.on(TRTC.EVENT.REMOTE_AUDIO_AVAILABLE, () => {
     remoteUserJoined.value = true
     remoteAudioAvailable.value = true
+    clearUnansweredCallTimer()
   })
 
   client.on(TRTC.EVENT.REMOTE_AUDIO_UNAVAILABLE, () => {
@@ -407,6 +416,11 @@ function connectCallChatSocket() {
       return
     }
 
+    if (isVideoSessionStatus(payload)) {
+      handleVideoSessionStatus(payload)
+      return
+    }
+
     if (isVideoInvite(payload) || isPresenceEvent(payload)) {
       return
     }
@@ -423,7 +437,11 @@ function connectCallChatSocket() {
 }
 
 function closeCallChatSocket() {
-  callSocketTask.value?.close({})
+  try {
+    callSocketTask.value?.close({})
+  } catch {
+    // Cleanup must continue even if the platform socket wrapper throws.
+  }
   callSocketTask.value = null
 }
 
@@ -446,8 +464,37 @@ function isVideoInvite(payload: ChatRealtimePayload): payload is VideoInviteEven
   return 'eventType' in payload && payload.eventType === 'video_invite'
 }
 
+function isVideoSessionStatus(payload: ChatRealtimePayload): payload is VideoSessionStatusEvent {
+  return 'eventType' in payload && payload.eventType === 'video_session_status'
+}
+
 function isPresenceEvent(payload: ChatRealtimePayload): payload is PresenceEvent {
   return 'eventType' in payload && payload.eventType === 'presence'
+}
+
+function handleVideoSessionStatus(event: VideoSessionStatusEvent) {
+  const updated = store.applyVideoSessionStatus(event)
+  if (event.sessionId !== sessionId.value || !bootstrap.value) return
+
+  const session = updated || {
+    ...bootstrap.value.session,
+    status: event.status,
+    startedAt: event.startedAt,
+    endedAt: event.endedAt,
+    updatedAt: event.updatedAt
+  }
+  bootstrap.value = { ...bootstrap.value, session }
+
+  if (isTerminalStatus(event.status) && !terminalStatusHandled.value) {
+    terminalStatusHandled.value = true
+    clearUnansweredCallTimer()
+    notice.value = event.status === 'ended' ? 'The other side ended the call' : statusLabel.value || 'Call ended'
+    cleanup(false).finally(() => {
+      setTimeout(() => {
+        uni.navigateBack()
+      }, 1200)
+    })
+  }
 }
 
 async function toggleAudio() {
@@ -490,6 +537,49 @@ function toggleSpeaker() {
   speakerEnabled.value = !speakerEnabled.value
 }
 
+function isCurrentUserInitiator() {
+  const session = bootstrap.value?.session
+  const currentUsername = store.state.currentUser?.username
+  return Boolean(session && currentUsername && session.initiatorUsername === currentUsername)
+}
+
+function isTerminalStatus(status: VideoSessionItem['status']) {
+  return TERMINAL_STATUSES.includes(status)
+}
+
+function startUnansweredCallTimer() {
+  clearUnansweredCallTimer()
+  const status = bootstrap.value?.session.status
+  if (!isCurrentUserInitiator() || remoteUserJoined.value || !status || isTerminalStatus(status)) return
+
+  unansweredCallTimer = setTimeout(() => {
+    markCallMissed().catch((error) => {
+      terminalStatusHandled.value = false
+      notice.value = error instanceof Error ? error.message : 'Unable to mark call as missed'
+    })
+  }, UNANSWERED_CALL_TIMEOUT_MS)
+}
+
+function clearUnansweredCallTimer() {
+  if (!unansweredCallTimer) return
+  clearTimeout(unansweredCallTimer)
+  unansweredCallTimer = null
+}
+
+async function markCallMissed() {
+  if (!sessionId.value || terminalStatusHandled.value || remoteUserJoined.value) return
+  terminalStatusHandled.value = true
+  const session = await store.updateVideoSessionStatus(sessionId.value, 'missed')
+  if (bootstrap.value) {
+    bootstrap.value = { ...bootstrap.value, session }
+  }
+  notice.value = 'No answer'
+  await cleanup(false)
+  setTimeout(() => {
+    uni.navigateBack()
+  }, 1200)
+}
+
 async function sendCallChat() {
   const content = chatDraft.value.trim()
   const session = bootstrap.value?.session
@@ -519,39 +609,67 @@ async function sendCallChat() {
 }
 
 async function hangup() {
-  await cleanup(true)
-  uni.navigateBack()
+  try {
+    await cleanup(true)
+    uni.navigateBack()
+  } catch {
+    // cleanup already exposed the actionable error in the page notice
+  }
 }
 
 async function cleanup(updateStatus = false) {
-  try {
-    closeCallChatSocket()
-    if (trtc.value) {
-      await trtc.value.stopRemoteVideo({ userId: '*' }).catch(() => {})
-      await trtc.value.stopLocalVideo().catch(() => {})
-      await trtc.value.stopLocalAudio().catch(() => {})
-      if (joined.value) {
-        await trtc.value.exitRoom().catch(() => {})
-      }
-      trtc.value.destroy()
+  clearUnansweredCallTimer()
+  const client = trtc.value
+  const cleanupErrors: string[] = []
+
+  await runCleanupStep('close call socket', async () => closeCallChatSocket(), cleanupErrors)
+  if (client) {
+    await runCleanupStep('stop remote video', async () => client.stopRemoteVideo({ userId: '*' }), cleanupErrors)
+    await runCleanupStep('stop local video', async () => client.stopLocalVideo(), cleanupErrors)
+    await runCleanupStep('stop local audio', async () => client.stopLocalAudio(), cleanupErrors)
+    if (joined.value) {
+      await runCleanupStep('exit video room', async () => client.exitRoom(), cleanupErrors)
+    }
+    await runCleanupStep('destroy video client', async () => client.destroy(), cleanupErrors)
+    if (trtc.value === client) {
       trtc.value = null
     }
-    joined.value = false
-    localVideoStarted.value = false
-    localAudioStarted.value = false
-    localDeviceFailed.value = false
-    hasRemoteVideo.value = false
-    remoteUserJoined.value = false
-    remoteAudioAvailable.value = false
-    remoteVideoAvailable.value = false
-    if (updateStatus && sessionId.value) {
+  }
+
+  joined.value = false
+  localVideoStarted.value = false
+  localAudioStarted.value = false
+  localDeviceFailed.value = false
+  hasRemoteVideo.value = false
+  remoteUserJoined.value = false
+  remoteAudioAvailable.value = false
+  remoteVideoAvailable.value = false
+
+  if (updateStatus && sessionId.value) {
+    try {
+      terminalStatusHandled.value = true
       const session = await store.updateVideoSessionStatus(sessionId.value, 'ended')
       if (bootstrap.value) {
         bootstrap.value = { ...bootstrap.value, session }
       }
+    } catch (error) {
+      terminalStatusHandled.value = false
+      notice.value = error instanceof Error ? error.message : 'Unable to end call'
+      throw error
     }
+  }
+
+  if (!updateStatus && cleanupErrors.length && !notice.value) {
+    notice.value = cleanupErrors[0]
+  }
+}
+
+async function runCleanupStep(label: string, step: () => void | Promise<void>, errors: string[]) {
+  try {
+    await step()
   } catch (error) {
-    notice.value = error instanceof Error ? error.message : 'Hang up failed'
+    const message = error instanceof Error ? error.message : String(error || 'failed')
+    errors.push(`${label}: ${message}`)
   }
 }
 </script>

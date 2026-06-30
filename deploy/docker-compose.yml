@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mysql:
     image: mysql:8.4
@@ -22,6 +20,19 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7.2-alpine
+    container_name: gift-chat-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ../gift-chat-server
@@ -30,6 +41,8 @@ services:
     restart: unless-stopped
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -43,6 +56,15 @@ services:
       APP_UPLOAD_IMAGE_DIR: /var/lib/gift-chat/uploads/images
       APP_UPLOAD_VOICE_DIR: /var/lib/gift-chat/uploads/voices
       APP_UPLOAD_PUBLIC_BASE_URL: ${APP_UPLOAD_PUBLIC_BASE_URL}
+      APP_REALTIME_REDIS_ENABLED: ${APP_REALTIME_REDIS_ENABLED:-true}
+      APP_REALTIME_REDIS_CHANNEL: ${APP_REALTIME_REDIS_CHANNEL:-gift-chat:realtime}
+      APP_TENCENT_CHAT_ENABLED: ${APP_TENCENT_CHAT_ENABLED:-false}
+      APP_TENCENT_CHAT_SDK_APP_ID: ${APP_TENCENT_CHAT_SDK_APP_ID:-}
+      APP_TENCENT_CHAT_SECRET_KEY: ${APP_TENCENT_CHAT_SECRET_KEY:-}
+      APP_TENCENT_CHAT_ADMIN_IDENTIFIER: ${APP_TENCENT_CHAT_ADMIN_IDENTIFIER:-administrator}
+      APP_TENCENT_CHAT_ADMIN_USER_SIG: ${APP_TENCENT_CHAT_ADMIN_USER_SIG:-}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
     volumes:
       - upload-data:/var/lib/gift-chat/uploads
     expose:
@@ -64,4 +86,5 @@ services:
 
 volumes:
   mysql-data:
+  redis-data:
   upload-data:

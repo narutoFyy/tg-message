@@ -43,6 +43,7 @@ public class PersistentFriendService {
     private final RealtimeChatService realtimeChatService;
     private final TencentMessageMirrorService tencentMessageMirrorService;
     private final MessageRateLimitService messageRateLimitService;
+    private final MessageAttachmentService messageAttachmentService;
 
     public PersistentFriendService(
         FriendshipRepository friendshipRepository,
@@ -53,7 +54,8 @@ public class PersistentFriendService {
         ConversationReadService conversationReadService,
         RealtimeChatService realtimeChatService,
         TencentMessageMirrorService tencentMessageMirrorService,
-        MessageRateLimitService messageRateLimitService
+        MessageRateLimitService messageRateLimitService,
+        MessageAttachmentService messageAttachmentService
     ) {
         this.friendshipRepository = friendshipRepository;
         this.directMessageRepository = directMessageRepository;
@@ -64,6 +66,7 @@ public class PersistentFriendService {
         this.realtimeChatService = realtimeChatService;
         this.tencentMessageMirrorService = tencentMessageMirrorService;
         this.messageRateLimitService = messageRateLimitService;
+        this.messageAttachmentService = messageAttachmentService;
     }
 
     public List<FriendProfile> getFriends() {
@@ -305,6 +308,7 @@ public class PersistentFriendService {
         entity.setTencentMirrorError("");
         entity.setCreatedAt(now);
         DirectMessageEntity saved = directMessageRepository.save(entity);
+        messageAttachmentService.createFromMessageContent("DIRECT", saved.getId(), saved.getMessageType(), saved.getContent());
 
         friendship.setUpdatedAt(now);
         friendshipRepository.save(friendship);
@@ -429,7 +433,8 @@ public class PersistentFriendService {
             message.getServerSeq() == null ? 0L : message.getServerSeq(),
             normalizeDeliveryStatus(message.getDeliveryStatus()),
             message.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(message.getDeliveredAt()),
-            message.getFailedReason() == null ? "" : message.getFailedReason()
+            message.getFailedReason() == null ? "" : message.getFailedReason(),
+            messageAttachmentService.attachmentsFor("DIRECT", message.getId(), message.getMessageType(), message.getContent())
         );
     }
 
@@ -445,7 +450,8 @@ public class PersistentFriendService {
             message.getServerSeq() == null ? 0L : message.getServerSeq(),
             normalizeDeliveryStatus(message.getDeliveryStatus()),
             message.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(message.getDeliveredAt()),
-            message.getFailedReason() == null ? "" : message.getFailedReason()
+            message.getFailedReason() == null ? "" : message.getFailedReason(),
+            messageAttachmentService.attachmentsFor("DIRECT", message.getId(), message.getMessageType(), message.getContent())
         );
     }
 

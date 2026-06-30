@@ -36,6 +36,7 @@ public class PersistentSupportService {
     private final MessageRateLimitService messageRateLimitService;
     private final UserPresenceService userPresenceService;
     private final UserRepository userRepository;
+    private final MessageAttachmentService messageAttachmentService;
 
     public PersistentSupportService(
         SupportConversationRepository supportConversationRepository,
@@ -46,7 +47,8 @@ public class PersistentSupportService {
         TencentMessageMirrorService tencentMessageMirrorService,
         MessageRateLimitService messageRateLimitService,
         UserPresenceService userPresenceService,
-        UserRepository userRepository
+        UserRepository userRepository,
+        MessageAttachmentService messageAttachmentService
     ) {
         this.supportConversationRepository = supportConversationRepository;
         this.supportMessageRepository = supportMessageRepository;
@@ -57,6 +59,7 @@ public class PersistentSupportService {
         this.messageRateLimitService = messageRateLimitService;
         this.userPresenceService = userPresenceService;
         this.userRepository = userRepository;
+        this.messageAttachmentService = messageAttachmentService;
     }
 
     @Transactional
@@ -228,6 +231,7 @@ public class PersistentSupportService {
             request.content(),
             clientMessageId
         );
+        messageAttachmentService.createFromMessageContent("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent());
 
         ChatMessage message = normalizeOwnSupportMessage(saved);
         mirrorAfterCommit(saved);
@@ -259,6 +263,7 @@ public class PersistentSupportService {
     ) {
         String normalizedRole = senderRole == null ? "SUPPORT" : senderRole.trim().toUpperCase();
         SupportMessageEntity saved = appendMessageEntity(conversation, sender, normalizedRole, messageType, content, "");
+        messageAttachmentService.createFromMessageContent("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent());
         String author = "ADMIN".equals(normalizedRole) ? "support" : normalizedRole.toLowerCase();
 
         realtimeChatService.broadcast(
@@ -283,7 +288,13 @@ public class PersistentSupportService {
             saved.getMessageType().toLowerCase(),
             saved.getContent(),
             MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
-            "none"
+            "none",
+            "",
+            saved.getServerSeq() == null ? 0L : saved.getServerSeq(),
+            normalizeDeliveryStatus(saved.getDeliveryStatus()),
+            saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
+            saved.getFailedReason() == null ? "" : saved.getFailedReason(),
+            messageAttachmentService.attachmentsFor("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent())
         );
     }
 
@@ -434,7 +445,8 @@ public class PersistentSupportService {
             message.getServerSeq() == null ? 0L : message.getServerSeq(),
             normalizeDeliveryStatus(message.getDeliveryStatus()),
             message.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(message.getDeliveredAt()),
-            message.getFailedReason() == null ? "" : message.getFailedReason()
+            message.getFailedReason() == null ? "" : message.getFailedReason(),
+            messageAttachmentService.attachmentsFor("SUPPORT", message.getId(), message.getMessageType(), message.getContent())
         );
     }
 
@@ -450,7 +462,8 @@ public class PersistentSupportService {
             saved.getServerSeq() == null ? 0L : saved.getServerSeq(),
             normalizeDeliveryStatus(saved.getDeliveryStatus()),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
-            saved.getFailedReason() == null ? "" : saved.getFailedReason()
+            saved.getFailedReason() == null ? "" : saved.getFailedReason(),
+            messageAttachmentService.attachmentsFor("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent())
         );
     }
 

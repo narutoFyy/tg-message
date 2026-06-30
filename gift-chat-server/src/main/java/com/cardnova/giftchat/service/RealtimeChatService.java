@@ -91,7 +91,8 @@ public class RealtimeChatService {
             serverSeq == null ? 0L : serverSeq,
             deliveryStatus == null || deliveryStatus.isBlank() ? "delivered" : deliveryStatus.toLowerCase(),
             deliveredAt == null ? "" : deliveredAt,
-            failedReason == null ? "" : failedReason
+            failedReason == null ? "" : failedReason,
+            java.util.List.of()
         );
         broadcastAuthorAwareLocal(channelKey, senderUserId, selfAuthor, otherAuthor, payload);
         publish(channelKey, senderUserId, payload, true, selfAuthor, otherAuthor);
@@ -213,7 +214,8 @@ public class RealtimeChatService {
                     message.serverSeq(),
                     message.deliveryStatus(),
                     message.deliveredAt(),
-                    message.failedReason()
+                    message.failedReason(),
+                    message.attachments()
                 );
             }
             sendSafely(session, sessionPayload);

@@ -11,7 +11,8 @@ public record ChatMessage(
     Long serverSeq,
     String deliveryStatus,
     String deliveredAt,
-    String failedReason
+    String failedReason,
+    java.util.List<MessageAttachment> attachments
 ) {
     public ChatMessage(
         String id,
@@ -21,6 +22,6 @@ public record ChatMessage(
         String createdAt,
         String readState
     ) {
-        this(id, author, type, content, createdAt, readState, "", 0L, "delivered", "", "");
+        this(id, author, type, content, createdAt, readState, "", 0L, "delivered", "", "", java.util.List.of());
     }
 }

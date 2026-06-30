@@ -92,46 +92,28 @@
             :class="['message-wrapper', isMine(msg) ? 'mine' : 'theirs']"
           >
             <!-- 对方消息显示头像 -->
-            <image v-if="!isMine(msg) && msg.author !== 'system'" class="msg-avatar" :src="uiIcons.user" mode="aspectFit" />
-
-            <view :class="['message-bubble', msg.author === 'system' ? 'system-bubble' : '']">
-              <!-- 图片消息 -->
-              <image
-                v-if="msg.type === 'image' || msg.type === 'gif'"
-                class="message-img"
-                :src="msg.content"
-                mode="aspectFill"
-                @click="previewImage(msg.content)"
-              />
-              <!-- 文本消息 -->
-              <view v-else-if="msg.type === 'video'" class="video-call-card">
-                <text class="video-call-title">{{ videoCallTitle(msg) }}</text>
-                <text class="video-call-room">{{ videoCallRoom(msg) }}</text>
-                <text :class="['video-call-status', videoCallStatus(msg)]">{{ videoCallStatusLabel(msg) }}</text>
-                <view class="video-call-actions">
-                  <button v-if="canAnswerVideoMessage(msg)" class="video-call-btn answer" @click.stop="answerVideoMessage(msg)">接听</button>
-                  <button v-if="canRejectVideoMessage(msg)" class="video-call-btn decline" @click.stop="rejectVideoMessage(msg)">拒绝</button>
-                  <button v-if="canEnterVideoMessage(msg)" class="video-call-btn enter" @click.stop="enterVideoMessage(msg)">进入通话</button>
-                </view>
-              </view>
-              <text v-else class="message-text">{{ msg.content }}</text>
-              <text v-if="translationFor(msg)" class="translation-text">{{ translationFor(msg) }}</text>
-
-              <!-- 消息元信息 -->
-              <view v-if="msg.author !== 'system'" class="message-meta">
-                <text class="msg-time">{{ msg.createdAt }}</text>
-                <text
-                  v-if="isMine(msg)"
-                  :class="['msg-status', { failed: msg.readState === 'failed' }]"
-                  @click.stop="msg.readState === 'failed' && retryMessage(msg)"
-                >
-                  {{ messageStatusLabel(msg) }}
-                </text>
-              </view>
-            </view>
-
-            <!-- 自己消息显示头像 -->
-            <image v-if="isMine(msg)" class="msg-avatar" :src="uiIcons.user" mode="aspectFit" />
+            <ChatMessageBubble
+              :message="msg"
+              :mine="isMine(msg)"
+              :avatar-src="uiIcons.user"
+              :translation="translationFor(msg)"
+              :call-title="videoCallTitle(msg)"
+              :call-room="videoCallRoom(msg)"
+              :call-status="videoCallStatus(msg)"
+              :call-status-label="videoCallStatusLabel(msg)"
+              :call-caption="videoCallCaption(msg)"
+              call-answer-label="接听"
+              call-reject-label="拒绝"
+              call-enter-label="进入"
+              :can-answer-call="canAnswerVideoMessage(msg)"
+              :can-reject-call="canRejectVideoMessage(msg)"
+              :can-enter-call="canEnterVideoMessage(msg)"
+              @preview="previewImage"
+              @retry="retryMessage"
+              @answer-call="answerVideoMessage"
+              @reject-call="rejectVideoMessage"
+              @enter-call="enterVideoMessage"
+            />
           </view>
 
           <view id="msg-bottom"></view>
@@ -139,11 +121,11 @@
       </scroll-view>
 
       <!-- 粘贴图片预览 -->
-      <view v-if="pendingImageUrl" class="image-preview-bar">
-        <image class="preview-thumb" :src="pendingImageUrl" mode="aspectFill" />
-        <text class="preview-text">图片已准备，点击发送按钮发送</text>
-        <view class="preview-close" @click="clearPendingImage">✕</view>
-      </view>
+      <ComposerAttachmentPreview
+        :attachment="activeAttachment"
+        @retry="sendPendingAttachment"
+        @clear="clearAttachment"
+      />
 
       <!-- 底部输入区域 -->
       <view class="input-area">
@@ -357,6 +339,9 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+import ChatMessageBubble from '@/components/chat/ChatMessageBubble.vue'
+import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPreview.vue'
+import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
 import { createBroadcast, translateToChinese, uploadImage } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { uiIcons } from '@/utils/art'
@@ -371,7 +356,15 @@ const socketTask = ref<UniApp.SocketTask | null>(null)
 const socketStatus = ref<'connecting' | 'online' | 'offline'>('connecting')
 const presenceRefreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const readRefreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
-const pendingImageUrl = ref('')
+const {
+  activeAttachment,
+  hasAttachment,
+  isUploading: isAttachmentUploading,
+  addFile,
+  addPath,
+  clearAttachment,
+  setStatus
+} = useComposerAttachments()
 const messageScrollTarget = ref('msg-bottom')
 const SOUND_ENABLED_KEY = 'support-chat-sound-enabled'
 const WORKBENCH_LANGUAGE_KEY = 'support-workbench-language'
@@ -391,7 +384,7 @@ const pendingRouteConversationId = ref('')
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT')
 const balanceSummary = computed(() => store.state.balanceSummary)
-const canSend = computed(() => draft.value.trim().length > 0 || pendingImageUrl.value)
+const canSend = computed(() => draft.value.trim().length > 0 || hasAttachment.value)
 
 const filteredConversations = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
@@ -703,6 +696,18 @@ function videoCallStatusLabel(message: ChatMessage) {
     missed: '未接听',
     rejected: '已拒绝'
   }[videoCallStatus(message)]
+}
+
+function videoCallCaption(message: ChatMessage) {
+  const payload = parseVideoCallMessage(message)
+  const status = videoCallStatus(message)
+  if (!payload) return '视频通话邀请格式异常，请刷新后重试。'
+  if (status === 'active') return '通话正在进行中，可继续进入同一房间。'
+  if (status === 'created') return '对方尚未接听，客服和客户都可以在有效期内进入。'
+  if (status === 'joining') return '对方正在加入，请稍候。'
+  if (status === 'missed') return '本次呼叫未接通，可以重新发起视频通话。'
+  if (status === 'rejected') return '本次呼叫已被拒绝。'
+  return '本次视频通话已结束。'
 }
 
 function videoCallTitle(message: ChatMessage) {
@@ -1110,20 +1115,16 @@ async function handlePasteImage(event: ClipboardEvent) {
   if (!file) return
 
   event.preventDefault()
-  clearPendingImage()
-  pendingImageUrl.value = URL.createObjectURL(file)
-}
-
-function clearPendingImage() {
-  if (pendingImageUrl.value) {
-    URL.revokeObjectURL(pendingImageUrl.value)
+  try {
+    addFile(file)
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : 'Unsupported image', icon: 'none' })
   }
-  pendingImageUrl.value = ''
 }
 
 async function handleSend() {
-  if (pendingImageUrl.value) {
-    await sendPendingImage()
+  if (activeAttachment.value) {
+    await sendPendingAttachment()
     return
   }
   const value = draft.value.trim()
@@ -1149,59 +1150,49 @@ async function retryMessage(message: ChatMessage) {
   }
 }
 
-function messageStatusLabel(message: ChatMessage) {
-  if (message.readState === 'read') return '✓✓'
-  if (message.readState === 'sending') return '✓'
-  if (message.readState === 'failed') return 'Retry'
-  return '✓'
-}
-
-async function sendPendingImage() {
-  const imageUrl = pendingImageUrl.value
-  if (!imageUrl) return
+async function sendPendingAttachment() {
+  const attachment = activeAttachment.value
+  if (!attachment || isAttachmentUploading.value) return
+  setStatus(attachment.id, 'uploading')
   try {
-    const asset = await uploadImage(imageUrl)
-    await store.sendSupport(asset.publicUrl, 'image')
+    const asset = await uploadImage(attachment.url)
+    await store.sendSupport(asset.publicUrl, attachment.kind)
     scrollMessagesToBottom()
     startReadRefresh()
-    clearPendingImage()
+    clearAttachment(attachment.id)
     if (draft.value.trim()) {
       await handleSend()
     }
   } catch (error) {
-    uni.showToast({ title: '图片发送失败', icon: 'none' })
+    const message = error instanceof Error ? error.message : 'Send failed'
+    setStatus(attachment.id, 'failed', message)
+    uni.showToast({ title: message, icon: 'none' })
   }
 }
 
 async function sendImage() {
   try {
-    const filePath = await chooseImageOnce()
+    const filePath = await chooseImageOnce('image')
     if (!filePath) return
-    const asset = await uploadImage(filePath)
-    await store.sendSupport(asset.publicUrl, 'image')
-    scrollMessagesToBottom()
-    startReadRefresh()
+    addPath(filePath, 'image')
   } catch (error) {
-    uni.showToast({ title: '图片发送失败', icon: 'none' })
+    uni.showToast({ title: error instanceof Error ? error.message : '图片选择失败', icon: 'none' })
   }
 }
 
 async function sendGif() {
   try {
-    const filePath = await chooseImageOnce()
+    const filePath = await chooseImageOnce('gif')
     if (!filePath) return
-    const asset = await uploadImage(filePath)
-    await store.sendSupport(asset.publicUrl, 'gif')
-    scrollMessagesToBottom()
-    startReadRefresh()
+    addPath(filePath, 'gif')
   } catch (error) {
-    uni.showToast({ title: 'GIF发送失败', icon: 'none' })
+    uni.showToast({ title: error instanceof Error ? error.message : 'GIF选择失败', icon: 'none' })
   }
 }
 
-function chooseImageOnce() {
+function chooseImageOnce(kind: ComposerAttachmentKind) {
   // #ifdef H5
-  return chooseBrowserImageOnce()
+  return chooseBrowserImageOnce(kind)
   // #endif
   return new Promise<string | null>((resolve, reject) => {
     uni.chooseImage({
@@ -1216,7 +1207,7 @@ function chooseImageOnce() {
   })
 }
 
-function chooseBrowserImageOnce() {
+function chooseBrowserImageOnce(kind: ComposerAttachmentKind) {
   return new Promise<string | null>((resolve, reject) => {
     if (typeof document === 'undefined') {
       resolve(null)
@@ -1225,7 +1216,7 @@ function chooseBrowserImageOnce() {
 
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = 'image/*'
+    input.accept = kind === 'gif' ? 'image/gif' : 'image/*'
     input.style.position = 'fixed'
     input.style.left = '-9999px'
     document.body.appendChild(input)

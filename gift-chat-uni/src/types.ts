@@ -19,6 +19,21 @@ export interface ChatMessage {
   deliveryStatus?: 'pending' | 'delivered' | 'failed'
   deliveredAt?: string
   failedReason?: string
+  attachments?: MessageAttachment[]
+}
+
+export interface MessageAttachment {
+  id: string
+  type: 'image' | 'gif' | 'video' | 'voice' | 'file' | 'call'
+  url: string
+  thumbnailUrl?: string
+  mimeType?: string
+  originalName?: string
+  sizeBytes?: number
+  width?: number
+  height?: number
+  durationMs?: number
+  status?: string
 }
 
 export interface ChatMessageSync {

@@ -27,11 +27,16 @@ const statusText = computed(() => props.state === 'read' ? '✓✓' : '✓')
 
 <style scoped>
 .delivery-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
   min-width: 16px;
   color: #0a8f5d;
   font-size: 12px;
   line-height: 1;
   text-align: right;
+  white-space: nowrap;
 }
 
 .delivery-status.read {
@@ -51,8 +56,10 @@ const statusText = computed(() => props.state === 'read' ? '✓✓' : '✓')
 }
 
 .delivery-check {
+  display: inline-block;
   font-weight: 800;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .delivery-retry {

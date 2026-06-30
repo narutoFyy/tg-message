@@ -25,6 +25,7 @@ import type {
   VideoSessionItem,
   WithdrawalItem
 } from '@/types'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
@@ -478,7 +479,7 @@ function uploadFile(url: string, filePath: string) {
             reject(new Error(readErrorMessage(body, 'Upload failed')))
             return
           }
-          resolve((body as ApiEnvelope<UploadAsset>).data)
+          resolve(normalizeUploadAsset((body as ApiEnvelope<UploadAsset>).data))
         } catch (error) {
           reject(error)
         }
@@ -488,4 +489,11 @@ function uploadFile(url: string, filePath: string) {
       }
     })
   })
+}
+
+function normalizeUploadAsset(asset: UploadAsset) {
+  return {
+    ...asset,
+    publicUrl: resolveMediaUrl(asset.publicUrl)
+  }
 }

@@ -74,6 +74,7 @@ import {
 } from '@/utils/api'
 import { closeAllChatSockets } from '@/utils/realtime'
 import { safeRouteForRole } from '@/utils/routeGuard'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const state = reactive({
   currentUser: getInitialUser(),
@@ -163,6 +164,42 @@ function applyReadSeq(messages: ChatMessage[], readSeq: number) {
   })
 }
 
+function normalizeMediaMessageContent(message: ChatMessage) {
+  return message.type === 'image' || message.type === 'gif' || message.type === 'voice'
+    ? resolveMediaUrl(message.content)
+    : message.content
+}
+
+function normalizeChatMessage(message: ChatMessage) {
+  return {
+    ...message,
+    content: normalizeMediaMessageContent(message),
+    attachments: message.attachments?.map((attachment) => ({
+      ...attachment,
+      url: resolveMediaUrl(attachment.url),
+      thumbnailUrl: attachment.thumbnailUrl ? resolveMediaUrl(attachment.thumbnailUrl) : attachment.thumbnailUrl
+    }))
+  } as ChatMessage
+}
+
+function normalizeChatMessages(messages: ChatMessage[]) {
+  return messages.map(normalizeChatMessage)
+}
+
+function normalizeSupportConversation(conversation: SupportConversationItem) {
+  return {
+    ...conversation,
+    messages: normalizeChatMessages(conversation.messages)
+  }
+}
+
+function normalizeFriendProfile(friend: FriendProfile) {
+  return {
+    ...friend,
+    messages: normalizeChatMessages(friend.messages)
+  }
+}
+
 function getInitialUser() {
   const storedUser = getStoredSessionUser()
   if (storedUser) {
@@ -172,7 +209,8 @@ function getInitialUser() {
   return null as SessionUser | null
 }
 
-function mergeUniqueMessage(messages: ChatMessage[], incoming: ChatMessage) {
+function mergeUniqueMessage(messages: ChatMessage[], incomingMessage: ChatMessage) {
+  const incoming = normalizeChatMessage(incomingMessage)
   if (messages.some((message) => message.id === incoming.id)) {
     return
   }
@@ -194,12 +232,13 @@ function mergeUniqueMessage(messages: ChatMessage[], incoming: ChatMessage) {
 }
 
 function replaceMessage(messages: ChatMessage[], localId: string, message: ChatMessage) {
+  const normalizedMessage = normalizeChatMessage(message)
   const localIndex = messages.findIndex((item) => item.id === localId)
   if (localIndex >= 0) {
-    messages.splice(localIndex, 1, message)
+    messages.splice(localIndex, 1, normalizedMessage)
     return
   }
-  mergeUniqueMessage(messages, message)
+  mergeUniqueMessage(messages, normalizedMessage)
 }
 
 function markMessageFailed(messages: ChatMessage[], localId: string) {
@@ -214,7 +253,7 @@ function makeClientMessageId() {
 }
 
 function makeLocalMessage(content: string, type: ChatMessage['type'], clientMessageId = makeClientMessageId()) {
-  return {
+  return normalizeChatMessage({
     id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     author: 'me',
     content,
@@ -223,7 +262,7 @@ function makeLocalMessage(content: string, type: ChatMessage['type'], clientMess
     readState: 'sending',
     clientMessageId,
     deliveryStatus: 'pending'
-  } as ChatMessage
+  } as ChatMessage)
 }
 
 function getSupportMessageReadStateCache() {
@@ -309,12 +348,13 @@ function syncActiveSupportConversation() {
 }
 
 function upsertSupportConversation(conversation: SupportConversationItem) {
-  applySupportReadCache([conversation])
-  const index = state.supportConversations.findIndex((item) => item.conversationId === conversation.conversationId)
+  const normalizedConversation = normalizeSupportConversation(conversation)
+  applySupportReadCache([normalizedConversation])
+  const index = state.supportConversations.findIndex((item) => item.conversationId === normalizedConversation.conversationId)
   if (index >= 0) {
-    state.supportConversations.splice(index, 1, conversation)
+    state.supportConversations.splice(index, 1, normalizedConversation)
   } else {
-    state.supportConversations.unshift(conversation)
+    state.supportConversations.unshift(normalizedConversation)
   }
   syncActiveSupportConversation()
 }
@@ -349,11 +389,13 @@ export function useAppStore() {
         fetchVideoSessions()
       ])
 
+      const normalizedFriends = friends.map(normalizeFriendProfile)
+      const normalizedSupport = support.map(normalizeSupportConversation)
       state.rates = rates
-      rememberFriendConversationCursors(friends)
-      state.friends = friends
+      rememberFriendConversationCursors(normalizedFriends)
+      state.friends = normalizedFriends
       state.blacklist = blacklist
-      state.supportConversations = applySupportReadCache(support)
+      state.supportConversations = applySupportReadCache(normalizedSupport)
       rememberSupportConversationCursors(state.supportConversations)
       state.transactions = transactions
       state.withdrawals = withdrawals
@@ -362,13 +404,13 @@ export function useAppStore() {
       state.friendRequests = friendRequests
       refreshBalanceSummary().catch(() => {})
       refreshSupportLedger().catch(() => {})
-      state.supportConversationId = support.some((conversation) => conversation.conversationId === previousSupportConversationId)
+      state.supportConversationId = normalizedSupport.some((conversation) => conversation.conversationId === previousSupportConversationId)
         ? previousSupportConversationId
-        : support[0]?.conversationId || state.supportConversationId
+        : normalizedSupport[0]?.conversationId || state.supportConversationId
       syncActiveSupportConversation()
-      state.activeFriendUsername = friends.some((friend) => friend.username === previousActiveFriend)
+      state.activeFriendUsername = normalizedFriends.some((friend) => friend.username === previousActiveFriend)
         ? previousActiveFriend
-        : friends[0]?.username || ''
+        : normalizedFriends[0]?.username || ''
     } catch (error) {
       throw error instanceof Error ? error : new Error('Bootstrap failed')
     }
@@ -382,14 +424,15 @@ export function useAppStore() {
 
   async function refreshSupport() {
     const support = await fetchSupportMessages()
+    const normalizedSupport = support.map(normalizeSupportConversation)
     const previousSupportConversationId = state.supportConversationId
-    state.supportConversations = applySupportReadCache(support)
+    state.supportConversations = applySupportReadCache(normalizedSupport)
     rememberSupportConversationCursors(state.supportConversations)
-    state.supportConversationId = support.some((conversation) => conversation.conversationId === previousSupportConversationId)
+    state.supportConversationId = normalizedSupport.some((conversation) => conversation.conversationId === previousSupportConversationId)
       ? previousSupportConversationId
-      : support[0]?.conversationId || state.supportConversationId
+      : normalizedSupport[0]?.conversationId || state.supportConversationId
     syncActiveSupportConversation()
-    return support
+    return normalizedSupport
   }
 
   function setCountry(code: string) {
@@ -627,7 +670,8 @@ export function useAppStore() {
     const cachedSeq = getChatCursor('support', conversationId)
     const localSeq = latestMessageSeq((conversation?.messages || []).filter((message) => !message.id.startsWith('local-')))
     const sync = await syncSupportMessages(conversationId, Math.max(cachedSeq, localSeq))
-    sync.messages.forEach((message) => {
+    const normalizedMessages = sync.messages.map(normalizeChatMessage)
+    normalizedMessages.forEach((message) => {
       pushSupportRealtime(message, conversationId)
     })
     setChatCursor('support', conversationId, sync.latestSeq)
@@ -642,7 +686,7 @@ export function useAppStore() {
       await markSupportRead().catch(() => {})
     }
     state.supportUnreadCount = totalSupportUnread()
-    return sync.messages
+    return normalizedMessages
   }
 
   async function markSupportRead() {
@@ -728,11 +772,11 @@ export function useAppStore() {
   }
 
   async function sendFriendMessage(friendshipId: string, content: string, messageType: ChatMessage['type'] = 'text') {
-    const message = await sendDirectMessage(friendshipId, {
+    const message = normalizeChatMessage(await sendDirectMessage(friendshipId, {
       content,
       messageType,
       clientMessageId: makeClientMessageId()
-    })
+    }))
     rememberMessageCursor('friend', friendshipId, message)
     const friend = state.friends.find((item) => item.id === friendshipId)
     if (friend) {
@@ -746,7 +790,8 @@ export function useAppStore() {
     const cachedSeq = getChatCursor('friend', friendshipId)
     const localSeq = latestMessageSeq((friend?.messages || []).filter((message) => !message.id.startsWith('local-')))
     const sync = await syncFriendMessages(friendshipId, Math.max(cachedSeq, localSeq))
-    sync.messages.forEach((message) => {
+    const normalizedMessages = sync.messages.map(normalizeChatMessage)
+    normalizedMessages.forEach((message) => {
       pushFriendRealtime(friendshipId, message)
     })
     setChatCursor('friend', friendshipId, sync.latestSeq)
@@ -754,7 +799,7 @@ export function useAppStore() {
       applyReadSeq(friend.messages, sync.readSeq)
       friend.unreadCount = sync.unreadCount
     }
-    return sync.messages
+    return normalizedMessages
   }
 
   async function markFriendRead(friendshipId: string) {

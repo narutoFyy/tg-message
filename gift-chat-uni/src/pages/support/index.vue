@@ -97,6 +97,7 @@ import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPrevi
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
 import { createBroadcast, fetchVideoSessionBootstrap, uploadImage } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { uiIcons } from '@/utils/art'
 import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 
@@ -712,15 +713,16 @@ async function startVideoCall() {
 }
 
 function previewImage(url: string) {
+  const resolved = resolveMediaUrl(url)
   uni.previewImage({
-    urls: [url],
-    current: url
+    urls: [resolved],
+    current: resolved
   })
 }
 
 function playVoice(url: string) {
   const audio = uni.createInnerAudioContext()
-  audio.src = url
+  audio.src = resolveMediaUrl(url)
   audio.play()
 }
 

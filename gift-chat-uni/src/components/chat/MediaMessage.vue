@@ -2,16 +2,19 @@
   <view :class="['media-message', mediaType]">
     <img
       class="media-native-image"
-      :src="src"
+      :src="resolvedSrc"
       alt=""
-      @click="$emit('preview', src)"
+      @click="$emit('preview', resolvedSrc)"
     />
     <view v-if="mediaType === 'gif'" class="media-badge">GIF</view>
   </view>
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
+
+const props = defineProps<{
   src: string
   mediaType: 'image' | 'gif'
 }>()
@@ -19,6 +22,8 @@ defineProps<{
 defineEmits<{
   (event: 'preview', url: string): void
 }>()
+
+const resolvedSrc = computed(() => resolveMediaUrl(props.src))
 </script>
 
 <style scoped>

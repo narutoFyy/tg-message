@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -209,12 +208,7 @@ public class UploadStorageService {
         if (StringUtils.hasText(publicBaseUrl)) {
             return publicBaseUrl.replaceAll("/+$", "") + "/uploads/" + publicSegment + "/" + storedName;
         }
-        return ServletUriComponentsBuilder.fromCurrentContextPath()
-            .path("/uploads/")
-            .path(publicSegment)
-            .path("/")
-            .path(storedName)
-            .toUriString();
+        return "/uploads/" + publicSegment + "/" + storedName;
     }
 
     private String extensionFromName(String originalName) {

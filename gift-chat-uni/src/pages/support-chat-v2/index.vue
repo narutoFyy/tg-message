@@ -380,6 +380,7 @@ import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPrevi
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
 import { createBroadcast, translateToChinese, uploadImage } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { uiIcons } from '@/utils/art'
 import type { ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
@@ -1372,7 +1373,8 @@ async function startVideoCall() {
 
 
 function previewImage(url: string) {
-  uni.previewImage({ urls: [url], current: url })
+  const resolved = resolveMediaUrl(url)
+  uni.previewImage({ urls: [resolved], current: resolved })
 }
 </script>
 

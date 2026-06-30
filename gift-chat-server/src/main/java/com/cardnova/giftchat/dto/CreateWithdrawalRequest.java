@@ -9,6 +9,7 @@ public record CreateWithdrawalRequest(
     @NotBlank String bankName,
     @NotBlank String accountNumber,
     String contact,
-    String note
+    String note,
+    Boolean sendChatMessage
 ) {
 }

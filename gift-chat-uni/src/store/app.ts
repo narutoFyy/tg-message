@@ -73,6 +73,7 @@ import {
   updateWithdrawalStatus as updateWithdrawalStatusRequest
 } from '@/utils/api'
 import { closeAllChatSockets } from '@/utils/realtime'
+import { safeRouteForRole } from '@/utils/routeGuard'
 
 const state = reactive({
   currentUser: getInitialUser(),
@@ -803,6 +804,7 @@ export function useAppStore() {
     accountNumber: string
     contact?: string
     note?: string
+    sendChatMessage?: boolean
   }) {
     const withdrawal = await createWithdrawalRequest(payload)
     state.withdrawals.unshift(withdrawal)
@@ -827,6 +829,7 @@ export function useAppStore() {
     purpose: string
     contact?: string
     repaymentPlan?: string
+    sendChatMessage?: boolean
   }) {
     const loan = await createLoanApplicationRequest(payload)
     state.loans.unshift(loan)
@@ -941,7 +944,7 @@ export function useAppStore() {
   }
 
   function go(url: string) {
-    uni.navigateTo({ url })
+    uni.navigateTo({ url: safeRouteForRole(url, state.currentUser) })
   }
 
   return {

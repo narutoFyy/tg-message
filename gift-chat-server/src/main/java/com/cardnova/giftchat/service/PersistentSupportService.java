@@ -37,6 +37,7 @@ public class PersistentSupportService {
     private final UserPresenceService userPresenceService;
     private final UserRepository userRepository;
     private final MessageAttachmentService messageAttachmentService;
+    private final TranslationService translationService;
 
     public PersistentSupportService(
         SupportConversationRepository supportConversationRepository,
@@ -48,7 +49,8 @@ public class PersistentSupportService {
         MessageRateLimitService messageRateLimitService,
         UserPresenceService userPresenceService,
         UserRepository userRepository,
-        MessageAttachmentService messageAttachmentService
+        MessageAttachmentService messageAttachmentService,
+        TranslationService translationService
     ) {
         this.supportConversationRepository = supportConversationRepository;
         this.supportMessageRepository = supportMessageRepository;
@@ -60,6 +62,7 @@ public class PersistentSupportService {
         this.userPresenceService = userPresenceService;
         this.userRepository = userRepository;
         this.messageAttachmentService = messageAttachmentService;
+        this.translationService = translationService;
     }
 
     @Transactional
@@ -223,12 +226,14 @@ public class PersistentSupportService {
             }
         }
 
+        String outgoingContent = normalizeOutgoingSupportContent(currentUser, request.messageType(), request.content());
+
         SupportMessageEntity saved = appendMessageEntity(
             conversation,
             currentUser,
             isAgent(currentUser) ? "SUPPORT" : "ME",
             request.messageType(),
-            request.content(),
+            outgoingContent,
             clientMessageId
         );
         messageAttachmentService.createFromMessageContent("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent());
@@ -251,6 +256,13 @@ public class PersistentSupportService {
             saved.getFailedReason()
         );
         return message;
+    }
+
+    private String normalizeOutgoingSupportContent(UserEntity currentUser, String messageType, String content) {
+        if (!isAgent(currentUser) || !"TEXT".equalsIgnoreCase(messageType == null ? "" : messageType.trim())) {
+            return content;
+        }
+        return translationService.translateToEnglish(content).translatedText();
     }
 
     @Transactional

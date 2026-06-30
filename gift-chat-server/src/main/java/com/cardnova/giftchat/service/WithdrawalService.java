@@ -97,7 +97,9 @@ public class WithdrawalService {
             saved.getBankName(),
             saved.getAccountNumber()
         ).trim();
-        persistentSupportService.appendSystemMessage(conversation, message);
+        if (request.sendChatMessage() == null || request.sendChatMessage()) {
+            persistentSupportService.appendSystemMessage(conversation, message);
+        }
         notificationService.notifyUser(
             assignedAgent,
             currentUser,

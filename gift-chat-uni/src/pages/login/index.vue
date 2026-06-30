@@ -66,6 +66,7 @@
 import { reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+import { safeRouteForRole } from '@/utils/routeGuard'
 
 const store = useAppStore()
 const notice = ref('')
@@ -94,7 +95,7 @@ async function handleSubmit() {
       return
     }
     const session = await store.login(identifier, password)
-    uni.redirectTo({ url: session.nextRoute || '/pages/support/index' })
+    uni.redirectTo({ url: safeRouteForRole(session.nextRoute, session, '/pages/support/index') })
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Login failed'
   }

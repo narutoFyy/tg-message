@@ -46,10 +46,13 @@ const statusText = computed(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
+  margin: 10px 16px 0;
+  padding: 10px;
+  border: 1px solid rgba(90, 123, 89, 0.14);
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.94);
-  border-top: 1px solid rgba(90, 123, 89, 0.2);
   box-sizing: border-box;
+  box-shadow: 0 8px 22px rgba(31, 58, 42, 0.08);
 }
 
 .composer-preview.failed {
@@ -57,9 +60,9 @@ const statusText = computed(() => {
 }
 
 .preview-thumb {
-  width: 58px;
-  height: 58px;
-  flex: 0 0 58px;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
   border-radius: 8px;
   background: #eef2ec;
 }
@@ -133,5 +136,11 @@ const statusText = computed(() => {
   background: #edf1eb;
   color: #32463a;
   font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  .composer-preview {
+    margin: 8px 10px 0;
+  }
 }
 </style>

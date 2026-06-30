@@ -548,6 +548,10 @@ onLoad((query) => {
 onShow(() => {
   checkMobile()
   store.bootstrap().then(() => {
+    if (store.state.currentUser?.roleCode !== 'AGENT' && store.state.currentUser?.roleCode !== 'ADMIN') {
+      uni.redirectTo({ url: '/pages/support/index' })
+      return
+    }
     applyPendingSupportDraft()
     if (store.state.supportConversations.length > 0) {
       const routeConversation = store.state.supportConversations.find(item => item.conversationId === pendingRouteConversationId.value)
@@ -1175,11 +1179,23 @@ function detachPasteListener() {
 
 function applyPendingSupportDraft() {
   const pendingDraft = uni.getStorageSync('pending-support-draft') as string | undefined
-  if (!pendingDraft) return
-  if (!draft.value.trim()) {
+  if (pendingDraft && !draft.value.trim()) {
     draft.value = pendingDraft
   }
   uni.removeStorageSync('pending-support-draft')
+}
+
+async function sendPendingSupportImage() {
+  const pendingImage = uni.getStorageSync('pending-support-image') as string | undefined
+  if (!pendingImage) return false
+  try {
+    await store.sendSupport(pendingImage, 'image')
+    uni.removeStorageSync('pending-support-image')
+    return true
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : 'Image send failed', icon: 'none' })
+    return false
+  }
 }
 
 async function handlePasteImage(event: ClipboardEvent) {
@@ -1208,6 +1224,7 @@ async function handleSend() {
   try {
     await store.sendSupport(value)
     draft.value = ''
+    await sendPendingSupportImage()
     scrollMessagesToBottom()
     startReadRefresh()
   } catch (error) {
@@ -1365,16 +1382,16 @@ function previewImage(url: string) {
   height: 100vh;
   width: 100%;
   overflow: hidden;
-  background: linear-gradient(180deg, #b7efb0 0%, #d7f3c3 18%, #d6ecbb 44%, #d8efc6 100%);
+  background: #edf4ea;
 }
 
 /* ============ 左侧客户列表 ============ */
 .customer-sidebar {
-  width: 300px;
-  flex: 0 0 300px;
+  width: 304px;
+  flex: 0 0 304px;
   min-width: 240px;
-  background: rgba(255, 255, 255, 0.95);
-  border-right: 1px solid rgba(90, 123, 89, 0.2);
+  background: #f9fbf8;
+  border-right: 1px solid rgba(90, 123, 89, 0.16);
   display: flex;
   flex-direction: column;
   transition: transform 0.3s;
@@ -1382,11 +1399,11 @@ function previewImage(url: string) {
 }
 
 .customer-profile-panel {
-  width: 340px;
-  flex: 0 1 340px;
+  width: 360px;
+  flex: 0 1 360px;
   min-width: 280px;
-  background: rgba(255, 255, 255, 0.94);
-  border-left: 1px solid rgba(90, 123, 89, 0.2);
+  background: #fbfcfa;
+  border-left: 1px solid rgba(90, 123, 89, 0.16);
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(10px);
@@ -1397,8 +1414,8 @@ function previewImage(url: string) {
 }
 
 .profile-header {
-  min-height: 82px;
-  padding: 16px;
+  min-height: 78px;
+  padding: 15px 16px;
   border-bottom: 1px solid rgba(90, 123, 89, 0.15);
   display: flex;
   align-items: center;
@@ -1468,12 +1485,12 @@ function previewImage(url: string) {
 .profile-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 12px 14px 18px;
 }
 
 .profile-section {
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(90, 123, 89, 0.12);
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(90, 123, 89, 0.1);
 }
 
 .profile-section:first-child {
@@ -1515,9 +1532,9 @@ function previewImage(url: string) {
 
 .metric-item {
   min-width: 0;
-  padding: 10px 8px;
+  padding: 11px 9px;
   border-radius: 8px;
-  background: rgba(225, 245, 220, 0.72);
+  background: #eef8ec;
 }
 
 .metric-value {
@@ -1531,6 +1548,8 @@ function previewImage(url: string) {
 
 .ledger-section {
   padding-top: 0;
+  max-height: 300px;
+  overflow: hidden;
 }
 
 .ledger-summary-grid {
@@ -1639,7 +1658,7 @@ function previewImage(url: string) {
 }
 
 .order-picker {
-  height: 36px;
+  min-height: 38px;
   padding: 0 10px;
   border: 1px solid rgba(90, 123, 89, 0.18);
   border-radius: 8px;
@@ -1676,7 +1695,7 @@ function previewImage(url: string) {
 
 .work-item {
   margin-top: 10px;
-  padding: 10px;
+  padding: 11px;
   border: 1px solid rgba(90, 123, 89, 0.15);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
@@ -1741,9 +1760,8 @@ function previewImage(url: string) {
   margin-top: 5px;
   font-size: 12px;
   color: #68766c;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 .work-line.strong {
@@ -1802,9 +1820,9 @@ function previewImage(url: string) {
 }
 
 .sidebar-header {
-  padding: 16px 12px;
+  padding: 14px 12px;
   border-bottom: 1px solid rgba(90, 123, 89, 0.15);
-  background: rgba(255, 255, 255, 0.5);
+  background: #f9fbf8;
 }
 
 .search-box {
@@ -1836,18 +1854,18 @@ function previewImage(url: string) {
 .customer-item {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  padding: 12px 14px;
   cursor: pointer;
   transition: background 0.2s;
   border-bottom: 1px solid rgba(90, 123, 89, 0.1);
 }
 
 .customer-item:hover {
-  background: rgba(183, 239, 176, 0.2);
+  background: rgba(225, 244, 222, 0.72);
 }
 
 .customer-item.active {
-  background: rgba(183, 239, 176, 0.4);
+  background: #e4f7df;
   border-left: 3px solid #00a884;
 }
 
@@ -1960,7 +1978,7 @@ function previewImage(url: string) {
   display: flex;
   padding: 12px 16px;
   border-top: 1px solid rgba(90, 123, 89, 0.2);
-  background: rgba(183, 239, 176, 0.3);
+  background: #eef8ec;
 }
 
 .stat-item {
@@ -1988,7 +2006,7 @@ function previewImage(url: string) {
   min-width: 360px;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.3);
+  background: #e4f3dc;
   transition: transform 0.3s;
   backdrop-filter: blur(10px);
 }
@@ -2006,10 +2024,10 @@ function previewImage(url: string) {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 64px;
+  min-height: 66px;
   padding: 10px 18px;
-  background: rgba(255, 255, 255, 0.96);
-  border-bottom: 1px solid rgba(90, 123, 89, 0.2);
+  background: #fbfcfa;
+  border-bottom: 1px solid rgba(90, 123, 89, 0.16);
   backdrop-filter: blur(10px);
 }
 
@@ -2072,19 +2090,19 @@ function previewImage(url: string) {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .icon-action {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: transparent;
+  background: rgba(33, 56, 43, 0.04);
   color: #44544b;
   cursor: pointer;
   transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
@@ -2100,7 +2118,7 @@ function previewImage(url: string) {
 }
 
 .icon-action.primary {
-  background: rgba(0, 168, 132, 0.11);
+  background: rgba(0, 168, 132, 0.13);
   color: #007d65;
 }
 
@@ -2191,7 +2209,7 @@ function previewImage(url: string) {
   z-index: 20;
   right: 0;
   top: 44px;
-  width: 156px;
+  width: 164px;
   padding: 6px;
   border: 1px solid rgba(83, 107, 91, 0.14);
   border-radius: 8px;
@@ -2271,7 +2289,7 @@ function previewImage(url: string) {
   flex: 1;
   min-height: 0;
   background: transparent;
-  padding: 16px 22px;
+  padding: 18px 24px;
   box-sizing: border-box;
   overflow-y: auto;
 }
@@ -2290,8 +2308,8 @@ function previewImage(url: string) {
 .date-divider text {
   display: inline-block;
   padding: 4px 12px;
-  background: rgba(0, 0, 0, 0.1);
-  color: #999999;
+  background: rgba(255, 255, 255, 0.58);
+  color: #7c8a7e;
   font-size: 12px;
   border-radius: 12px;
 }
@@ -2559,16 +2577,16 @@ function previewImage(url: string) {
 }
 
 .input-area {
-  background: rgba(255, 255, 255, 0.96);
-  border-top: 1px solid rgba(90, 123, 89, 0.2);
-  padding: 12px 16px;
+  background: #fbfcfa;
+  border-top: 1px solid rgba(90, 123, 89, 0.16);
+  padding: 10px 16px 12px;
   backdrop-filter: blur(10px);
 }
 
 .input-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
 }
 
 .composer-tools-wrap {
@@ -2616,7 +2634,7 @@ function previewImage(url: string) {
 .composer-popover {
   position: absolute;
   left: 0;
-  bottom: 48px;
+  bottom: 50px;
   width: 176px;
   padding: 8px;
   border: 1px solid rgba(83, 107, 91, 0.14);
@@ -2712,7 +2730,7 @@ function previewImage(url: string) {
 .message-input {
   flex: 1;
   min-width: 0;
-  height: 40px;
+  height: 42px;
   padding: 0 14px;
   border: 1px solid rgba(80, 116, 93, 0.22);
   border-radius: 8px;
@@ -2723,14 +2741,14 @@ function previewImage(url: string) {
 
 .send-btn {
   min-width: 76px;
-  height: 40px;
+  height: 42px;
   padding: 0 18px;
   background: rgba(0, 168, 132, 0.2);
   color: #6f8069;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 800;
-  line-height: 40px;
+  line-height: 42px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
@@ -2748,6 +2766,10 @@ function previewImage(url: string) {
 
 /* ============ 响应式设计 ============ */
 @media (max-width: 768px) {
+  .chat-container {
+    background: #e4f3dc;
+  }
+
   .customer-sidebar {
     width: 100%;
     flex-basis: 100%;
@@ -2766,8 +2788,65 @@ function previewImage(url: string) {
     display: none;
   }
 
-  .message-bubble {
-    max-width: 75%;
+  .chat-main {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .chat-header {
+    min-height: 58px;
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .header-avatar {
+    width: 34px;
+    height: 34px;
+    margin-right: 8px;
+  }
+
+  .header-name {
+    max-width: 34vw;
+    font-size: 15px;
+  }
+
+  .header-actions {
+    gap: 4px;
+  }
+
+  .icon-action {
+    width: 34px;
+    height: 34px;
+  }
+
+  .message-area {
+    padding: 12px 10px;
+  }
+
+  .input-area {
+    padding: 8px 10px 10px;
+  }
+
+  .input-row {
+    gap: 7px;
+  }
+
+  .composer-tool-main {
+    width: 36px;
+    height: 36px;
+  }
+
+  .message-input {
+    height: 40px;
+    padding: 0 11px;
+  }
+
+  .send-btn {
+    min-width: 58px;
+    height: 40px;
+    padding: 0 12px;
+    line-height: 40px;
+    font-size: 13px;
   }
 }
 
@@ -2779,8 +2858,8 @@ function previewImage(url: string) {
   }
 
   .customer-profile-panel {
-    width: 300px;
-    flex-basis: 300px;
+    width: 310px;
+    flex-basis: 310px;
     min-width: 260px;
   }
 
@@ -2790,6 +2869,18 @@ function previewImage(url: string) {
 
   .message-area {
     padding: 14px 18px;
+  }
+
+  .ledger-section {
+    max-height: 260px;
+  }
+}
+
+@media (min-width: 1181px) {
+  .message-list {
+    max-width: 920px;
+    width: 100%;
+    margin: 0 auto;
   }
 }
 </style>

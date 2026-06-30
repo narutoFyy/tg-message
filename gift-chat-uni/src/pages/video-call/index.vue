@@ -6,13 +6,12 @@
 
     <view class="glass-layer"></view>
 
-    <view class="top-actions">
-      <text class="brand-label">{{ roomLabel }}</text>
-      <view class="top-icon stack-icon">
-        <text></text>
-        <text></text>
+    <view class="call-topbar">
+      <view class="call-topbar-main">
+        <text class="brand-label">{{ roomLabel }}</text>
+        <text class="call-network-label">{{ joined ? 'Connected' : 'Connecting' }}</text>
       </view>
-      <view class="top-icon plus-icon">+</view>
+      <view class="call-quality-dot" :class="{ online: joined }"></view>
     </view>
 
     <view class="caller-card">
@@ -614,13 +613,20 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   pointer-events: none;
 }
 
-.top-actions {
+.call-topbar {
   position: relative;
   z-index: 2;
-  padding: 42rpx 52rpx 0;
+  padding: 38rpx 48rpx 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.call-topbar-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
 }
 
 .brand-label {
@@ -631,46 +637,30 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   text-shadow: 0 3rpx 10rpx rgba(0, 0, 0, 0.24);
 }
 
-.top-icon {
-  width: 64rpx;
-  height: 64rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  font-size: 70rpx;
-  font-weight: 200;
-  line-height: 1;
-  text-shadow: 0 3rpx 10rpx rgba(0, 0, 0, 0.24);
+.call-network-label {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 21rpx;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
-.stack-icon {
-  position: relative;
+.call-quality-dot {
+  width: 18rpx;
+  height: 18rpx;
+  border: 3rpx solid rgba(255, 255, 255, 0.46);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.22);
 }
 
-.stack-icon text {
-  position: absolute;
-  width: 34rpx;
-  height: 34rpx;
-  border: 5rpx solid #ffffff;
-  border-radius: 6rpx;
-  box-sizing: border-box;
-}
-
-.stack-icon text:first-child {
-  left: 5rpx;
-  top: 8rpx;
-}
-
-.stack-icon text:last-child {
-  right: 5rpx;
-  bottom: 8rpx;
+.call-quality-dot.online {
+  background: #19d47a;
 }
 
 .caller-card {
   position: relative;
   z-index: 2;
-  margin-top: 138rpx;
+  margin-top: 120rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -724,7 +714,7 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 }
 
 .notice-text {
-  max-width: 72vw;
+  max-width: min(620rpx, 76vw);
   margin-top: 14rpx;
   font-size: 22rpx;
   line-height: 1.45;
@@ -733,14 +723,16 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 }
 
 .device-notice {
-  max-width: 72vw;
-  margin-top: 10rpx;
-  padding: 8rpx 14rpx;
-  border-radius: 999rpx;
-  background: rgba(0, 0, 0, 0.24);
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 20rpx;
-  line-height: 1.35;
+  max-width: min(650rpx, 78vw);
+  margin-top: 14rpx;
+  padding: 12rpx 18rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.16);
+  border-radius: 14rpx;
+  background: rgba(39, 15, 15, 0.5);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 21rpx;
+  line-height: 1.42;
+  box-sizing: border-box;
 }
 
 .device-retry-button {
@@ -760,6 +752,7 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 }
 
 .remote-state-row {
+  max-width: min(650rpx, 80vw);
   margin-top: 18rpx;
   display: flex;
   justify-content: center;
@@ -785,12 +778,12 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .local-video {
   position: absolute;
   z-index: 3;
-  right: 26rpx;
-  top: 216rpx;
-  width: 140rpx;
-  height: 196rpx;
-  border: 3rpx solid rgba(255, 255, 255, 0.66);
-  border-radius: 18rpx;
+  right: 28rpx;
+  top: 150rpx;
+  width: 156rpx;
+  height: 214rpx;
+  border: 2rpx solid rgba(255, 255, 255, 0.58);
+  border-radius: 20rpx;
   overflow: hidden;
   background: rgba(30, 20, 20, 0.55);
   display: flex;
@@ -809,8 +802,8 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   z-index: 4;
   left: 0;
   right: 0;
-  bottom: 46rpx;
-  padding: 0 64rpx;
+  bottom: 44rpx;
+  padding: 0 58rpx;
 }
 
 .primary-controls,
@@ -826,7 +819,7 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 }
 
 .secondary-controls {
-  margin-top: 54rpx;
+  margin-top: 46rpx;
   gap: 46rpx;
 }
 
@@ -841,8 +834,8 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .soft-control,
 .hangup-control {
   position: relative;
-  width: 124rpx;
-  height: 124rpx;
+  width: 118rpx;
+  height: 118rpx;
   border: 0;
   border-radius: 50%;
   display: flex;
@@ -907,6 +900,38 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   transform: translateX(-50%);
   border-radius: 999rpx;
   background: rgba(255, 255, 255, 0.94);
+}
+
+@media (max-height: 760px) {
+  .caller-card {
+    margin-top: 62rpx;
+  }
+
+  .caller-avatar {
+    width: 112rpx;
+    height: 112rpx;
+  }
+
+  .caller-name {
+    margin-top: 22rpx;
+    font-size: 38rpx;
+  }
+
+  .calling-dots {
+    margin-top: 24rpx;
+  }
+
+  .remote-state-row {
+    margin-top: 12rpx;
+  }
+
+  .control-panel {
+    bottom: 34rpx;
+  }
+
+  .secondary-controls {
+    margin-top: 30rpx;
+  }
 }
 
 .icon-mic,

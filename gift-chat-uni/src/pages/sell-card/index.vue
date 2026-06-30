@@ -215,7 +215,12 @@ async function confirmSell() {
       sendChatMessage: false
     })
     uni.setStorageSync('pending-support-draft', buildSellCardDraft(transaction.orderNo))
-    uni.redirectTo({ url: '/pages/support-chat-v2/index' })
+    if (form.voucherImageUrl) {
+      uni.setStorageSync('pending-support-image', form.voucherImageUrl)
+    } else {
+      uni.removeStorageSync('pending-support-image')
+    }
+    uni.redirectTo({ url: '/pages/support/index' })
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Sell failed'
   }
@@ -233,7 +238,7 @@ function buildSellCardDraft(orderNo: string) {
     `Rate: ${activeRate.value?.rate || '-'}`,
     `Settlement: ${settlementAmount.value}`,
     form.cardData ? `Card data: ${form.cardData}` : '',
-    form.voucherImageUrl ? `Voucher: ${form.voucherImageUrl}` : ''
+    form.voucherImageUrl ? 'Voucher: Image attached below' : ''
   ].filter(Boolean).join('\n')
 }
 

@@ -139,6 +139,7 @@ const bubbleKindClass = computed(() => {
 }
 
 .chat-bubble.media-bubble {
+  max-width: min(72%, 340px);
   overflow: hidden;
   padding: 0;
   background: #f6faf4 !important;
@@ -184,6 +185,8 @@ const bubbleKindClass = computed(() => {
   color: #333333;
   font-size: 15px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .voice-chip {
@@ -226,6 +229,10 @@ const bubbleKindClass = computed(() => {
 @media (max-width: 768px) {
   .chat-bubble {
     max-width: min(78%, 420px);
+  }
+
+  .chat-bubble.media-bubble {
+    max-width: min(82%, 300px);
   }
 
   .chat-avatar {

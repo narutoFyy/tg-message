@@ -229,6 +229,7 @@ export function createWithdrawal(payload: {
   accountNumber: string
   contact?: string
   note?: string
+  sendChatMessage?: boolean
 }) {
   return request<WithdrawalItem>('/withdrawals', 'POST', payload)
 }
@@ -291,6 +292,7 @@ export function createLoanApplication(payload: {
   purpose: string
   contact?: string
   repaymentPlan?: string
+  sendChatMessage?: boolean
 }) {
   return request<LoanApplicationItem>('/loans', 'POST', payload)
 }

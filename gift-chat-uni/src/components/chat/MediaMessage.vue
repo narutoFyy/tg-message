@@ -24,7 +24,8 @@ defineEmits<{
 <style scoped>
 .media-message {
   position: relative;
-  width: min(260px, 58vw);
+  width: min(300px, 58vw);
+  max-height: 420px;
   overflow: hidden;
   border-radius: 8px;
   background: #f6faf4;
@@ -33,7 +34,7 @@ defineEmits<{
 }
 
 .media-message.gif {
-  width: min(220px, 54vw);
+  width: min(240px, 54vw);
 }
 
 .media-native-image {
@@ -41,7 +42,9 @@ defineEmits<{
   width: 100%;
   max-width: 100%;
   height: auto;
-  max-height: none;
+  max-height: 420px;
+  object-fit: contain;
+  background: #f6faf4;
 }
 
 .media-message.gif .media-native-image {
@@ -63,5 +66,20 @@ defineEmits<{
   line-height: 22px;
   text-align: center;
   box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .media-message {
+    width: min(270px, 68vw);
+    max-height: 360px;
+  }
+
+  .media-message.gif {
+    width: min(230px, 62vw);
+  }
+
+  .media-native-image {
+    max-height: 360px;
+  }
 }
 </style>

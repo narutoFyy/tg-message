@@ -31,6 +31,7 @@
 import { reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+import { safeRouteForRole } from '@/utils/routeGuard'
 
 const store = useAppStore()
 const notice = ref('')
@@ -64,7 +65,7 @@ async function handleSubmit() {
       notice.value = 'Admin account required.'
       return
     }
-    uni.redirectTo({ url: session.nextRoute || '/pages/admin-rates/index' })
+    uni.redirectTo({ url: safeRouteForRole(session.nextRoute, session, '/pages/admin-rates/index') })
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Admin login failed'
   }

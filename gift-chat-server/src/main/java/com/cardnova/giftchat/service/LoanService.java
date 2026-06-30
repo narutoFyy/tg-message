@@ -97,7 +97,9 @@ public class LoanService {
             value(saved.getContact()),
             value(saved.getRepaymentPlan())
         ).trim();
-        persistentSupportService.appendSystemMessage(conversation, message);
+        if (request.sendChatMessage() == null || request.sendChatMessage()) {
+            persistentSupportService.appendSystemMessage(conversation, message);
+        }
         notificationService.notifyUser(
             assignedAgent,
             currentUser,

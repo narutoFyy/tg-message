@@ -52,6 +52,28 @@ public class TranslationService {
         return new TranslationResult(normalized, translateOffline(normalized), "offline");
     }
 
+    public TranslationResult translateToEnglish(String text) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        currentUserService.requireAgentOrAdmin(currentUser);
+
+        String normalized = normalizeText(text);
+        if (!looksChinese(normalized)) {
+            return new TranslationResult(normalized, normalized, "original");
+        }
+
+        String online = translateOnline(normalized, "zh-CN%7Cen", false);
+        if (StringUtils.hasText(online)) {
+            return new TranslationResult(normalized, online, "mymemory");
+        }
+
+        String offline = translateChineseOffline(normalized);
+        if (StringUtils.hasText(offline)) {
+            return new TranslationResult(normalized, offline, "offline");
+        }
+
+        throw new IllegalArgumentException("Unable to translate message to English");
+    }
+
     private String normalizeText(String text) {
         String normalized = text == null ? "" : text.trim();
         if (!StringUtils.hasText(normalized)) {
@@ -65,9 +87,13 @@ public class TranslationService {
     }
 
     private String translateOnline(String text) {
+        return translateOnline(text, "en%7Czh-CN", true);
+    }
+
+    private String translateOnline(String text, String langPair, boolean requireChineseResult) {
         try {
             String encoded = URLEncoder.encode(text, StandardCharsets.UTF_8);
-            URI uri = URI.create("https://api.mymemory.translated.net/get?q=" + encoded + "&langpair=en%7Czh-CN");
+            URI uri = URI.create("https://api.mymemory.translated.net/get?q=" + encoded + "&langpair=" + langPair);
             HttpRequest request = HttpRequest.newBuilder(uri)
                 .timeout(Duration.ofSeconds(5))
                 .header("Accept", "application/json")
@@ -85,7 +111,11 @@ public class TranslationService {
 
             String translated = repairMojibake(root.path("responseData").path("translatedText").asText("").trim());
             String upper = translated.toUpperCase();
-            if (upper.contains("INVALID") || upper.contains("LANGPAIR") || looksMojibake(translated) || !looksChinese(translated)) {
+            if (upper.contains("INVALID")
+                || upper.contains("LANGPAIR")
+                || looksMojibake(translated)
+                || (requireChineseResult && !looksChinese(translated))
+                || (!requireChineseResult && looksChinese(translated))) {
                 return "";
             }
             return translated;
@@ -121,6 +151,35 @@ public class TranslationService {
                 || codePoint == 0x00EF
                 || (codePoint >= 0x0080 && codePoint <= 0x009F)
         );
+    }
+
+    private String translateChineseOffline(String text) {
+        Map<String, String> phrases = new LinkedHashMap<>();
+        phrases.put("\u4f60\u597d", "Hello");
+        phrases.put("\u55e8", "Hi");
+        phrases.put("\u597d\u7684", "OK");
+        phrases.put("\u53ef\u4ee5", "OK");
+        phrases.put("\u6536\u5230", "Received");
+        phrases.put("\u8bf7\u7a0d\u7b49", "Please wait a moment");
+        phrases.put("\u7a0d\u7b49", "Wait a moment");
+        phrases.put("\u8bf7", "Please ");
+        phrases.put("\u8c22\u8c22", "Thank you");
+        phrases.put("\u611f\u8c22", "Thank you");
+        phrases.put("\u9a6c\u4e0a\u5904\u7406", "We will process it right away");
+        phrases.put("\u6b63\u5728\u5904\u7406", "We are processing it");
+        phrases.put("\u5df2\u5b8c\u6210", "Completed");
+        phrases.put("\u8ba2\u5355", "order");
+        phrases.put("\u4f59\u989d", "balance");
+        phrases.put("\u6c47\u7387", "rate");
+        phrases.put("\u793c\u54c1\u5361", "gift card");
+        phrases.put("\u56fe\u7247", "image");
+        phrases.put("\u95ee\u9898", "issue");
+
+        String translated = text;
+        for (Map.Entry<String, String> entry : phrases.entrySet()) {
+            translated = translated.replace(entry.getKey(), entry.getValue());
+        }
+        return translated.equals(text) || looksChinese(translated) ? "" : translated;
     }
 
     private String translateOffline(String text) {

@@ -90,18 +90,32 @@ function parseMoney(value: string) {
 
 async function submit() {
   try {
-    await store.createWithdrawal({
+    const withdrawal = await store.createWithdrawal({
       amount: form.amount,
       country: form.country,
       accountName: form.accountName,
       bankName: form.bankName,
       accountNumber: form.accountNumber,
-      contact: form.contact || undefined
+      contact: form.contact || undefined,
+      sendChatMessage: false
     })
+    uni.setStorageSync('pending-support-draft', buildWithdrawalDraft(withdrawal.requestNo))
     uni.redirectTo({ url: '/pages/support/index' })
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Withdrawal failed'
   }
+}
+
+function buildWithdrawalDraft(requestNo: string) {
+  return [
+    `Withdrawal request ${requestNo}`,
+    `Amount: ${form.amount}`,
+    `Country: ${form.country}`,
+    `Account: ${form.accountName}`,
+    `Bank: ${form.bankName}`,
+    `Number: ${form.accountNumber}`,
+    form.contact ? `Contact: ${form.contact}` : ''
+  ].filter(Boolean).join('\n')
 }
 </script>
 

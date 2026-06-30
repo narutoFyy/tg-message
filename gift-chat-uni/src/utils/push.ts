@@ -1,5 +1,6 @@
 import { registerPushDevice } from '@/utils/api'
 import { getStoredSessionUser } from '@/utils/api'
+import { safeRouteForRole, supportRouteForRole } from '@/utils/routeGuard'
 
 type PushClickPayload = {
   channelType?: 'support' | 'friend'
@@ -54,16 +55,14 @@ export function installPushClickRouter() {
   }
   plus.push.addEventListener('click', (message) => {
     const payload = normalizePayload(message.payload)
+    const user = getStoredSessionUser()
     if (payload.channelType === 'support' && payload.channelId) {
-      const user = getStoredSessionUser()
-      const page = user?.roleCode === 'AGENT' || user?.roleCode === 'ADMIN'
-        ? '/pages/support-chat-v2/index'
-        : '/pages/support/index'
+      const page = supportRouteForRole(user)
       uni.navigateTo({ url: `${page}?conversationId=${encodeURIComponent(payload.channelId)}` })
       return
     }
     if (payload.route) {
-      uni.navigateTo({ url: payload.route })
+      uni.navigateTo({ url: safeRouteForRole(payload.route, user) })
     }
   })
 }

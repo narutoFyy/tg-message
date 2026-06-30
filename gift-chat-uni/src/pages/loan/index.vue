@@ -82,14 +82,16 @@ async function submitLoan() {
 
   submitting.value = true
   try {
-    await store.createLoanApplication({
+    const loan = await store.createLoanApplication({
       amount: form.amount,
       country: form.country,
       purpose: form.purpose,
       contact: form.contact || undefined,
-      repaymentPlan: form.repaymentPlan || undefined
+      repaymentPlan: form.repaymentPlan || undefined,
+      sendChatMessage: false
     })
-    notice.value = 'Application submitted. Your support chat has been notified.'
+    uni.setStorageSync('pending-support-draft', buildLoanDraft(loan.applicationNo))
+    notice.value = 'Application submitted. Please review and send it in support chat.'
     form.amount = ''
     form.country = ''
     form.purpose = ''
@@ -101,6 +103,17 @@ async function submitLoan() {
   } finally {
     submitting.value = false
   }
+}
+
+function buildLoanDraft(applicationNo: string) {
+  return [
+    `Loan application ${applicationNo}`,
+    `Amount: ${form.amount}`,
+    `Country: ${form.country}`,
+    `Purpose: ${form.purpose}`,
+    form.contact ? `Contact: ${form.contact}` : '',
+    form.repaymentPlan ? `Repayment plan: ${form.repaymentPlan}` : ''
+  ].filter(Boolean).join('\n')
 }
 
 function statusClass(status: LoanApplicationItem['status']) {

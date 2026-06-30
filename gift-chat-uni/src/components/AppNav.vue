@@ -20,14 +20,16 @@
 </template>
 
 <script setup lang="ts">
+import { getStoredSessionUser } from '@/utils/api'
 import { navIcons } from '@/utils/art'
+import { safeRouteForRole } from '@/utils/routeGuard'
 
 defineProps<{
   current?: 'home' | 'chat' | 'transactions' | 'me'
 }>()
 
 function go(url: string) {
-  uni.redirectTo({ url })
+  uni.redirectTo({ url: safeRouteForRole(url, getStoredSessionUser()) })
 }
 </script>
 

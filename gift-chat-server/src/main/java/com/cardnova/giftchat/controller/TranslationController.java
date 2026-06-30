@@ -24,4 +24,9 @@ public class TranslationController {
     public ApiResponse<TranslationResult> translateToChinese(@Valid @RequestBody TranslateRequest request) {
         return ApiResponse.success(translationService.translateToChinese(request.text()));
     }
+
+    @PostMapping("/en")
+    public ApiResponse<TranslationResult> translateToEnglish(@Valid @RequestBody TranslateRequest request) {
+        return ApiResponse.success(translationService.translateToEnglish(request.text()));
+    }
 }

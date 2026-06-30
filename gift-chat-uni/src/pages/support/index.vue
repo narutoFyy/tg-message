@@ -140,6 +140,10 @@ const socketStatusLabel = computed(() => ({
 
 onShow(() => {
   store.bootstrap().then(async () => {
+    if (store.state.currentUser?.roleCode === 'AGENT' || store.state.currentUser?.roleCode === 'ADMIN') {
+      uni.redirectTo({ url: '/pages/support-chat-v2/index' })
+      return
+    }
     applyPendingSupportDraft()
     connectSocket()
     await store.markSupportRead()
@@ -529,11 +533,23 @@ function detachPasteListener() {
 
 function applyPendingSupportDraft() {
   const pendingDraft = uni.getStorageSync('pending-support-draft') as string | undefined
-  if (!pendingDraft) return
-  if (!draft.value.trim()) {
+  if (pendingDraft && !draft.value.trim()) {
     draft.value = pendingDraft
   }
   uni.removeStorageSync('pending-support-draft')
+}
+
+async function sendPendingSupportImage() {
+  const pendingImage = uni.getStorageSync('pending-support-image') as string | undefined
+  if (!pendingImage) return false
+  try {
+    await store.sendSupport(pendingImage, 'image')
+    uni.removeStorageSync('pending-support-image')
+    return true
+  } catch (error) {
+    showNotice(error instanceof Error ? error.message : 'Image send failed')
+    return false
+  }
 }
 
 async function handlePasteImage(event: ClipboardEvent) {
@@ -556,6 +572,7 @@ async function sendText(content: string) {
 
   try {
     await store.sendSupport(value)
+    await sendPendingSupportImage()
     startReadRefresh()
     draft.value = ''
     showNotice('Message sent.')

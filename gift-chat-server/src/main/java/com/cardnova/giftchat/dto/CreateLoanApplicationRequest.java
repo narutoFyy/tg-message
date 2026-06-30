@@ -7,6 +7,7 @@ public record CreateLoanApplicationRequest(
     @NotBlank String country,
     @NotBlank String purpose,
     String contact,
-    String repaymentPlan
+    String repaymentPlan,
+    Boolean sendChatMessage
 ) {
 }

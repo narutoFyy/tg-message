@@ -30,6 +30,7 @@
 import { reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+import { safeRouteForRole } from '@/utils/routeGuard'
 
 const store = useAppStore()
 const notice = ref('')
@@ -79,7 +80,7 @@ async function handleSubmit() {
       password
     })
     notice.value = 'Registration complete.'
-    uni.redirectTo({ url: session.nextRoute || '/pages/support/index' })
+    uni.redirectTo({ url: safeRouteForRole(session.nextRoute, session, '/pages/support/index') })
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Registration failed'
   }

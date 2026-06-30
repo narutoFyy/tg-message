@@ -6,16 +6,8 @@
 
     <view class="glass-layer"></view>
 
-    <view class="top-status">
-      <text class="status-time">{{ roomLabel }}</text>
-      <view class="status-icons">
-        <view class="signal-bars"><text></text><text></text><text></text></view>
-        <view class="wifi-mark"></view>
-        <view class="battery-mark"><text></text></view>
-      </view>
-    </view>
-
     <view class="top-actions">
+      <text class="brand-label">{{ roomLabel }}</text>
       <view class="top-icon stack-icon">
         <text></text>
         <text></text>
@@ -46,22 +38,6 @@
 
     <view id="local-video-view" class="local-video">
       <text v-if="!localVideoStarted" class="local-placeholder">Local</text>
-    </view>
-
-    <view class="call-chat">
-      <view v-if="callMessages.length" class="call-chat-feed">
-        <view
-          v-for="message in callMessages"
-          :key="message.id"
-          :class="['call-chat-bubble', isOwnCallMessage(message) && 'is-own']"
-        >
-          <text class="call-chat-author">{{ isOwnCallMessage(message) ? 'Me' : peerLabel }}</text>
-          <text class="call-chat-text">{{ message.content }}</text>
-        </view>
-      </view>
-      <input v-model="chatDraft" class="call-chat-input" placeholder="Message..." @confirm="sendCallChat" />
-      <button :class="['call-chat-send', canSendChat && 'is-ready']" @click="sendCallChat">Send</button>
-      <text v-if="chatNotice" class="call-chat-notice">{{ chatNotice }}</text>
     </view>
 
     <view class="control-panel">
@@ -107,7 +83,7 @@
 import { computed, nextTick, ref } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import TRTC from 'trtc-sdk-v5'
-import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoInviteEvent, VideoSessionBootstrap, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
+import type { ChatRealtimePayload, VideoSessionBootstrap, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import { useAppStore } from '@/store/app'
 import { uiIcons } from '@/utils/art'
 import { connectChatSocket } from '@/utils/realtime'
@@ -120,10 +96,6 @@ const bootstrap = ref<VideoSessionBootstrap | null>(null)
 const roomId = ref('')
 const sessionId = ref('')
 const notice = ref('')
-const chatDraft = ref('')
-const chatSending = ref(false)
-const chatNotice = ref('')
-const callMessages = ref<ChatMessage[]>([])
 const localVideoStarted = ref(false)
 const localAudioStarted = ref(false)
 const localDeviceFailed = ref(false)
@@ -136,7 +108,7 @@ const mutedVideo = ref(false)
 const speakerEnabled = ref(true)
 const trtc = ref<TRTC | null>(null)
 const joined = ref(false)
-const callSocketTask = ref<UniApp.SocketTask | null>(null)
+const statusSocketTask = ref<UniApp.SocketTask | null>(null)
 const terminalStatusHandled = ref(false)
 let unansweredCallTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -177,7 +149,6 @@ const callHint = computed(() => {
 const micLabel = computed(() => mutedAudio.value ? 'Mic off' : 'Mic on')
 const cameraLabel = computed(() => mutedVideo.value ? 'Camera off' : 'Camera on')
 const speakerLabel = computed(() => speakerEnabled.value ? 'Speaker on' : 'Speaker off')
-const canSendChat = computed(() => Boolean(chatDraft.value.trim()) && !chatSending.value)
 const canRetryLocalDevices = computed(() => Boolean(trtc.value) && localDeviceFailed.value)
 const deviceRetryLabel = computed(() => {
   if (mutedAudio.value && mutedVideo.value) return '重新开启麦克风和摄像头'
@@ -195,8 +166,7 @@ onLoad(async (options) => {
     }
     roomId.value = bootstrap.value?.session.roomId || ''
     sessionId.value = bootstrap.value?.session.id || ''
-    prepareCallChat()
-    connectCallChatSocket()
+    connectCallStatusSocket()
     await nextTick()
     await joinRoom()
   } catch (error) {
@@ -385,91 +355,29 @@ async function retryLocalDevices() {
   await startLocalDevices(trtc.value)
 }
 
-function prepareCallChat() {
+function connectCallStatusSocket() {
+  closeCallStatusSocket()
   const session = bootstrap.value?.session
   if (!session) return
 
-  if (session.channelType === 'support') {
-    store.setActiveSupportConversation(session.channelId)
-    callMessages.value = store.state.supportMessages.slice(-6)
-    return
-  }
-
-  const friend = store.state.friends.find((item) => item.id === session.channelId)
-  callMessages.value = (friend?.messages || []).slice(-6)
-}
-
-function connectCallChatSocket() {
-  closeCallChatSocket()
-  const session = bootstrap.value?.session
-  if (!session) return
-
-  callSocketTask.value = connectChatSocket(session.channelType, session.channelId, (payload) => {
-    if (isReadReceipt(payload)) {
-      if (payload.readerUsername !== store.state.currentUser?.username) {
-        if (session.channelType === 'support') {
-          store.applySupportReadReceipt(session.channelId)
-        } else {
-          store.applyFriendReadReceipt(session.channelId)
-        }
-      }
-      return
-    }
-
+  statusSocketTask.value = connectChatSocket(session.channelType, session.channelId, (payload) => {
     if (isVideoSessionStatus(payload)) {
       handleVideoSessionStatus(payload)
-      return
-    }
-
-    if (isVideoInvite(payload) || isPresenceEvent(payload)) {
-      return
-    }
-
-    addCallMessage(payload)
-    if (session.channelType === 'support') {
-      store.pushSupportRealtime(payload, session.channelId)
-      store.markSupportRead().catch(() => {})
-    } else {
-      store.pushFriendRealtime(session.channelId, payload)
-      store.markFriendRead(session.channelId).catch(() => {})
     }
   })
 }
 
-function closeCallChatSocket() {
+function closeCallStatusSocket() {
   try {
-    callSocketTask.value?.close({})
+    statusSocketTask.value?.close({})
   } catch {
     // Cleanup must continue even if the platform socket wrapper throws.
   }
-  callSocketTask.value = null
-}
-
-function addCallMessage(message: ChatMessage) {
-  if (message.type !== 'text' && message.type !== 'link') return
-  if (!callMessages.value.some((item) => item.id === message.id)) {
-    callMessages.value = [...callMessages.value, message].slice(-6)
-  }
-}
-
-function isOwnCallMessage(message: ChatMessage) {
-  return message.author === 'me'
-}
-
-function isReadReceipt(payload: ChatRealtimePayload): payload is ChatReadReceiptEvent {
-  return 'eventType' in payload && payload.eventType === 'read'
-}
-
-function isVideoInvite(payload: ChatRealtimePayload): payload is VideoInviteEvent {
-  return 'eventType' in payload && payload.eventType === 'video_invite'
+  statusSocketTask.value = null
 }
 
 function isVideoSessionStatus(payload: ChatRealtimePayload): payload is VideoSessionStatusEvent {
   return 'eventType' in payload && payload.eventType === 'video_session_status'
-}
-
-function isPresenceEvent(payload: ChatRealtimePayload): payload is PresenceEvent {
-  return 'eventType' in payload && payload.eventType === 'presence'
 }
 
 function handleVideoSessionStatus(event: VideoSessionStatusEvent) {
@@ -580,34 +488,6 @@ async function markCallMissed() {
   }, 1200)
 }
 
-async function sendCallChat() {
-  const content = chatDraft.value.trim()
-  const session = bootstrap.value?.session
-  if (!content || !session || chatSending.value) return
-
-  chatSending.value = true
-  chatNotice.value = ''
-  try {
-    if (session.channelType === 'support') {
-      store.setActiveSupportConversation(session.channelId)
-      const message = await store.sendSupport(content)
-      addCallMessage(message)
-    } else {
-      const message = await store.sendFriendMessage(session.channelId, content)
-      addCallMessage(message)
-    }
-    chatDraft.value = ''
-    chatNotice.value = 'Sent'
-    setTimeout(() => {
-      if (chatNotice.value === 'Sent') chatNotice.value = ''
-    }, 1600)
-  } catch (error) {
-    chatNotice.value = error instanceof Error ? error.message : 'Message failed'
-  } finally {
-    chatSending.value = false
-  }
-}
-
 async function hangup() {
   try {
     await cleanup(true)
@@ -622,7 +502,7 @@ async function cleanup(updateStatus = false) {
   const client = trtc.value
   const cleanupErrors: string[] = []
 
-  await runCleanupStep('close call socket', async () => closeCallChatSocket(), cleanupErrors)
+  await runCleanupStep('close call status socket', async () => closeCallStatusSocket(), cleanupErrors)
   if (client) {
     await runCleanupStep('stop remote video', async () => client.stopRemoteVideo({ userId: '*' }), cleanupErrors)
     await runCleanupStep('stop local video', async () => client.stopLocalVideo(), cleanupErrors)
@@ -710,92 +590,21 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   pointer-events: none;
 }
 
-.top-status {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 42rpx 64rpx 0;
-}
-
-.status-time {
-  font-size: 38rpx;
-  font-weight: 800;
-  line-height: 1;
-  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.28);
-}
-
-.status-icons {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-}
-
-.signal-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 4rpx;
-  height: 24rpx;
-}
-
-.signal-bars text {
-  width: 7rpx;
-  border-radius: 4rpx;
-  background: #ffffff;
-}
-
-.signal-bars text:nth-child(1) { height: 10rpx; }
-.signal-bars text:nth-child(2) { height: 17rpx; }
-.signal-bars text:nth-child(3) { height: 24rpx; }
-
-.wifi-mark {
-  width: 28rpx;
-  height: 20rpx;
-  border: 6rpx solid #ffffff;
-  border-bottom: 0;
-  border-left-color: transparent;
-  border-right-color: transparent;
-  border-radius: 30rpx 30rpx 0 0;
-}
-
-.battery-mark {
-  position: relative;
-  width: 48rpx;
-  height: 24rpx;
-  border: 4rpx solid rgba(255, 255, 255, 0.9);
-  border-radius: 7rpx;
-  box-sizing: border-box;
-}
-
-.battery-mark::after {
-  content: '';
-  position: absolute;
-  right: -8rpx;
-  top: 5rpx;
-  width: 4rpx;
-  height: 10rpx;
-  border-radius: 2rpx;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.battery-mark text {
-  display: block;
-  width: 28rpx;
-  height: 14rpx;
-  margin: 1rpx;
-  border-radius: 3rpx;
-  background: rgba(255, 255, 255, 0.92);
-}
-
 .top-actions {
   position: relative;
   z-index: 2;
-  margin-top: 76rpx;
-  padding: 0 52rpx;
+  padding: 42rpx 52rpx 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.brand-label {
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-shadow: 0 3rpx 10rpx rgba(0, 0, 0, 0.24);
 }
 
 .top-icon {
@@ -969,101 +778,6 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .local-placeholder {
   font-size: 20rpx;
   color: rgba(255, 255, 255, 0.72);
-}
-
-.call-chat {
-  position: absolute;
-  z-index: 4;
-  left: 48rpx;
-  right: 48rpx;
-  bottom: 364rpx;
-  min-height: 66rpx;
-  display: grid;
-  grid-template-columns: 1fr 108rpx;
-  align-items: center;
-  gap: 10rpx;
-}
-
-.call-chat-feed {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 82rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  pointer-events: none;
-}
-
-.call-chat-bubble {
-  max-width: 78%;
-  align-self: flex-start;
-  padding: 10rpx 14rpx;
-  border-radius: 16rpx;
-  background: rgba(0, 0, 0, 0.3);
-  color: #ffffff;
-  box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(12rpx);
-}
-
-.call-chat-bubble.is-own {
-  align-self: flex-end;
-  background: rgba(255, 255, 255, 0.9);
-  color: #2e1616;
-}
-
-.call-chat-author {
-  display: block;
-  margin-bottom: 3rpx;
-  font-size: 18rpx;
-  font-weight: 800;
-  line-height: 1.2;
-  opacity: 0.72;
-}
-
-.call-chat-text {
-  display: block;
-  font-size: 22rpx;
-  line-height: 1.35;
-  word-break: break-word;
-}
-
-.call-chat-input {
-  min-width: 0;
-  height: 66rpx;
-  padding: 0 24rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.22);
-  border-radius: 999rpx;
-  background: rgba(0, 0, 0, 0.28);
-  color: #ffffff;
-  font-size: 24rpx;
-  box-sizing: border-box;
-  backdrop-filter: blur(14rpx);
-}
-
-.call-chat-send {
-  height: 66rpx;
-  padding: 0;
-  border: 0;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.3);
-  color: rgba(255, 255, 255, 0.74);
-  font-size: 22rpx;
-  font-weight: 800;
-  line-height: 66rpx;
-}
-
-.call-chat-send.is-ready {
-  background: rgba(255, 255, 255, 0.94);
-  color: #2e1616;
-}
-
-.call-chat-notice {
-  position: absolute;
-  left: 18rpx;
-  top: -34rpx;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 20rpx;
 }
 
 .control-panel {

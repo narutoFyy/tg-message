@@ -1,9 +1,9 @@
 <template>
   <view :class="['media-message', mediaType]">
-    <image
-      class="media-image"
+    <img
+      class="media-native-image"
       :src="src"
-      mode="aspectFill"
+      alt=""
       @click="$emit('preview', src)"
     />
     <view v-if="mediaType === 'gif'" class="media-badge">GIF</view>
@@ -24,22 +24,28 @@ defineEmits<{
 <style scoped>
 .media-message {
   position: relative;
-  width: min(240px, 58vw);
-  aspect-ratio: 4 / 3;
+  width: min(260px, 58vw);
   overflow: hidden;
   border-radius: 8px;
-  background: #eef2ec;
+  background: #f6faf4;
   box-shadow: inset 0 0 0 1px rgba(42, 68, 43, 0.08);
+  cursor: pointer;
 }
 
 .media-message.gif {
-  aspect-ratio: 1 / 1;
+  width: min(220px, 54vw);
 }
 
-.media-image {
-  width: 100%;
-  height: 100%;
+.media-native-image {
   display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: none;
+}
+
+.media-message.gif .media-native-image {
+  max-width: 100%;
 }
 
 .media-badge {

@@ -2,7 +2,7 @@
   <view :class="['chat-message', mine ? 'mine' : 'theirs', message.author === 'system' ? 'system' : '']">
     <image v-if="!mine && message.author !== 'system'" class="chat-avatar" :src="avatarSrc" mode="aspectFit" />
 
-    <view :class="['chat-bubble', message.author === 'system' ? 'system-bubble' : '']">
+    <view :class="['chat-bubble', bubbleKindClass, message.author === 'system' ? 'system-bubble' : '']">
       <MediaMessage
         v-if="message.type === 'image' || message.type === 'gif'"
         :src="message.content"
@@ -48,12 +48,13 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import CallMessageCard from './CallMessageCard.vue'
 import MediaMessage from './MediaMessage.vue'
 import MessageDeliveryStatus from './MessageDeliveryStatus.vue'
 import type { ChatMessage, VideoSessionItem } from '@/types'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   message: ChatMessage
   mine: boolean
   avatarSrc: string
@@ -96,6 +97,11 @@ defineEmits<{
 }>()
 
 const defaultCallTitle = 'Video call'
+const bubbleKindClass = computed(() => {
+  if (props.message.type === 'image' || props.message.type === 'gif') return 'media-bubble'
+  if (props.message.type === 'video') return 'call-bubble'
+  return ''
+})
 </script>
 
 <style scoped>
@@ -132,6 +138,20 @@ const defaultCallTitle = 'Video call'
   box-sizing: border-box;
 }
 
+.chat-bubble.media-bubble {
+  overflow: hidden;
+  padding: 0;
+  background: #f6faf4 !important;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(42, 68, 43, 0.08);
+}
+
+.chat-bubble.call-bubble {
+  padding: 0;
+  background: transparent !important;
+  box-shadow: none;
+}
+
 .chat-message.theirs .chat-bubble {
   background: rgba(255, 255, 255, 0.92);
   border-top-left-radius: 2px;
@@ -140,6 +160,13 @@ const defaultCallTitle = 'Video call'
 .chat-message.mine .chat-bubble {
   background: linear-gradient(180deg, #efffd1, #f5ffd9);
   border-top-right-radius: 2px;
+}
+
+.chat-message.theirs .chat-bubble.media-bubble,
+.chat-message.mine .chat-bubble.media-bubble,
+.chat-message.theirs .chat-bubble.call-bubble,
+.chat-message.mine .chat-bubble.call-bubble {
+  border-radius: 8px;
 }
 
 .system-bubble {
@@ -182,6 +209,13 @@ const defaultCallTitle = 'Video call'
   justify-content: flex-end;
   gap: 6px;
   margin-top: 5px;
+}
+
+.media-bubble .message-meta {
+  margin-top: 0;
+  padding: 5px 8px 6px;
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 0 0 8px 8px;
 }
 
 .msg-time {

@@ -72,10 +72,31 @@
           </view>
         </view>
         <view class="header-actions">
-          <view class="action-btn" @click="editCustomerNote">备注</view>
-          <view class="action-btn" @click="toggleSound">{{ soundEnabled ? '🔔' : '🔕' }}</view>
-          <view class="action-btn" @click="startVideoCall">📹</view>
-          <view class="action-btn" @click="showMoreActions">⋯</view>
+          <view
+            :class="['icon-action', soundEnabled && 'is-on']"
+            :title="soundEnabled ? 'Mute notifications' : 'Unmute notifications'"
+            @click="toggleSound"
+          >
+            <text class="icon-bell"></text>
+          </view>
+          <view class="icon-action primary" title="Video call" @click="startVideoCall">
+            <text class="icon-video"></text>
+          </view>
+          <view class="header-menu-wrap">
+            <view class="icon-action" title="More actions" @click="toggleMoreMenu">
+              <text class="icon-more"></text>
+            </view>
+            <view v-if="showHeaderMenu" class="header-menu">
+              <view class="header-menu-item" @click="handleHeaderMenu('note')">
+                <text class="menu-icon note"></text>
+                <text>备注客户</text>
+              </view>
+              <view class="header-menu-item" @click="handleHeaderMenu('broadcast')">
+                <text class="menu-icon broadcast"></text>
+                <text>群发消息</text>
+              </view>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -129,12 +150,27 @@
 
       <!-- 底部输入区域 -->
       <view class="input-area">
-        <view class="input-toolbar">
-          <view class="tool-btn" @click="sendImage">📷</view>
-          <view class="tool-btn" @click="sendGif">GIF</view>
-          <view v-if="isAgent" class="tool-btn" @click="sendOwnCustomerBroadcast">📢</view>
-        </view>
         <view class="input-row">
+          <view class="composer-tools-wrap">
+            <view :class="['composer-tool-main', showComposerTools && 'is-open']" title="Attachments" @click="toggleComposerTools">
+              <text></text>
+              <text></text>
+            </view>
+            <view v-if="showComposerTools" class="composer-popover">
+              <view class="composer-option" @click="chooseComposerTool('image')">
+                <text class="composer-option-icon image"></text>
+                <text>图片</text>
+              </view>
+              <view class="composer-option" @click="chooseComposerTool('gif')">
+                <text class="composer-option-icon gif">GIF</text>
+                <text>GIF</text>
+              </view>
+              <view v-if="isAgent" class="composer-option" @click="chooseComposerTool('broadcast')">
+                <text class="composer-option-icon broadcast"></text>
+                <text>群发</text>
+              </view>
+            </view>
+          </view>
           <input v-model="draft" class="message-input" placeholder="输入消息..." @confirm="handleSend" />
           <view class="send-btn" :class="{ 'active': canSend }" @click="handleSend">
             <text>发送</text>
@@ -374,6 +410,8 @@ const workbenchLanguage = ref<'zh' | 'en'>((uni.getStorageSync(WORKBENCH_LANGUAG
 const showChat = ref(false)
 const isMobile = ref(false)
 const activeConversationId = ref('')
+const showHeaderMenu = ref(false)
+const showComposerTools = ref(false)
 const handledVideoInvites = new Set<string>()
 const localVideoStatuses = ref<Record<string, VideoSessionItem['status']>>({})
 const incomingVideoInvite = ref<VideoInviteEvent | null>(null)
@@ -574,6 +612,8 @@ function checkMobile() {
 }
 
 async function selectCustomer(conv: SupportConversationItem) {
+  showHeaderMenu.value = false
+  showComposerTools.value = false
   activeConversationId.value = conv.conversationId
   store.setActiveSupportConversation(conv.conversationId)
   store.clearSupportUnread(conv.conversationId)
@@ -1063,11 +1103,44 @@ function enableAudio() {
 
 function toggleSound() {
   audioEnabled.value = !audioEnabled.value
+  showHeaderMenu.value = false
   uni.setStorageSync(SOUND_ENABLED_KEY, audioEnabled.value)
   uni.showToast({
     title: audioEnabled.value ? '提示音已开启' : '提示音已关闭',
     icon: 'none'
   })
+}
+
+function toggleMoreMenu() {
+  showHeaderMenu.value = !showHeaderMenu.value
+  showComposerTools.value = false
+}
+
+function handleHeaderMenu(action: 'note' | 'broadcast') {
+  showHeaderMenu.value = false
+  if (action === 'note') {
+    editCustomerNote()
+    return
+  }
+  sendOwnCustomerBroadcast()
+}
+
+function toggleComposerTools() {
+  showComposerTools.value = !showComposerTools.value
+  showHeaderMenu.value = false
+}
+
+function chooseComposerTool(action: 'image' | 'gif' | 'broadcast') {
+  showComposerTools.value = false
+  if (action === 'image') {
+    sendImage()
+    return
+  }
+  if (action === 'gif') {
+    sendGif()
+    return
+  }
+  sendOwnCustomerBroadcast()
 }
 
 function playIncomingSound() {
@@ -1123,6 +1196,8 @@ async function handlePasteImage(event: ClipboardEvent) {
 }
 
 async function handleSend() {
+  showHeaderMenu.value = false
+  showComposerTools.value = false
   if (activeAttachment.value) {
     await sendPendingAttachment()
     return
@@ -1278,33 +1353,6 @@ async function startVideoCall() {
   }
 }
 
-function showMoreActions() {
-  if (!activeConversationId.value) {
-    uni.showToast({ title: '请先选择客户', icon: 'none' })
-    return
-  }
-
-  uni.showActionSheet({
-    itemList: ['视频通话', '查看客户资料', '清空聊天记录'],
-    success(result) {
-      if (result.tapIndex === 0) {
-        startVideoCall()
-      } else if (result.tapIndex === 1) {
-        uni.showToast({ title: '客户资料功能开发中', icon: 'none' })
-      } else if (result.tapIndex === 2) {
-        uni.showModal({
-          title: '确认清空',
-          content: '确定要清空与该客户的聊天记录吗？',
-          success(res) {
-            if (res.confirm) {
-              uni.showToast({ title: '清空功能开发中', icon: 'none' })
-            }
-          }
-        })
-      }
-    }
-  })
-}
 
 function previewImage(url: string) {
   uni.previewImage({ urls: [url], current: url })
@@ -1957,8 +2005,10 @@ function previewImage(url: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.92);
+  gap: 16px;
+  min-height: 64px;
+  padding: 10px 18px;
+  background: rgba(255, 255, 255, 0.96);
   border-bottom: 1px solid rgba(90, 123, 89, 0.2);
   backdrop-filter: blur(10px);
 }
@@ -1966,6 +2016,7 @@ function previewImage(url: string) {
 .header-left {
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .back-btn {
@@ -1990,12 +2041,16 @@ function previewImage(url: string) {
 .header-info {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .header-name {
   font-size: 16px;
   font-weight: 600;
   color: #333333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-status {
@@ -2016,24 +2071,200 @@ function previewImage(url: string) {
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.action-btn {
-  min-width: 36px;
+.icon-action {
+  position: relative;
+  width: 36px;
   height: 36px;
-  padding: 0 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  cursor: pointer;
   border-radius: 50%;
-  transition: background 0.2s;
+  background: transparent;
+  color: #44544b;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
-.action-btn:hover {
-  background: #f0f0f0;
+.icon-action:hover {
+  background: rgba(17, 42, 31, 0.08);
+  color: #14291d;
+}
+
+.icon-action:active {
+  transform: scale(0.96);
+}
+
+.icon-action.primary {
+  background: rgba(0, 168, 132, 0.11);
+  color: #007d65;
+}
+
+.icon-action.primary:hover {
+  background: rgba(0, 168, 132, 0.18);
+  color: #00644f;
+}
+
+.icon-action.is-on::after {
+  content: '';
+  position: absolute;
+  right: 7px;
+  top: 8px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #12c96b;
+}
+
+.icon-bell {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  border: 2px solid currentColor;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  border-bottom: 0;
+}
+
+.icon-bell::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.icon-bell::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  bottom: -8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.icon-video {
+  position: relative;
+  width: 18px;
+  height: 13px;
+  border-radius: 4px;
+  background: currentColor;
+}
+
+.icon-video::after {
+  content: '';
+  position: absolute;
+  right: -7px;
+  top: 3px;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 8px solid currentColor;
+}
+
+.icon-more {
+  position: relative;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: -8px 0 0 currentColor, 8px 0 0 currentColor;
+}
+
+.header-menu-wrap {
+  position: relative;
+}
+
+.header-menu {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  top: 44px;
+  width: 156px;
+  padding: 6px;
+  border: 1px solid rgba(83, 107, 91, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 46px rgba(23, 45, 33, 0.16);
+  box-sizing: border-box;
+}
+
+.header-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: #26352b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.header-menu-item:hover {
+  background: rgba(0, 168, 132, 0.08);
+}
+
+.menu-icon {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  color: #5d6a62;
+  flex-shrink: 0;
+}
+
+.menu-icon.note {
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.menu-icon.note::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  box-shadow: 0 5px 0 currentColor;
+}
+
+.menu-icon.broadcast::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 6px;
+  width: 8px;
+  height: 6px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.menu-icon.broadcast::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  top: 3px;
+  width: 6px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  box-sizing: border-box;
 }
 
 .message-area {
@@ -2328,54 +2559,182 @@ function previewImage(url: string) {
 }
 
 .input-area {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.96);
   border-top: 1px solid rgba(90, 123, 89, 0.2);
-  padding: 8px 16px 8px;
+  padding: 12px 16px;
   backdrop-filter: blur(10px);
-}
-
-.input-toolbar {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 8px;
-}
-
-.tool-btn {
-  font-size: 20px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.2s;
-}
-
-.tool-btn:hover {
-  background: #f0f0f0;
 }
 
 .input-row {
   display: flex;
-  gap: 12px;
   align-items: center;
+  gap: 10px;
+}
+
+.composer-tools-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.composer-tool-main {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(33, 56, 43, 0.06);
+  color: #42524a;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.composer-tool-main:hover,
+.composer-tool-main.is-open {
+  background: rgba(0, 168, 132, 0.12);
+  color: #007d65;
+}
+
+.composer-tool-main:active {
+  transform: scale(0.96);
+}
+
+.composer-tool-main text:first-child,
+.composer-tool-main text:last-child {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.composer-tool-main text:last-child {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.composer-popover {
+  position: absolute;
+  left: 0;
+  bottom: 48px;
+  width: 176px;
+  padding: 8px;
+  border: 1px solid rgba(83, 107, 91, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 44px rgba(23, 45, 33, 0.16);
+  box-sizing: border-box;
+  z-index: 18;
+}
+
+.composer-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: #24352b;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.composer-option:hover {
+  background: rgba(0, 168, 132, 0.08);
+}
+
+.composer-option-icon {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(0, 168, 132, 0.1);
+  color: #00896d;
+  flex-shrink: 0;
+}
+
+.composer-option-icon.image::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 7px;
+  width: 14px;
+  height: 11px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.composer-option-icon.image::after {
+  content: '';
+  position: absolute;
+  left: 9px;
+  bottom: 7px;
+  width: 10px;
+  height: 7px;
+  background: linear-gradient(135deg, transparent 0 42%, currentColor 43% 57%, transparent 58%);
+}
+
+.composer-option-icon.gif {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.composer-option-icon.broadcast::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 10px;
+  width: 9px;
+  height: 6px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.composer-option-icon.broadcast::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  top: 7px;
+  width: 6px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  box-sizing: border-box;
 }
 
 .message-input {
   flex: 1;
-  padding: 10px 14px;
-  border: 1px solid rgba(90, 123, 89, 0.25);
-  border-radius: 6px;
+  min-width: 0;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(80, 116, 93, 0.22);
+  border-radius: 8px;
   font-size: 14px;
   background: rgba(255, 255, 255, 0.9);
+  box-sizing: border-box;
 }
 
 .send-btn {
-  padding: 10px 24px;
+  min-width: 76px;
+  height: 40px;
+  padding: 0 18px;
   background: rgba(0, 168, 132, 0.2);
   color: #6f8069;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 800;
+  line-height: 40px;
+  text-align: center;
   cursor: pointer;
   transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .send-btn.active {

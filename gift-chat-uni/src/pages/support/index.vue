@@ -33,7 +33,7 @@
 
             <view :class="['message-bubble', message.author === 'system' ? 'system-bubble' : '']">
               <image
-                v-if="message.type === 'image'"
+                v-if="message.type === 'image' || message.type === 'gif'"
                 class="message-img"
                 :src="message.content"
                 mode="aspectFill"
@@ -374,6 +374,7 @@ function lastMessageText(item: { messages: ChatMessage[] }) {
   const last = item.messages[item.messages.length - 1]
   if (!last) return 'No messages'
   if (last.type === 'image') return 'Image'
+  if (last.type === 'gif') return 'GIF'
   if (last.type === 'voice') return 'Voice'
   if (last.type === 'video') return 'Video call'
   return last.content.length > 28 ? `${last.content.slice(0, 28)}...` : last.content
@@ -635,7 +636,10 @@ function sendVoice() {
 
 async function sendGif() {
   try {
-    await store.sendSupport('[GIF] smile', 'gif')
+    const filePath = await chooseImageOnce()
+    if (!filePath) return
+    const asset = await uploadImage(filePath)
+    await store.sendSupport(asset.publicUrl, 'gif')
     showNotice('GIF sent.')
   } catch (error) {
     showNotice(error instanceof Error ? error.message : 'GIF send failed')

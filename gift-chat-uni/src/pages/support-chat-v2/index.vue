@@ -97,7 +97,7 @@
             <view :class="['message-bubble', msg.author === 'system' ? 'system-bubble' : '']">
               <!-- 图片消息 -->
               <image
-                v-if="msg.type === 'image'"
+                v-if="msg.type === 'image' || msg.type === 'gif'"
                 class="message-img"
                 :src="msg.content"
                 mode="aspectFill"
@@ -651,6 +651,7 @@ function getLastMessage(conv: SupportConversationItem) {
   const last = conv.messages[conv.messages.length - 1]
   if (!last) return '暂无消息'
   if (last.type === 'image') return '[图片]'
+  if (last.type === 'gif') return '[GIF]'
   if (last.type === 'voice') return '[语音]'
   if (last.type === 'video') return '[视频通话]'
   return last.content.length > 20 ? `${last.content.slice(0, 20)}...` : last.content
@@ -1173,26 +1174,73 @@ async function sendPendingImage() {
 }
 
 async function sendImage() {
-  uni.chooseImage({
-    count: 1,
-    async success(result) {
-      const filePath = result.tempFilePaths?.[0]
-      if (!filePath) return
-      try {
-        const asset = await uploadImage(filePath)
-        await store.sendSupport(asset.publicUrl, 'image')
-        scrollMessagesToBottom()
-        startReadRefresh()
-      } catch (error) {
-        uni.showToast({ title: '图片发送失败', icon: 'none' })
+  try {
+    const filePath = await chooseImageOnce()
+    if (!filePath) return
+    const asset = await uploadImage(filePath)
+    await store.sendSupport(asset.publicUrl, 'image')
+    scrollMessagesToBottom()
+    startReadRefresh()
+  } catch (error) {
+    uni.showToast({ title: '图片发送失败', icon: 'none' })
+  }
+}
+
+async function sendGif() {
+  try {
+    const filePath = await chooseImageOnce()
+    if (!filePath) return
+    const asset = await uploadImage(filePath)
+    await store.sendSupport(asset.publicUrl, 'gif')
+    scrollMessagesToBottom()
+    startReadRefresh()
+  } catch (error) {
+    uni.showToast({ title: 'GIF发送失败', icon: 'none' })
+  }
+}
+
+function chooseImageOnce() {
+  // #ifdef H5
+  return chooseBrowserImageOnce()
+  // #endif
+  return new Promise<string | null>((resolve, reject) => {
+    uni.chooseImage({
+      count: 1,
+      success(result) {
+        resolve(result.tempFilePaths?.[0] || null)
+      },
+      fail(error) {
+        reject(error)
       }
-    }
+    })
   })
 }
 
-function sendGif() {
-  store.sendSupport('[GIF]', 'gif').catch(() => {
-    uni.showToast({ title: '发送失败', icon: 'none' })
+function chooseBrowserImageOnce() {
+  return new Promise<string | null>((resolve, reject) => {
+    if (typeof document === 'undefined') {
+      resolve(null)
+      return
+    }
+
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.style.position = 'fixed'
+    input.style.left = '-9999px'
+    document.body.appendChild(input)
+
+    input.onchange = () => {
+      const file = input.files?.[0]
+      const filePath = file ? URL.createObjectURL(file) : null
+      input.remove()
+      resolve(filePath)
+    }
+    input.onerror = (event) => {
+      input.remove()
+      reject(event)
+    }
+    input.click()
   })
 }
 

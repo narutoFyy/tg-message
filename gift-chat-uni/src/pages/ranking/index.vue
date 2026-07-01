@@ -291,7 +291,7 @@ function goBack() {
   min-width: 210rpx;
   height: 78rpx;
   border-radius: 8rpx;
-  background: #08c967;
+  background: #0088cc;
   color: #fff;
   font-size: 30rpx;
   font-weight: 900;

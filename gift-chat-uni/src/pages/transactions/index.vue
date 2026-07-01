@@ -190,7 +190,7 @@ function openSupportChat() {
 }
 
 .battery {
-  color: #1dcf72;
+  color: #0088cc;
 }
 
 .hero-card {
@@ -218,16 +218,17 @@ function openSupportChat() {
 
 .stat-pill {
   min-height: 118rpx;
-  border-radius: 26rpx;
+  border-radius: 12rpx;
   padding: 18rpx;
-  background: linear-gradient(180deg, #fff8de, #ffeec8);
+  background: #f3f6f8;
+  border: 1rpx solid rgba(136, 153, 166, 0.16);
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 
 .stat-pill.mint {
-  background: linear-gradient(180deg, #e9fff4, #dafced);
+  background: rgba(0, 136, 204, 0.08);
 }
 
 .stat-label {
@@ -255,7 +256,7 @@ function openSupportChat() {
   min-width: 136rpx;
   height: 70rpx;
   padding: 0 20rpx;
-  border-radius: 999rpx;
+  border-radius: 10rpx;
   background: #f2f5f7;
   color: #6a717a;
   display: inline-flex;
@@ -266,7 +267,7 @@ function openSupportChat() {
 }
 
 .active-filter {
-  background: linear-gradient(180deg, #17da70, #08c85f);
+  background: #0088cc;
   color: #ffffff;
 }
 

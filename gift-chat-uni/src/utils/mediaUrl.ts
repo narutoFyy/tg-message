@@ -13,7 +13,7 @@ export function resolveMediaUrl(url: string) {
   const absoluteUrl = parseAbsoluteUrl(value)
   if (absoluteUrl) {
     const uploadPath = extractUploadPath(`${absoluteUrl.pathname}${absoluteUrl.search}${absoluteUrl.hash}`)
-    if (uploadPath && shouldUseSameOriginUpload(absoluteUrl.hostname)) {
+    if (uploadPath && shouldUseSameOriginUpload(absoluteUrl)) {
       return uploadPath
     }
     return value
@@ -47,25 +47,10 @@ function parseAbsoluteUrl(value: string) {
   }
 }
 
-function shouldUseSameOriginUpload(hostname: string) {
-  const normalized = hostname.toLowerCase()
-  const currentHostname = getCurrentHostname()
-  return (
-    (!!currentHostname && normalized === currentHostname) ||
-    normalized === 'localhost' ||
-    normalized === '127.0.0.1' ||
-    normalized === '0.0.0.0' ||
-    normalized === '::1' ||
-    normalized.startsWith('10.') ||
-    normalized.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)
-  )
-}
-
-function getCurrentHostname() {
+function shouldUseSameOriginUpload(url: URL) {
   if (typeof window === 'undefined') {
-    return ''
+    return false
   }
 
-  return window.location.hostname.toLowerCase()
+  return url.origin === window.location.origin
 }

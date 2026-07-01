@@ -265,7 +265,8 @@ function goBack() {
 .sell-page {
   min-height: 100vh;
   padding-bottom: 180rpx;
-  background: linear-gradient(180deg, #9cf5ba 0%, #f7fff9 26%, #ffffff 100%);
+  background: linear-gradient(180deg, #edf4f8 0%, #f7f9fb 30%, #ffffff 100%);
+  box-sizing: border-box;
 }
 
 .sell-head {
@@ -313,7 +314,7 @@ function goBack() {
   min-width: 210rpx;
   height: 78rpx;
   border-radius: 10rpx;
-  background: #08c967;
+  background: #0088cc;
   color: #ffffff;
   font-size: 30rpx;
   font-weight: 900;
@@ -325,6 +326,11 @@ function goBack() {
   display: flex;
   flex-direction: column;
   gap: 36rpx;
+  padding: 28rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1rpx solid rgba(136, 153, 166, 0.18);
+  box-shadow: 0 12rpx 34rpx rgba(25, 42, 62, 0.08);
 }
 
 .form-row {
@@ -398,7 +404,7 @@ function goBack() {
 
 .plus,
 .active-segment {
-  background: #08c967;
+  background: #0088cc;
   color: #ffffff;
 }
 
@@ -423,8 +429,8 @@ function goBack() {
   width: 230rpx;
   min-height: 180rpx;
   border-radius: 18rpx;
-  border: 2rpx dashed #aeeecd;
-  background: #f6fffb;
+  border: 2rpx dashed rgba(0, 136, 204, 0.26);
+  background: #f7f9fb;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -436,7 +442,7 @@ function goBack() {
   width: 70rpx;
   height: 70rpx;
   border-radius: 18rpx;
-  background: #08c967;
+  background: #0088cc;
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -451,9 +457,12 @@ function goBack() {
 
 .settlement-bar {
   position: fixed;
-  left: 0;
-  right: 0;
+  left: 50%;
+  right: auto;
   bottom: 0;
+  width: 100%;
+  max-width: 980px;
+  transform: translateX(-50%);
   min-height: 122rpx;
   padding: 20rpx 34rpx 30rpx;
   background: rgba(255, 255, 255, 0.96);
@@ -462,6 +471,23 @@ function goBack() {
   align-items: center;
   justify-content: space-between;
   gap: 22rpx;
+}
+
+@media (min-width: 900px) {
+  .sell-page {
+    max-width: 980px;
+    margin: 0 auto;
+    border-left: 1px solid rgba(136, 153, 166, 0.14);
+    border-right: 1px solid rgba(136, 153, 166, 0.14);
+  }
+
+  .card-picker {
+    margin-top: 24rpx;
+  }
+
+  .form-panel {
+    margin-top: 28rpx;
+  }
 }
 
 .settlement-label {
@@ -475,7 +501,7 @@ function goBack() {
   display: block;
   margin-top: 6rpx;
   font-size: 42rpx;
-  color: #08c967;
+  color: #0088cc;
   font-weight: 900;
 }
 

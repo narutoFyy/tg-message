@@ -139,7 +139,9 @@ const bubbleKindClass = computed(() => {
 }
 
 .chat-bubble.media-bubble {
-  max-width: min(72%, 340px);
+  width: auto;
+  max-width: none;
+  flex: 0 0 auto;
   min-width: 0;
   overflow: hidden;
   padding: 0;
@@ -161,7 +163,7 @@ const bubbleKindClass = computed(() => {
 }
 
 .chat-message.mine .chat-bubble {
-  background: linear-gradient(180deg, #efffd1, #f5ffd9);
+  background: #e8f6ef;
   border-top-right-radius: 2px;
 }
 
@@ -238,7 +240,8 @@ const bubbleKindClass = computed(() => {
   }
 
   .chat-bubble.media-bubble {
-    max-width: min(82%, 300px);
+    width: auto;
+    max-width: none;
   }
 
   .chat-avatar {

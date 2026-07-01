@@ -39,12 +39,13 @@ function go(url: string) {
   left: 24rpx;
   right: 24rpx;
   bottom: 20rpx;
-  height: 122rpx;
-  padding: 14rpx 10rpx 18rpx;
+  height: 112rpx;
+  padding: 12rpx 10rpx 14rpx;
   display: flex;
   align-items: flex-end;
   justify-content: space-around;
   z-index: 30;
+  backdrop-filter: blur(18rpx);
 }
 
 .tab-item {
@@ -63,12 +64,12 @@ function go(url: string) {
 
 .tab-label {
   font-size: 24rpx;
-  color: #9fa8b4;
+  color: #7d8b97;
   font-weight: 700;
 }
 
 .tab-label.active,
 .tab-item:active .tab-label {
-  color: #12c96b;
+  color: #0088cc;
 }
 </style>

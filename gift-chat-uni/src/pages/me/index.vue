@@ -191,9 +191,7 @@ function shareInvite() {
   position: absolute;
   inset: 0 0 auto;
   height: 620rpx;
-  background:
-    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.18) 26%, transparent 48%),
-    linear-gradient(180deg, #ffd7bc 0%, #ffe9d7 45%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(180deg, #edf4f8 0%, rgba(247, 249, 251, 0.92) 48%, rgba(255, 255, 255, 0) 100%);
   pointer-events: none;
 }
 
@@ -213,7 +211,7 @@ function shareInvite() {
 }
 
 .battery {
-  color: #1dcf72;
+  color: #0088cc;
 }
 
 .me-head {
@@ -221,9 +219,8 @@ function shareInvite() {
 }
 
 .me-title {
-  font-size: 62rpx;
+  font-size: 48rpx;
   font-weight: 900;
-  font-family: Georgia, serif;
 }
 
 .icons {
@@ -277,12 +274,12 @@ function shareInvite() {
   z-index: 1;
   margin-top: 22rpx;
   min-height: 122rpx;
-  border-radius: 28rpx;
+  border-radius: 16rpx;
   padding: 0 26rpx;
   background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.12), transparent 36%),
-    linear-gradient(180deg, #202744, #2d315b);
-  color: #ffe8ca;
+    linear-gradient(120deg, rgba(255, 255, 255, 0.08), transparent 36%),
+    linear-gradient(180deg, #17212b, #223241);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -335,9 +332,9 @@ function shareInvite() {
   z-index: 1;
   min-width: 208rpx;
   height: 74rpx;
-  border-radius: 38rpx;
-  background: #ffd8ba;
-  color: #54412f;
+  border-radius: 10rpx;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -371,7 +368,7 @@ function shareInvite() {
 
 .quick-card {
   min-height: 158rpx;
-  border-radius: 24rpx;
+  border-radius: 12rpx;
   padding: 22rpx;
   display: flex;
   justify-content: space-between;
@@ -380,13 +377,11 @@ function shareInvite() {
 }
 
 .wallet {
-  background: linear-gradient(135deg, #fff7db, #fff0c2);
+  background: #f3f6f8;
 }
 
 .support-card {
-  background:
-    radial-gradient(circle at 18% 100%, rgba(116, 232, 154, 0.28), transparent 34%),
-    linear-gradient(135deg, #eefff2, #dcfff3);
+  background: rgba(0, 136, 204, 0.08);
 }
 
 .quick-title {
@@ -422,11 +417,10 @@ function shareInvite() {
   z-index: 1;
   margin-top: 22rpx;
   min-height: 258rpx;
-  border-radius: 28rpx;
+  border-radius: 16rpx;
   padding: 26rpx 26rpx 22rpx;
-  background:
-    radial-gradient(circle at 50% 32%, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.08) 34%, transparent 55%),
-    linear-gradient(180deg, #edfef0, #dffcf9);
+  background: #ffffff;
+  border: 1rpx solid rgba(136, 153, 166, 0.16);
   overflow: hidden;
 }
 

@@ -68,7 +68,7 @@
           <view class="header-info">
             <text class="header-name">{{ activeCustomer ? customerDisplayName(activeCustomer) : '选择客户' }}</text>
             <text v-if="activeCustomer?.agentNote" class="header-note">{{ activeCustomer.customerUsername }}</text>
-            <text :class="['header-status', { offline: !activeCustomer?.online }]">{{ activeCustomer?.online ? '在线' : '离线' }}</text>
+            <text :class="['header-status', { offline: connectionStatusOffline }]">{{ connectionStatusLabel }}</text>
           </view>
         </view>
         <view class="header-actions">
@@ -436,6 +436,12 @@ const filteredConversations = computed(() => {
 const activeCustomer = computed(() =>
   store.state.supportConversations.find(c => c.conversationId === activeConversationId.value)
 )
+const connectionStatusLabel = computed(() => {
+  if (socketStatus.value === 'connecting') return '连接中'
+  if (socketStatus.value === 'offline') return '重连中'
+  return activeCustomer.value?.online ? '在线' : '已连接'
+})
+const connectionStatusOffline = computed(() => socketStatus.value !== 'online' || !activeCustomer.value?.online)
 const soundEnabled = computed(() => audioEnabled.value)
 const profile = computed(() => store.state.activeSupportCustomerProfile)
 const supportLedger = computed(() => store.state.supportLedger)
@@ -965,6 +971,7 @@ function connectSocket() {
         refreshPresence()
       },
       onReconnect: () => {
+        socketStatus.value = 'connecting'
         store.recoverSupportMessages(conversationId).catch(() => {})
       }
     })
@@ -1384,7 +1391,7 @@ function previewImage(url: string) {
   height: 100vh;
   width: 100%;
   overflow: hidden;
-  background: #edf4ea;
+  background: #e8eef2;
 }
 
 /* ============ 左侧客户列表 ============ */
@@ -1392,8 +1399,8 @@ function previewImage(url: string) {
   width: 304px;
   flex: 0 0 304px;
   min-width: 240px;
-  background: #f9fbf8;
-  border-right: 1px solid rgba(90, 123, 89, 0.16);
+  background: #f7f9fb;
+  border-right: 1px solid rgba(136, 153, 166, 0.22);
   display: flex;
   flex-direction: column;
   transition: transform 0.3s;
@@ -1404,8 +1411,8 @@ function previewImage(url: string) {
   width: 360px;
   flex: 0 1 360px;
   min-width: 280px;
-  background: #fbfcfa;
-  border-left: 1px solid rgba(90, 123, 89, 0.16);
+  background: #ffffff;
+  border-left: 1px solid rgba(136, 153, 166, 0.22);
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(10px);
@@ -1439,9 +1446,9 @@ function previewImage(url: string) {
   height: 26px;
   padding: 0 9px;
   border-radius: 8px;
-  border: 1px solid rgba(18, 201, 107, 0.25);
-  background: rgba(18, 201, 107, 0.08);
-  color: #0a7a44;
+  border: 1px solid rgba(0, 136, 204, 0.24);
+  background: rgba(0, 136, 204, 0.08);
+  color: #0088cc;
   font-size: 12px;
   font-weight: 900;
   display: flex;
@@ -1452,7 +1459,7 @@ function previewImage(url: string) {
 }
 
 .language-toggle:active {
-  background: rgba(18, 201, 107, 0.18);
+  background: rgba(0, 136, 204, 0.16);
 }
 
 .profile-eyebrow {
@@ -1791,7 +1798,7 @@ function previewImage(url: string) {
 }
 
 .mini-btn.primary {
-  background: #12c96b;
+  background: #0088cc;
   color: #ffffff;
 }
 
@@ -1823,7 +1830,7 @@ function previewImage(url: string) {
 
 .sidebar-header {
   padding: 14px 12px;
-  border-bottom: 1px solid rgba(90, 123, 89, 0.15);
+  border-bottom: 1px solid rgba(136, 153, 166, 0.18);
   background: #f9fbf8;
 }
 
@@ -2008,7 +2015,7 @@ function previewImage(url: string) {
   min-width: 360px;
   display: flex;
   flex-direction: column;
-  background: #e4f3dc;
+  background: #e8eef2;
   transition: transform 0.3s;
   backdrop-filter: blur(10px);
 }
@@ -2290,7 +2297,11 @@ function previewImage(url: string) {
 .message-area {
   flex: 1;
   min-height: 0;
-  background: transparent;
+  background-image:
+    linear-gradient(180deg, rgba(232, 238, 242, 0.76), rgba(232, 238, 242, 0.82)),
+    url('/static/chat-bg.png');
+  background-size: cover;
+  background-position: center;
   padding: 18px 24px;
   box-sizing: border-box;
   overflow-y: auto;
@@ -2310,8 +2321,8 @@ function previewImage(url: string) {
 .date-divider text {
   display: inline-block;
   padding: 4px 12px;
-  background: rgba(255, 255, 255, 0.58);
-  color: #7c8a7e;
+  background: rgba(255, 255, 255, 0.78);
+  color: #51606d;
   font-size: 12px;
   border-radius: 12px;
 }
@@ -2344,15 +2355,15 @@ function previewImage(url: string) {
 }
 
 .message-wrapper.theirs .message-bubble {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.98);
   border-top-left-radius: 2px;
-  box-shadow: 0 2px 8px rgba(42, 68, 43, 0.08);
+  box-shadow: 0 2px 8px rgba(25, 42, 62, 0.08);
 }
 
 .message-wrapper.mine .message-bubble {
-  background: linear-gradient(180deg, #efffd1, #f5ffd9);
+  background: rgba(232, 246, 239, 0.98);
   border-top-right-radius: 2px;
-  box-shadow: 0 2px 8px rgba(42, 68, 43, 0.08);
+  box-shadow: 0 2px 8px rgba(25, 42, 62, 0.08);
 }
 
 .system-bubble {
@@ -2378,7 +2389,7 @@ function previewImage(url: string) {
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   font-size: 13px;
   line-height: 1.45;
-  color: #20805f;
+  color: #0088cc;
 }
 
 .message-img {
@@ -2579,8 +2590,8 @@ function previewImage(url: string) {
 }
 
 .input-area {
-  background: #fbfcfa;
-  border-top: 1px solid rgba(90, 123, 89, 0.16);
+  background: #ffffff;
+  border-top: 1px solid rgba(136, 153, 166, 0.22);
   padding: 10px 16px 12px;
   backdrop-filter: blur(10px);
 }
@@ -2601,16 +2612,16 @@ function previewImage(url: string) {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: rgba(33, 56, 43, 0.06);
-  color: #42524a;
+  background: rgba(23, 33, 43, 0.06);
+  color: #51606d;
   cursor: pointer;
   transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
 .composer-tool-main:hover,
 .composer-tool-main.is-open {
-  background: rgba(0, 168, 132, 0.12);
-  color: #007d65;
+  background: rgba(0, 136, 204, 0.1);
+  color: #0088cc;
 }
 
 .composer-tool-main:active {
@@ -2639,10 +2650,10 @@ function previewImage(url: string) {
   bottom: 50px;
   width: 176px;
   padding: 8px;
-  border: 1px solid rgba(83, 107, 91, 0.14);
+  border: 1px solid rgba(136, 153, 166, 0.2);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 18px 44px rgba(23, 45, 33, 0.16);
+  box-shadow: 0 18px 44px rgba(25, 42, 62, 0.14);
   box-sizing: border-box;
   z-index: 18;
 }
@@ -2654,14 +2665,14 @@ function previewImage(url: string) {
   min-height: 42px;
   padding: 0 10px;
   border-radius: 7px;
-  color: #24352b;
+  color: #17212b;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
 }
 
 .composer-option:hover {
-  background: rgba(0, 168, 132, 0.08);
+  background: rgba(0, 136, 204, 0.08);
 }
 
 .composer-option-icon {
@@ -2669,8 +2680,8 @@ function previewImage(url: string) {
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  background: rgba(0, 168, 132, 0.1);
-  color: #00896d;
+  background: rgba(0, 136, 204, 0.1);
+  color: #0088cc;
   flex-shrink: 0;
 }
 

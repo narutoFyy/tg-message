@@ -1,5 +1,5 @@
 <template>
-  <view class="page-shell soft-page home-page">
+  <view class="page-shell home-page">
     <view class="status-row">
       <text class="clock">05:47</text>
       <text class="battery">30%</text>
@@ -19,9 +19,9 @@
     <view class="banner-card" @click="openTaskModal">
       <view class="banner-glow banner-glow-left"></view>
       <view class="banner-copy">
-        <text class="banner-tag">Keep the Madness Alive</text>
-        <text class="banner-title">Enhanced Rank Perks</text>
-        <text class="banner-sub">₦10.43M Prize Pool: One Million Mega Grand Prize</text>
+        <text class="banner-tag">Rate desk</text>
+        <text class="banner-title">Live Rate Desk</text>
+        <text class="banner-sub">Track active cards, settlement country, and current selling rates.</text>
       </view>
       <image class="banner-art" :src="pageArt.homeBanner" mode="aspectFill" />
       <view class="banner-indicator"></view>
@@ -78,11 +78,11 @@
             <view class="coin-core"></view>
             <text>₦300</text>
           </view>
-          <text class="reward-text">Daily Task: Sell at least ₦20000 worth of cards to claim the reward</text>
+          <text class="reward-text">Daily Task: Sell at least 20000 worth of cards to claim the reward</text>
           <button class="primary-button reward-button" @click="dismissTaskModal">Go</button>
         </view>
       </view>
-      <view class="close-ring" @click="dismissTaskModal">×</view>
+      <view class="close-ring" @click="dismissTaskModal">x</view>
     </view>
 
     <AppNav current="home" />
@@ -169,6 +169,13 @@ function clearTaskModalTimer() {
 <style scoped lang="scss">
 .home-page {
   position: relative;
+  min-height: 100vh;
+  background-image:
+    linear-gradient(180deg, rgba(2, 10, 16, 0.16), rgba(2, 10, 16, 0.58)),
+    url('/static/home-bg.png');
+  background-size: cover;
+  background-position: center;
+  overflow-x: hidden;
 }
 
 .status-row,
@@ -185,7 +192,7 @@ function clearTaskModalTimer() {
 }
 
 .battery {
-  color: #1dcf72;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .top-head {
@@ -207,12 +214,19 @@ function clearTaskModalTimer() {
 .country {
   font-size: 38rpx;
   font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 4rpx 18rpx rgba(0, 0, 0, 0.26);
 }
 
 .country {
   display: flex;
   align-items: center;
   gap: 10rpx;
+  padding: 10rpx 16rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1rpx solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(14rpx);
 }
 
 .country-arrow {
@@ -223,11 +237,14 @@ function clearTaskModalTimer() {
 .banner-card {
   position: relative;
   min-height: 190rpx;
-  border-radius: 28rpx;
+  border-radius: 16rpx;
   padding: 26rpx 28rpx 32rpx;
-  background: linear-gradient(118deg, #f55f49 0%, #fa8346 45%, #ffbf68 100%);
+  background: rgba(10, 25, 34, 0.58);
   overflow: hidden;
-  color: #fff8f2;
+  color: #ffffff;
+  border: 1rpx solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 22rpx 52rpx rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18rpx);
 }
 
 .banner-copy {
@@ -237,10 +254,7 @@ function clearTaskModalTimer() {
 }
 
 .banner-glow {
-  position: absolute;
-  border-radius: 999rpx;
-  background: rgba(255, 249, 202, 0.55);
-  filter: blur(14rpx);
+  display: none;
 }
 
 .banner-glow-left {
@@ -262,22 +276,20 @@ function clearTaskModalTimer() {
 .banner-tag {
   display: inline-flex;
   padding: 10rpx 18rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 251, 239, 0.94);
-  color: #2d2720;
+  border-radius: 8rpx;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
   font-size: 22rpx;
   font-weight: 800;
-  box-shadow: 0 8rpx 24rpx rgba(124, 61, 26, 0.18);
+  border: 1rpx solid rgba(255, 255, 255, 0.18);
 }
 
 .banner-title {
   display: block;
   margin-top: 20rpx;
-  font-size: 52rpx;
+  font-size: 44rpx;
   font-weight: 900;
-  font-style: italic;
   line-height: 1;
-  text-shadow: 0 6rpx 12rpx rgba(150, 70, 33, 0.18);
 }
 
 .banner-sub {
@@ -285,6 +297,8 @@ function clearTaskModalTimer() {
   margin-top: 10rpx;
   font-size: 24rpx;
   font-weight: 700;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .banner-indicator {
@@ -302,7 +316,10 @@ function clearTaskModalTimer() {
 .tab-card {
   margin-top: 18rpx;
   padding: 18rpx 20rpx 10rpx;
-  border-radius: 30rpx 30rpx 12rpx 12rpx;
+  border-radius: 16rpx 16rpx 8rpx 8rpx;
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(255, 255, 255, 0.36);
+  backdrop-filter: blur(18rpx);
 }
 
 .card-tabs-scroll {
@@ -331,13 +348,16 @@ function clearTaskModalTimer() {
 }
 
 .active-tab {
-  color: #0ec76a;
+  color: #0088cc;
 }
 
 .rate-list {
   margin-top: 8rpx;
   padding: 8rpx 0;
-  border-radius: 10rpx 10rpx 34rpx 34rpx;
+  border-radius: 8rpx 8rpx 16rpx 16rpx;
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.36);
+  backdrop-filter: blur(18rpx);
 }
 
 .rate-row {
@@ -347,6 +367,27 @@ function clearTaskModalTimer() {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1rpx solid #eef0f2;
+}
+
+@media (min-width: 900px) {
+  .home-page {
+    max-width: 980px;
+    margin: 0 auto;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .banner-card {
+    min-height: 156rpx;
+  }
+
+  .banner-art {
+    opacity: 0.72;
+  }
+
+  .rate-row {
+    min-height: 104rpx;
+  }
 }
 
 .rate-left {
@@ -403,8 +444,8 @@ function clearTaskModalTimer() {
   min-width: 112rpx;
   height: 50rpx;
   padding: 0 18rpx;
-  border-radius: 999rpx;
-  background: #0fd26b;
+  border-radius: 10rpx;
+  background: #0088cc;
   color: #ffffff;
   font-size: 22rpx;
   font-weight: 900;
@@ -420,8 +461,8 @@ function clearTaskModalTimer() {
 }
 
 .rate-status.active {
-  color: #0a9c53;
-  background: rgba(20, 216, 111, 0.12);
+  color: #008b5c;
+  background: rgba(0, 139, 92, 0.1);
 }
 
 .rate-status.paused {
@@ -450,7 +491,7 @@ function clearTaskModalTimer() {
   width: 540rpx;
   padding: 0;
   overflow: visible;
-  background: linear-gradient(180deg, #efffd8 0%, #d6ffd5 100%);
+  background: #ffffff;
   box-shadow: 0 28rpx 70rpx rgba(0, 0, 0, 0.2);
 }
 
@@ -459,9 +500,9 @@ function clearTaskModalTimer() {
   width: 460rpx;
   height: 118rpx;
   margin: -38rpx auto 0;
-  border-radius: 30rpx;
-  background: linear-gradient(180deg, #4bc384, #1e985c);
-  box-shadow: 0 18rpx 38rpx rgba(23, 133, 79, 0.3);
+  border-radius: 16rpx;
+  background: #0088cc;
+  box-shadow: 0 18rpx 38rpx rgba(0, 136, 204, 0.22);
 }
 
 .reward-top-tag {
@@ -523,9 +564,9 @@ function clearTaskModalTimer() {
 .coin-badge {
   width: 230rpx;
   height: 230rpx;
-  border-radius: 28rpx;
-  background: linear-gradient(180deg, #fff5d7 0%, #ffe09c 100%);
-  box-shadow: inset 0 0 0 12rpx rgba(255, 177, 82, 0.55);
+  border-radius: 16rpx;
+  background: #f3f6f8;
+  border: 1rpx solid rgba(136, 153, 166, 0.2);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -555,13 +596,13 @@ function clearTaskModalTimer() {
 .coin-badge text {
   font-size: 52rpx;
   font-weight: 900;
-  color: #0f7257;
+  color: #17212b;
 }
 
 .reward-text {
   text-align: center;
   font-size: 28rpx;
-  color: #137052;
+  color: #51606d;
   line-height: 1.5;
 }
 

@@ -1,5 +1,5 @@
 <template>
-  <view class="page-shell soft-page">
+  <view class="page-shell login-page">
     <view class="login-top">
       <view class="status-row">
         <text class="clock">05:47</text>
@@ -33,7 +33,7 @@
         <text class="field-label">Country</text>
         <view class="field-input picker-field" @click="pickCountry">
           <text>{{ store.selectedCountry().name }}</text>
-          <text class="picker-arrow">▾</text>
+          <text class="picker-arrow">v</text>
         </view>
         <view style="height: 24rpx"></view>
 
@@ -54,7 +54,7 @@
         <text v-if="notice" class="muted">{{ notice }}</text>
 
         <view class="policy">
-          <view class="policy-box">✓</view>
+          <view class="policy-box">OK</view>
           <text class="muted">By continuing, you agree to CardBrother Term of Use and confirm that you have read Privacy Policy.</text>
         </view>
       </view>
@@ -112,7 +112,23 @@ function pickCountry() {
 
 <style scoped lang="scss">
 .login-top {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 520px);
+  margin: 0 auto;
   padding: 8rpx 8rpx 24rpx;
+}
+
+.login-page {
+  position: relative;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background-image:
+    linear-gradient(180deg, rgba(5, 14, 23, 0.08), rgba(5, 14, 23, 0.36)),
+    url('/static/login-bg.png');
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
 }
 
 .status-row {
@@ -125,14 +141,14 @@ function pickCountry() {
 }
 
 .battery {
-  color: #12c96b;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 300rpx;
+  min-height: 214rpx;
 }
 
 .brand-row {
@@ -148,32 +164,45 @@ function pickCountry() {
 
 .hello {
   display: block;
-  font-size: 64rpx;
+  font-size: 52rpx;
   font-weight: 900;
-  color: #14cb6d;
+  color: #ffffff;
   line-height: 1;
+  text-shadow: 0 4rpx 18rpx rgba(0, 0, 0, 0.26);
 }
 
 .brand-name {
   display: block;
-  font-size: 34rpx;
+  margin-top: 8rpx;
+  font-size: 30rpx;
   font-weight: 800;
-  color: #18b15f;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .hero-visual {
-  width: 280rpx;
-  height: 280rpx;
-  border-radius: 120rpx 40rpx 120rpx 40rpx;
+  width: 156rpx;
+  height: 116rpx;
+  border-radius: 16rpx;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.5), rgba(0,0,0,0)),
-    radial-gradient(circle at 38% 30%, rgba(255,255,255,0.8), transparent 20%),
-    linear-gradient(145deg, #76f2b3, #12d46e 58%, #95ffd0);
-  box-shadow: inset 0 0 0 10rpx rgba(255,255,255,0.2);
+    linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1rpx, transparent 1rpx),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16) 1rpx, transparent 1rpx),
+    rgba(255, 255, 255, 0.1);
+  background-size: 34rpx 34rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 16rpx 34rpx rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(12rpx);
 }
 
 .auth-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 520px);
+  margin: 0 auto;
   overflow: hidden;
+  background: rgba(8, 19, 30, 0.72);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 28rpx 76rpx rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(24rpx);
 }
 
 .tab-strip {
@@ -182,32 +211,41 @@ function pickCountry() {
 }
 
 .tab {
-  min-height: 118rpx;
+  min-height: 92rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12rpx;
-  font-size: 66rpx;
+  font-size: 30rpx;
   font-weight: 900;
 }
 
 .tab text {
-  font-size: 66rpx;
+  font-size: 34rpx;
   font-weight: 900;
-  color: #18b765;
+  color: #ffffff;
 }
 
 .muted-tab {
-  background: linear-gradient(180deg, rgba(9, 202, 103, 0.55), rgba(9, 202, 103, 0.18));
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .muted-tab text {
-  color: rgba(16, 118, 69, 0.55);
+  color: rgba(255, 255, 255, 0.56);
 }
 
 .form-body {
   padding: 26rpx;
+}
+
+.field-label {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.field-input {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .picker-field {
@@ -217,8 +255,9 @@ function pickCountry() {
 }
 
 .picker-arrow {
-  color: #212121;
-  font-size: 34rpx;
+  color: #7d8b97;
+  font-size: 24rpx;
+  font-weight: 900;
 }
 
 .helper-row {
@@ -230,14 +269,14 @@ function pickCountry() {
 .helper-link {
   font-size: 24rpx;
   font-weight: 700;
-  color: #12c96b;
+  color: #55c7ff;
 }
 
 .or-text {
   display: block;
   text-align: center;
   font-size: 28rpx;
-  color: #19c26b;
+  color: rgba(255, 255, 255, 0.56);
   padding: 20rpx 0;
   font-weight: 700;
 }
@@ -248,15 +287,31 @@ function pickCountry() {
   align-items: flex-start;
 }
 
+.policy .muted {
+  color: rgba(255, 255, 255, 0.58);
+}
+
 .policy-box {
-  width: 44rpx;
+  width: 48rpx;
   height: 44rpx;
-  border-radius: 10rpx;
-  background: #0ecf67;
+  border-radius: 8rpx;
+  background: #0088cc;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 18rpx;
   font-weight: 900;
+}
+
+@media (min-width: 900px) {
+  .login-page {
+    padding-top: 34px;
+  }
+
+  .login-top,
+  .auth-card {
+    width: 488px;
+  }
 }
 </style>

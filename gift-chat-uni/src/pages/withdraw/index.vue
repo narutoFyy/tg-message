@@ -121,7 +121,8 @@ function buildWithdrawalDraft(requestNo: string) {
 
 <style scoped lang="scss">
 .balance-panel {
-  background: linear-gradient(180deg, #e9fff4, #f8fffb);
+  background: #ffffff;
+  border: 1rpx solid rgba(136, 153, 166, 0.18);
 }
 
 .balance-label,
@@ -136,7 +137,7 @@ function buildWithdrawalDraft(requestNo: string) {
   margin-top: 10rpx;
   font-size: 52rpx;
   font-weight: 900;
-  color: #0f9b57;
+  color: #0088cc;
 }
 
 .withdraw-row {
@@ -163,7 +164,7 @@ function buildWithdrawalDraft(requestNo: string) {
 .amount {
   font-size: 28rpx;
   font-weight: 900;
-  color: #0f9b57;
+  color: #0088cc;
 }
 
 .notice-text {

@@ -60,12 +60,27 @@
       />
 
       <view class="input-area">
-        <view class="input-toolbar">
-          <view class="tool-btn" @click="sendImage">Image</view>
-          <view class="tool-btn" @click="sendGif">GIF</view>
-          <view class="tool-btn" @click="startVideoCall">Video</view>
-        </view>
         <view class="input-row">
+          <view class="composer-tools-wrap">
+            <view :class="['composer-tool-main', showComposerTools && 'is-open']" title="Attachments" @click="toggleComposerTools">
+              <text></text>
+              <text></text>
+            </view>
+            <view v-if="showComposerTools" class="composer-popover">
+              <view class="composer-option" @click="chooseComposerTool('image')">
+                <text class="composer-option-icon image"></text>
+                <text>Image</text>
+              </view>
+              <view class="composer-option" @click="chooseComposerTool('gif')">
+                <text class="composer-option-icon gif">GIF</text>
+                <text>GIF</text>
+              </view>
+              <view class="composer-option" @click="chooseComposerTool('video')">
+                <text class="composer-option-icon video"></text>
+                <text>Video</text>
+              </view>
+            </view>
+          </view>
           <input v-model="draft" class="message-input" placeholder="Type a message..." @confirm="handleSend" />
           <view class="send-btn" :class="{ active: canSend }" @click="handleSend">
             <text>Send</text>
@@ -107,6 +122,7 @@ const notice = ref('')
 const socketTask = ref<UniApp.SocketTask | null>(null)
 const readRefreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const socketStatus = ref<'connecting' | 'online' | 'offline'>('connecting')
+const showComposerTools = ref(false)
 const {
   activeAttachment,
   hasAttachment,
@@ -584,6 +600,7 @@ async function sendText(content: string) {
 
 function handleSend() {
   enableAudio()
+  showComposerTools.value = false
   if (activeAttachment.value) {
     sendPendingAttachment()
     return
@@ -591,6 +608,23 @@ function handleSend() {
   const value = draft.value.trim()
   if (!value) return
   sendText(value)
+}
+
+function toggleComposerTools() {
+  showComposerTools.value = !showComposerTools.value
+}
+
+function chooseComposerTool(action: 'image' | 'gif' | 'video') {
+  showComposerTools.value = false
+  if (action === 'image') {
+    sendImage()
+    return
+  }
+  if (action === 'gif') {
+    sendGif()
+    return
+  }
+  startVideoCall()
 }
 
 async function sendPendingAttachment() {
@@ -789,7 +823,7 @@ function showNotice(message: string) {
 .chat-container {
   display: flex;
   height: 100vh;
-  background: linear-gradient(180deg, #b7efb0 0%, #d7f3c3 18%, #d6ecbb 44%, #d8efc6 100%);
+  background: #e8eef2;
   overflow: hidden;
   width: 100%;
 }
@@ -799,7 +833,7 @@ function showNotice(message: string) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.3);
+  background: #e8eef2;
   backdrop-filter: blur(10px);
 }
 
@@ -808,8 +842,8 @@ function showNotice(message: string) {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.92);
-  border-bottom: 1px solid rgba(90, 123, 89, 0.2);
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid rgba(136, 153, 166, 0.22);
   backdrop-filter: blur(10px);
   gap: 12px;
 }
@@ -873,7 +907,7 @@ function showNotice(message: string) {
 .header-status {
   margin-top: 2px;
   font-size: 12px;
-  color: #00a884;
+  color: #008b5c;
 }
 
 .header-status.offline {
@@ -894,9 +928,9 @@ function showNotice(message: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 18px;
-  background: rgba(0, 168, 132, 0.12);
-  color: #00795f;
+  border-radius: 8px;
+  background: rgba(0, 136, 204, 0.1);
+  color: #0088cc;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
@@ -905,7 +939,11 @@ function showNotice(message: string) {
 .message-area {
   flex: 1;
   min-height: 0;
-  background: transparent;
+  background-image:
+    linear-gradient(180deg, rgba(232, 238, 242, 0.76), rgba(232, 238, 242, 0.82)),
+    url('/static/chat-bg.png');
+  background-size: cover;
+  background-position: center;
   padding: 16px 22px;
   box-sizing: border-box;
   overflow-y: auto;
@@ -925,9 +963,9 @@ function showNotice(message: string) {
 .date-divider text {
   display: inline-block;
   padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #7d8b79;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #51606d;
   font-size: 12px;
   font-weight: 700;
 }
@@ -949,16 +987,16 @@ function showNotice(message: string) {
   padding: 10px 14px;
   border-radius: 8px;
   word-break: break-word;
-  box-shadow: 0 2px 8px rgba(42, 68, 43, 0.08);
+  box-shadow: 0 2px 8px rgba(25, 42, 62, 0.08);
 }
 
 .message-wrapper.theirs .message-bubble {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.98);
   border-top-left-radius: 2px;
 }
 
 .message-wrapper.mine .message-bubble {
-  background: linear-gradient(180deg, #efffd1, #f5ffd9);
+  background: rgba(232, 246, 239, 0.98);
   border-top-right-radius: 2px;
 }
 
@@ -1115,36 +1153,152 @@ function showNotice(message: string) {
 }
 
 .input-area {
-  background: rgba(255, 255, 255, 0.92);
-  border-top: 1px solid rgba(90, 123, 89, 0.2);
+  background: #ffffff;
+  border-top: 1px solid rgba(136, 153, 166, 0.22);
   padding: 8px 16px 10px;
   backdrop-filter: blur(10px);
-}
-
-.input-toolbar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.tool-btn {
-  min-height: 30px;
-  padding: 4px 10px;
-  border-radius: 4px;
-  color: #355140;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.tool-btn:hover {
-  background: #f0f0f0;
 }
 
 .input-row {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.composer-tools-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.composer-tool-main {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(23, 33, 43, 0.06);
+  color: #51606d;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.composer-tool-main:hover,
+.composer-tool-main.is-open {
+  background: rgba(0, 136, 204, 0.1);
+  color: #0088cc;
+}
+
+.composer-tool-main:active {
+  transform: scale(0.96);
+}
+
+.composer-tool-main text:first-child,
+.composer-tool-main text:last-child {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.composer-tool-main text:last-child {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.composer-popover {
+  position: absolute;
+  left: 0;
+  bottom: 50px;
+  width: 176px;
+  padding: 8px;
+  border: 1px solid rgba(136, 153, 166, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 44px rgba(25, 42, 62, 0.14);
+  box-sizing: border-box;
+  z-index: 18;
+}
+
+.composer-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: #17212b;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.composer-option:hover {
+  background: rgba(0, 136, 204, 0.08);
+}
+
+.composer-option-icon {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(0, 136, 204, 0.1);
+  color: #0088cc;
+  flex-shrink: 0;
+}
+
+.composer-option-icon.image::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 7px;
+  width: 14px;
+  height: 11px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.composer-option-icon.image::after {
+  content: '';
+  position: absolute;
+  left: 9px;
+  bottom: 7px;
+  width: 10px;
+  height: 7px;
+  background: linear-gradient(135deg, transparent 0 42%, currentColor 43% 57%, transparent 58%);
+}
+
+.composer-option-icon.gif {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.composer-option-icon.video::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  width: 12px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.composer-option-icon.video::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  top: 10px;
+  border-left: 6px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
 }
 
 .message-input {

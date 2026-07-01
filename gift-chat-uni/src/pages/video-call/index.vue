@@ -22,17 +22,11 @@
         <text></text>
         <text></text>
       </view>
-      <text class="caller-status">{{ statusLabel }}</text>
       <text v-if="callHint" class="notice-text">{{ callHint }}</text>
       <text v-if="notice" class="device-notice">{{ notice }}</text>
       <button v-if="canRetryLocalDevices" class="device-retry-button" @click="retryLocalDevices">
         {{ deviceRetryLabel }}
       </button>
-      <view class="remote-state-row">
-        <text :class="['remote-state-pill', remoteUserJoined && 'is-on']">{{ remoteUserJoined ? 'Peer joined' : 'Waiting peer' }}</text>
-        <text :class="['remote-state-pill', remoteAudioAvailable && 'is-on']">{{ remoteAudioAvailable ? 'Peer mic on' : 'Peer mic off' }}</text>
-        <text :class="['remote-state-pill', remoteVideoAvailable && 'is-on']">{{ remoteVideoAvailable ? 'Peer camera on' : 'Peer camera off' }}</text>
-      </view>
     </view>
 
     <view id="local-video-view" class="local-video">
@@ -136,10 +130,10 @@ const statusLabel = computed(() => {
 
 const remotePlaceholder = computed(() => {
   if (!bootstrap.value?.sdkConfigured) return bootstrap.value?.note || 'TRTC is not configured'
-  if (!joined.value) return 'Preparing video'
-  if (!remoteUserJoined.value) return 'Waiting for the other side to answer'
-  if (!remoteVideoAvailable.value) return 'Connected. Waiting for the other side camera'
-  return ''
+  if (!joined.value) return '正在连接...'
+  if (!remoteUserJoined.value) return '等待对方接听...'
+  if (!remoteVideoAvailable.value) return remoteAudioAvailable.value ? '已接通，对方摄像头已关闭' : '已接通，等待对方开启设备'
+  return '通话中'
 })
 
 const callHint = computed(() => {
@@ -715,10 +709,10 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 
 .notice-text {
   max-width: min(620rpx, 76vw);
-  margin-top: 14rpx;
-  font-size: 22rpx;
-  line-height: 1.45;
-  color: rgba(255, 255, 255, 0.78);
+  margin-top: 20rpx;
+  font-size: 25rpx;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.88);
   text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.28);
 }
 
@@ -749,30 +743,6 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   font-weight: 800;
   line-height: 56rpx;
   box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, 0.18);
-}
-
-.remote-state-row {
-  max-width: min(650rpx, 80vw);
-  margin-top: 18rpx;
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 10rpx;
-}
-
-.remote-state-pill {
-  padding: 6rpx 12rpx;
-  border-radius: 999rpx;
-  background: rgba(0, 0, 0, 0.22);
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 19rpx;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.remote-state-pill.is-on {
-  background: rgba(255, 255, 255, 0.9);
-  color: #2e1616;
 }
 
 .local-video {
@@ -815,7 +785,7 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 }
 
 .primary-controls {
-  gap: 34rpx;
+  gap: 30rpx;
 }
 
 .secondary-controls {
@@ -824,6 +794,7 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 }
 
 .control-item {
+  width: 150rpx;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -872,10 +843,13 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 }
 
 .control-label {
-  margin-top: 18rpx;
-  font-size: 25rpx;
+  width: 150rpx;
+  margin-top: 16rpx;
+  font-size: 24rpx;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.9);
+  line-height: 1.2;
+  text-align: center;
   white-space: nowrap;
   text-shadow: 0 3rpx 10rpx rgba(0, 0, 0, 0.35);
 }
@@ -921,10 +895,6 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
     margin-top: 24rpx;
   }
 
-  .remote-state-row {
-    margin-top: 12rpx;
-  }
-
   .control-panel {
     bottom: 34rpx;
   }
@@ -943,18 +913,18 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   position: relative;
   z-index: 1;
   display: block;
-  width: 58rpx;
-  height: 58rpx;
+  width: 56rpx;
+  height: 56rpx;
   box-sizing: border-box;
 }
 
 .icon-mic::before {
   content: '';
   position: absolute;
-  left: 19rpx;
-  top: 4rpx;
+  left: 18rpx;
+  top: 3rpx;
   width: 20rpx;
-  height: 34rpx;
+  height: 32rpx;
   border-radius: 12rpx;
   background: currentColor;
 }
@@ -962,13 +932,22 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .icon-mic::after {
   content: '';
   position: absolute;
-  left: 12rpx;
-  top: 28rpx;
+  left: 11rpx;
+  top: 26rpx;
   width: 34rpx;
   height: 24rpx;
-  border: 6rpx solid currentColor;
+  border: 5rpx solid currentColor;
   border-top: 0;
   border-radius: 0 0 18rpx 18rpx;
+}
+
+.icon-mic {
+  transform: translateY(1rpx);
+}
+
+.icon-mic::before,
+.icon-mic::after {
+  box-sizing: border-box;
 }
 
 .icon-speaker::before {

@@ -10,21 +10,19 @@ onLaunch(() => {
 
 <style lang="scss">
 page {
-  background: linear-gradient(180deg, #d8ffe7 0%, #f8fff4 26%, #ffffff 56%);
-  color: #161616;
+  background: #f3f6f8;
+  color: #17212b;
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .page-shell {
   min-height: 100vh;
-  padding: 28rpx 24rpx 180rpx;
+  padding: 24rpx 24rpx 172rpx;
   box-sizing: border-box;
 }
 
 .soft-page {
-  background:
-    radial-gradient(circle at top right, rgba(129, 255, 202, 0.42), transparent 30%),
-    linear-gradient(180deg, #d9ffe7 0%, #f8fff6 32%, #ffffff 68%);
+  background: linear-gradient(180deg, #edf4f8 0%, #f7f9fb 42%, #ffffff 100%);
 }
 
 .page-stack {
@@ -34,37 +32,39 @@ page {
 }
 
 .surface-card {
-  background: rgba(255, 255, 255, 0.94);
-  border-radius: 34rpx;
-  box-shadow: 0 18rpx 50rpx rgba(88, 156, 112, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  border: 1rpx solid rgba(136, 153, 166, 0.18);
+  border-radius: 16rpx;
+  box-shadow: 0 12rpx 34rpx rgba(25, 42, 62, 0.08);
 }
 
 .panel {
   @extend .surface-card;
-  padding: 28rpx;
+  padding: 26rpx;
 }
 
 .eyebrow {
-  color: #0bc86b;
+  color: #0088cc;
   font-size: 22rpx;
   font-weight: 700;
+  letter-spacing: 0;
 }
 
 .title {
-  font-size: 40rpx;
+  font-size: 38rpx;
   font-weight: 800;
   line-height: 1.25;
-  color: #161616;
+  color: #17212b;
 }
 
 .subtitle {
   font-size: 27rpx;
-  color: #717171;
+  color: #5f6f7c;
   line-height: 1.55;
 }
 
 .muted {
-  color: #8d8d8d;
+  color: #7d8b97;
   font-size: 24rpx;
   line-height: 1.5;
 }
@@ -73,7 +73,7 @@ page {
   display: block;
   margin-bottom: 12rpx;
   font-size: 25rpx;
-  color: #12b76a;
+  color: #3b4a54;
   font-weight: 700;
 }
 
@@ -82,32 +82,33 @@ page {
   height: 88rpx;
   padding: 0 24rpx;
   box-sizing: border-box;
-  border: 3rpx solid #1fd58f;
-  border-radius: 22rpx;
+  border: 1rpx solid rgba(136, 153, 166, 0.34);
+  border-radius: 12rpx;
   background: #ffffff;
-  color: #1b1b1b;
-  font-size: 30rpx;
+  color: #17212b;
+  font-size: 29rpx;
 }
 
 .primary-button,
 .ghost-button {
-  border-radius: 22rpx;
+  border-radius: 12rpx;
   border: none;
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: 800;
   line-height: 1.2;
-  padding: 24rpx 28rpx;
+  padding: 22rpx 28rpx;
 }
 
 .primary-button {
   color: #ffffff;
-  background: linear-gradient(180deg, #14d86f 0%, #05c95f 100%);
+  background: #0088cc;
+  box-shadow: 0 10rpx 22rpx rgba(0, 136, 204, 0.22);
 }
 
 .ghost-button {
-  color: #08be61;
+  color: #0088cc;
   background: #ffffff;
-  border: 2rpx solid #16cc7d;
+  border: 1rpx solid rgba(0, 136, 204, 0.32);
 }
 
 .status-pill {
@@ -121,12 +122,12 @@ page {
 }
 
 .status-pill.active {
-  color: #0ab95d;
-  background: rgba(14, 210, 110, 0.12);
+  color: #008b5c;
+  background: rgba(0, 168, 132, 0.12);
 }
 
 .status-pill.paused {
-  color: #e18f38;
+  color: #b26a00;
   background: rgba(255, 178, 76, 0.18);
 }
 
@@ -138,21 +139,22 @@ page {
   padding: 0 28rpx;
   border-radius: 999rpx;
   background: #ffffff;
-  box-shadow: 0 8rpx 24rpx rgba(16, 24, 40, 0.08);
-  color: #2a2a2a;
+  border: 1rpx solid rgba(136, 153, 166, 0.2);
+  box-shadow: 0 8rpx 22rpx rgba(25, 42, 62, 0.06);
+  color: #263642;
   font-size: 25rpx;
 }
 
 .section-title {
   font-size: 28rpx;
   font-weight: 800;
-  color: #1e1e1e;
+  color: #17212b;
 }
 
 .tab-active-line {
   width: 50rpx;
   height: 8rpx;
   border-radius: 999rpx;
-  background: #17d675;
+  background: #0088cc;
 }
 </style>

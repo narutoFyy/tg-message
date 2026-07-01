@@ -22,7 +22,7 @@ defineEmits<{
 
 const failed = computed(() => props.state === 'failed')
 const statusClass = computed(() => props.state || 'sent')
-const statusText = computed(() => props.state === 'read' ? '✓✓' : '✓')
+const statusText = computed(() => props.state === 'read' ? '\u2713\u2713' : '\u2713')
 </script>
 
 <style scoped>

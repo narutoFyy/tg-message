@@ -15,7 +15,7 @@
     >
       Retry
     </button>
-    <button class="preview-action clear" @click="$emit('clear', attachment.id)">×</button>
+    <button class="preview-action clear" aria-label="Clear attachment" @click="$emit('clear', attachment.id)">×</button>
   </view>
 </template>
 

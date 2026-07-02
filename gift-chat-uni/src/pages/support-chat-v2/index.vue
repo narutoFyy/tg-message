@@ -20,7 +20,7 @@
         >
           <!-- 头像 -->
           <view class="customer-avatar">
-            <image class="avatar-img" :src="uiIcons.user" mode="aspectFit" />
+            <image class="avatar-img" :src="customerAvatar(conv)" mode="aspectFill" />
             <view :class="['online-dot', { offline: !conv.online }]"></view>
           </view>
 
@@ -57,14 +57,14 @@
     </view>
 
     <!-- 右侧聊天区域 -->
-    <view class="chat-main" :class="{ 'chat-hidden': isMobile && !showChat }">
+    <view class="chat-main" :class="{ 'chat-hidden': isMobile && (!showChat || showMobileProfile) }">
       <!-- 聊天顶部导航 -->
       <view class="chat-header">
         <view class="header-left">
           <view v-if="isMobile" class="back-btn" @click="backToList">
             <text>‹</text>
           </view>
-          <image class="header-avatar" :src="uiIcons.user" mode="aspectFit" />
+          <image class="header-avatar" :src="activeCustomer ? customerAvatar(activeCustomer) : uiIcons.user" mode="aspectFill" />
           <view class="header-info">
             <text class="header-name">{{ activeCustomer ? customerDisplayName(activeCustomer) : '选择客户' }}</text>
             <text v-if="activeCustomer?.agentNote" class="header-note">{{ activeCustomer.customerUsername }}</text>
@@ -87,6 +87,10 @@
               <text class="icon-more"></text>
             </view>
             <view v-if="showHeaderMenu" class="header-menu">
+              <view v-if="isMobile" class="header-menu-item" @click="handleHeaderMenu('profile')">
+                <text class="menu-icon profile"></text>
+                <text>客户资料</text>
+              </view>
               <view class="header-menu-item" @click="handleHeaderMenu('note')">
                 <text class="menu-icon note"></text>
                 <text>备注客户</text>
@@ -101,7 +105,7 @@
       </view>
 
       <!-- 聊天消息区域 -->
-      <scroll-view scroll-y class="message-area" :scroll-into-view="messageScrollTarget">
+      <scroll-view scroll-y class="message-area" :scroll-into-view="messageScrollTarget" @click="closeChatPanels">
         <view class="message-list">
           <view class="date-divider">
             <text>今天</text>
@@ -116,7 +120,7 @@
             <ChatMessageBubble
               :message="msg"
               :mine="isMine(msg)"
-              :avatar-src="uiIcons.user"
+              :avatar-src="activeCustomer ? customerAvatar(activeCustomer) : uiIcons.user"
               :translation="translationFor(msg)"
               :call-title="videoCallTitle(msg)"
               :call-room="videoCallRoom(msg)"
@@ -134,6 +138,7 @@
               @answer-call="answerVideoMessage"
               @reject-call="rejectVideoMessage"
               @enter-call="enterVideoMessage"
+              @message-menu="openMessageMenu"
             />
           </view>
 
@@ -149,14 +154,21 @@
       />
 
       <!-- 底部输入区域 -->
-      <view class="input-area">
+      <view :class="['input-area', showComposerTools && isMobile && 'tools-open']">
+        <view v-if="replyTarget" class="reply-composer">
+          <view class="reply-composer-body">
+            <text class="reply-composer-label">引用</text>
+            <text class="reply-composer-text">{{ replyTargetText }}</text>
+          </view>
+          <view class="reply-composer-close" @click="clearReplyTarget">×</view>
+        </view>
         <view class="input-row">
           <view class="composer-tools-wrap">
             <view :class="['composer-tool-main', showComposerTools && 'is-open']" title="Attachments" @click="toggleComposerTools">
               <text></text>
               <text></text>
             </view>
-            <view v-if="showComposerTools" class="composer-popover">
+            <view v-if="showComposerTools && !isMobile" class="composer-popover">
               <view class="composer-option" @click="chooseComposerTool('image')">
                 <text class="composer-option-icon image"></text>
                 <text>图片</text>
@@ -165,22 +177,45 @@
                 <text class="composer-option-icon gif">GIF</text>
                 <text>GIF</text>
               </view>
-              <view v-if="isAgent" class="composer-option" @click="chooseComposerTool('broadcast')">
-                <text class="composer-option-icon broadcast"></text>
-                <text>群发</text>
-              </view>
             </view>
           </view>
-          <input v-model="draft" class="message-input" placeholder="输入消息..." @confirm="handleSend" />
+          <input v-model="draft" class="message-input" placeholder="输入消息..." @focus="closeComposerTools" @confirm="handleSend" />
           <view class="send-btn" :class="{ 'active': canSend }" @click="handleSend">
             <text>发送</text>
           </view>
         </view>
+        <view v-if="showComposerTools && isMobile" class="composer-panel">
+          <view class="composer-panel-grid">
+            <view class="composer-panel-item" @click="chooseComposerTool('image')">
+              <text class="composer-panel-icon image"></text>
+              <text>图片</text>
+            </view>
+            <view class="composer-panel-item" @click="chooseComposerTool('gif')">
+              <text class="composer-panel-icon gif">GIF</text>
+              <text>GIF</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view
+        v-if="messageContextMenu"
+        class="message-menu-mask"
+        @click="closeMessageMenu"
+        @contextmenu.prevent.stop="closeMessageMenu"
+      >
+        <view class="message-context-menu" :style="messageMenuStyle" @click.stop @contextmenu.prevent.stop>
+          <view class="message-context-item" @click="copyContextMessage">复制</view>
+          <view v-if="canQuoteMessage(messageContextMenu.message)" class="message-context-item" @click="quoteContextMessage">引用</view>
+        </view>
       </view>
     </view>
 
-    <view class="customer-profile-panel" :class="{ 'profile-hidden': isMobile && showChat }">
+    <view class="customer-profile-panel" :class="{ 'profile-hidden': isMobile && !showMobileProfile }">
       <view class="profile-header">
+        <view v-if="isMobile" class="profile-back-btn" @click="closeMobileProfile">
+          <text>‹</text>
+        </view>
         <view>
           <text class="profile-eyebrow">{{ workbenchText.customer }}</text>
           <text class="profile-title">{{ profileDisplayName }}</text>
@@ -410,6 +445,7 @@ const audioUnlocked = ref(false)
 const workbenchLanguage = ref<'zh' | 'en'>((uni.getStorageSync(WORKBENCH_LANGUAGE_KEY) || 'zh') as 'zh' | 'en')
 const showChat = ref(false)
 const isMobile = ref(false)
+const showMobileProfile = ref(false)
 const activeConversationId = ref('')
 const showHeaderMenu = ref(false)
 const showComposerTools = ref(false)
@@ -419,11 +455,20 @@ const incomingVideoInvite = ref<VideoInviteEvent | null>(null)
 const translations = reactive<Record<string, string>>({})
 const translatingIds = new Set<string>()
 const pendingRouteConversationId = ref('')
+const replyTarget = ref<ChatMessage['replyTo'] | null>(null)
+const messageContextMenu = ref<{ message: ChatMessage; x: number; y: number } | null>(null)
+const lastContextMenuPoint = ref<{ clientX: number; clientY: number; time: number } | null>(null)
 
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT')
 const balanceSummary = computed(() => store.state.balanceSummary)
 const canSend = computed(() => draft.value.trim().length > 0 || hasAttachment.value)
+const replyTargetText = computed(() => previewMessageContent(replyTarget.value?.content || ''))
+const messageMenuStyle = computed(() => {
+  const menu = messageContextMenu.value
+  if (!menu) return ''
+  return `left:${menu.x}px;top:${menu.y}px;`
+})
 
 const filteredConversations = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
@@ -439,7 +484,7 @@ const activeCustomer = computed(() =>
 const connectionStatusLabel = computed(() => {
   if (socketStatus.value === 'connecting') return '连接中'
   if (socketStatus.value === 'offline') return '重连中'
-  return activeCustomer.value?.online ? '在线' : '已连接'
+  return activeCustomer.value?.online ? '在线' : '离线'
 })
 const connectionStatusOffline = computed(() => socketStatus.value !== 'online' || !activeCustomer.value?.online)
 const soundEnabled = computed(() => audioEnabled.value)
@@ -575,6 +620,7 @@ onShow(() => {
 
 onMounted(() => {
   attachPasteListener()
+  attachContextMenuPointListener()
   startPresenceRefresh()
   window.addEventListener('resize', checkMobile)
 })
@@ -613,6 +659,7 @@ onUnmounted(() => {
   stopReadRefresh()
   closeSocket()
   detachPasteListener()
+  detachContextMenuPointListener()
   window.removeEventListener('resize', checkMobile)
 })
 
@@ -622,9 +669,112 @@ function checkMobile() {
   // #endif
 }
 
+function previewMessageContent(content: string) {
+  const normalized = (content || '').trim().replace(/\s+/g, ' ')
+  if (!normalized) return ''
+  return normalized.length > 80 ? `${normalized.slice(0, 80)}...` : normalized
+}
+
+function copyableMessageContent(message: ChatMessage) {
+  if (message.type === 'image') return '[图片]'
+  if (message.type === 'gif') return '[GIF]'
+  if (message.type === 'voice') return '[语音]'
+  if (message.type === 'video') return '[视频通话]'
+  return message.content || ''
+}
+
+function clipboardMessageContent(message: ChatMessage) {
+  return message.type === 'text' ? message.content || '' : copyableMessageContent(message)
+}
+
+function closeMessageMenu() {
+  messageContextMenu.value = null
+}
+
+function clearReplyTarget() {
+  replyTarget.value = null
+}
+
+function canQuoteMessage(message: ChatMessage) {
+  return message.author !== 'system' && !message.id.startsWith('local-')
+}
+
+function rememberContextMenuPoint(event: MouseEvent) {
+  lastContextMenuPoint.value = {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    time: Date.now()
+  }
+}
+
+function attachContextMenuPointListener() {
+  // #ifdef H5
+  window.addEventListener('contextmenu', rememberContextMenuPoint, true)
+  // #endif
+}
+
+function detachContextMenuPointListener() {
+  // #ifdef H5
+  window.removeEventListener('contextmenu', rememberContextMenuPoint, true)
+  // #endif
+}
+
+function resolveContextMenuPoint(point?: { clientX: number; clientY: number }) {
+  const recent = lastContextMenuPoint.value
+  if (recent && Date.now() - recent.time < 250) {
+    return recent
+  }
+  return point
+}
+
+function openMessageMenu(message: ChatMessage, point?: { clientX: number; clientY: number }) {
+  showHeaderMenu.value = false
+  showComposerTools.value = false
+  let x = 24
+  let y = 120
+  // #ifdef H5
+  const menuWidth = 118
+  const menuHeight = canQuoteMessage(message) ? 88 : 48
+  const menuPoint = resolveContextMenuPoint(point)
+  const clientX = menuPoint?.clientX || 0
+  const clientY = menuPoint?.clientY || 0
+  x = Math.max(12, Math.min(clientX || 24, window.innerWidth - menuWidth - 12))
+  y = Math.max(12, Math.min(clientY || 120, window.innerHeight - menuHeight - 12))
+  // #endif
+  messageContextMenu.value = { message, x, y }
+}
+
+function copyContextMessage() {
+  const message = messageContextMenu.value?.message
+  closeMessageMenu()
+  if (!message) return
+  const data = clipboardMessageContent(message)
+  if (!data) return
+  uni.setClipboardData({
+    data,
+    success() {
+      uni.showToast({ title: '已复制', icon: 'none' })
+    }
+  })
+}
+
+function quoteContextMessage() {
+  const message = messageContextMenu.value?.message
+  closeMessageMenu()
+  if (!message || !canQuoteMessage(message)) return
+  replyTarget.value = {
+    messageId: message.id,
+    author: message.author,
+    content: copyableMessageContent(message)
+  }
+}
+
 async function selectCustomer(conv: SupportConversationItem) {
   showHeaderMenu.value = false
   showComposerTools.value = false
+  closeMessageMenu()
+  clearReplyTarget()
+  showMobileProfile.value = false
   activeConversationId.value = conv.conversationId
   store.setActiveSupportConversation(conv.conversationId)
   store.clearSupportUnread(conv.conversationId)
@@ -688,7 +838,21 @@ function handleOrderPick(event: { detail: { value: number | string } }) {
 }
 
 function backToList() {
+  showMobileProfile.value = false
   showChat.value = false
+}
+
+function showCustomerProfile() {
+  showHeaderMenu.value = false
+  showComposerTools.value = false
+  closeMessageMenu()
+  showMobileProfile.value = true
+  showChat.value = true
+}
+
+function closeMobileProfile() {
+  showMobileProfile.value = false
+  showChat.value = true
 }
 
 function getLastMessage(conv: SupportConversationItem) {
@@ -841,6 +1005,10 @@ async function openVideoSession(sessionId: string) {
 
 function customerDisplayName(conv: SupportConversationItem) {
   return conv.agentNote?.trim() || conv.customerUsername
+}
+
+function customerAvatar(conv: SupportConversationItem) {
+  return conv.customerAvatarUrl ? resolveMediaUrl(conv.customerAvatarUrl) : uiIcons.user
 }
 
 function displayUnreadCount(conv: SupportConversationItem) {
@@ -1126,10 +1294,15 @@ function toggleSound() {
 function toggleMoreMenu() {
   showHeaderMenu.value = !showHeaderMenu.value
   showComposerTools.value = false
+  closeMessageMenu()
 }
 
-function handleHeaderMenu(action: 'note' | 'broadcast') {
+function handleHeaderMenu(action: 'note' | 'broadcast' | 'profile') {
   showHeaderMenu.value = false
+  if (action === 'profile') {
+    showCustomerProfile()
+    return
+  }
   if (action === 'note') {
     editCustomerNote()
     return
@@ -1140,19 +1313,28 @@ function handleHeaderMenu(action: 'note' | 'broadcast') {
 function toggleComposerTools() {
   showComposerTools.value = !showComposerTools.value
   showHeaderMenu.value = false
+  closeMessageMenu()
+  if (showComposerTools.value && isMobile.value) {
+    nextTick(() => scrollMessagesToBottom())
+  }
 }
 
-function chooseComposerTool(action: 'image' | 'gif' | 'broadcast') {
+function closeComposerTools() {
+  showComposerTools.value = false
+}
+
+function closeChatPanels() {
+  closeMessageMenu()
+  closeComposerTools()
+}
+
+function chooseComposerTool(action: 'image' | 'gif') {
   showComposerTools.value = false
   if (action === 'image') {
     sendImage()
     return
   }
-  if (action === 'gif') {
-    sendGif()
-    return
-  }
-  sendOwnCustomerBroadcast()
+  sendGif()
 }
 
 function playIncomingSound() {
@@ -1222,6 +1404,7 @@ async function handlePasteImage(event: ClipboardEvent) {
 async function handleSend() {
   showHeaderMenu.value = false
   showComposerTools.value = false
+  closeMessageMenu()
   if (activeAttachment.value) {
     await sendPendingAttachment()
     return
@@ -1230,8 +1413,10 @@ async function handleSend() {
   if (!value) return
 
   try {
-    await store.sendSupport(value)
+    const replyTo = replyTarget.value || undefined
+    await store.sendSupport(value, 'text', replyTo)
     draft.value = ''
+    clearReplyTarget()
     await sendPendingSupportImage()
     scrollMessagesToBottom()
     startReadRefresh()
@@ -1256,7 +1441,9 @@ async function sendPendingAttachment() {
   setStatus(attachment.id, 'uploading')
   try {
     const asset = await uploadImage(attachment.url)
-    await store.sendSupport(asset.publicUrl, attachment.kind)
+    const replyTo = replyTarget.value || undefined
+    await store.sendSupport(asset.publicUrl, attachment.kind, replyTo)
+    clearReplyTarget()
     scrollMessagesToBottom()
     startReadRefresh()
     clearAttachment(attachment.id)
@@ -1431,6 +1618,21 @@ function previewImage(url: string) {
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
+}
+
+.profile-back-btn {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(33, 56, 43, 0.06);
+  color: #26352b;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .profile-header-actions {
@@ -2029,6 +2231,8 @@ function previewImage(url: string) {
 }
 
 .chat-header {
+  position: relative;
+  z-index: 70;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2044,6 +2248,7 @@ function previewImage(url: string) {
   display: flex;
   align-items: center;
   min-width: 0;
+  flex: 1;
 }
 
 .back-btn {
@@ -2069,6 +2274,7 @@ function previewImage(url: string) {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
 }
 
 .header-name {
@@ -2182,22 +2388,35 @@ function previewImage(url: string) {
 
 .icon-video {
   position: relative;
-  width: 18px;
-  height: 13px;
-  border-radius: 4px;
+  width: 21px;
+  height: 15px;
+  border: 2px solid currentColor;
+  border-radius: 5px;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.icon-video::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
   background: currentColor;
 }
 
 .icon-video::after {
   content: '';
   position: absolute;
-  right: -7px;
+  right: -8px;
   top: 3px;
-  width: 0;
-  height: 0;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 8px solid currentColor;
+  width: 8px;
+  height: 7px;
+  border-radius: 1px 4px 4px 1px;
+  background: currentColor;
+  clip-path: polygon(0 18%, 100% 0, 100% 100%, 0 82%);
 }
 
 .icon-more {
@@ -2211,11 +2430,12 @@ function previewImage(url: string) {
 
 .header-menu-wrap {
   position: relative;
+  z-index: 80;
 }
 
 .header-menu {
   position: absolute;
-  z-index: 20;
+  z-index: 90;
   right: 0;
   top: 44px;
   width: 164px;
@@ -2268,6 +2488,34 @@ function previewImage(url: string) {
   border-radius: 2px;
   background: currentColor;
   box-shadow: 0 5px 0 currentColor;
+}
+
+.menu-icon.profile {
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.menu-icon.profile::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.menu-icon.profile::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 3px;
+  height: 6px;
+  border-radius: 8px 8px 2px 2px;
+  background: currentColor;
 }
 
 .menu-icon.broadcast::before {
@@ -2344,52 +2592,6 @@ function previewImage(url: string) {
   border-radius: 50%;
   background: #e0e0e0;
   flex-shrink: 0;
-}
-
-.message-bubble {
-  max-width: min(68%, 520px);
-  min-width: 0;
-  padding: 10px 14px;
-  border-radius: 8px;
-  word-break: break-word;
-}
-
-.message-wrapper.theirs .message-bubble {
-  background: rgba(255, 255, 255, 0.98);
-  border-top-left-radius: 2px;
-  box-shadow: 0 2px 8px rgba(25, 42, 62, 0.08);
-}
-
-.message-wrapper.mine .message-bubble {
-  background: rgba(232, 246, 239, 0.98);
-  border-top-right-radius: 2px;
-  box-shadow: 0 2px 8px rgba(25, 42, 62, 0.08);
-}
-
-.system-bubble {
-  max-width: 80%;
-  margin: 0 auto;
-  background: rgba(0, 0, 0, 0.1) !important;
-  text-align: center;
-  font-size: 12px;
-  color: #999999;
-  border-radius: 4px !important;
-}
-
-.message-text {
-  font-size: 15px;
-  line-height: 1.5;
-  color: #333333;
-}
-
-.translation-text {
-  display: block;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-  font-size: 13px;
-  line-height: 1.45;
-  color: #0088cc;
 }
 
 .message-img {
@@ -2594,12 +2796,15 @@ function previewImage(url: string) {
   border-top: 1px solid rgba(136, 153, 166, 0.22);
   padding: 10px 16px 12px;
   backdrop-filter: blur(10px);
+  flex-shrink: 0;
+  transition: padding 0.18s ease, box-shadow 0.18s ease;
 }
 
 .input-row {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
 }
 
 .composer-tools-wrap {
@@ -2716,28 +2921,150 @@ function previewImage(url: string) {
   letter-spacing: 0;
 }
 
-.composer-option-icon.broadcast::before {
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 10px;
-  width: 9px;
-  height: 6px;
-  border-radius: 2px;
-  background: currentColor;
+.composer-panel {
+  display: none;
 }
 
-.composer-option-icon.broadcast::after {
+.composer-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.composer-panel-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #263642;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.composer-panel-icon {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #f0f6f8;
+  color: #0088cc;
+  box-shadow: inset 0 0 0 1px rgba(0, 136, 204, 0.08);
+}
+
+.composer-panel-icon.image::before {
   content: '';
   position: absolute;
-  right: 5px;
-  top: 7px;
-  width: 6px;
-  height: 12px;
+  left: 14px;
+  top: 16px;
+  width: 24px;
+  height: 18px;
   border: 2px solid currentColor;
-  border-left: 0;
-  border-radius: 0 10px 10px 0;
+  border-radius: 5px;
   box-sizing: border-box;
+}
+
+.composer-panel-icon.image::after {
+  content: '';
+  position: absolute;
+  left: 19px;
+  bottom: 16px;
+  width: 18px;
+  height: 11px;
+  background: linear-gradient(135deg, transparent 0 42%, currentColor 43% 57%, transparent 58%);
+}
+
+.composer-panel-icon.gif {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.reply-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid #00a884;
+  border-radius: 8px;
+  background: rgba(232, 246, 239, 0.94);
+  box-sizing: border-box;
+}
+
+.reply-composer-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.reply-composer-label {
+  color: #007a61;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.reply-composer-text {
+  margin-top: 2px;
+  color: #344b40;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reply-composer-close {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.06);
+  color: #42544a;
+  font-size: 20px;
+  line-height: 26px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.message-menu-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+}
+
+.message-context-menu {
+  position: fixed;
+  min-width: 112px;
+  padding: 6px;
+  border: 1px solid rgba(38, 59, 48, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(23, 40, 31, 0.18);
+  box-sizing: border-box;
+}
+
+.message-context-item {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  color: #22332a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 36px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.message-context-item:hover {
+  background: rgba(0, 168, 132, 0.1);
 }
 
 .message-input {
@@ -2781,6 +3108,7 @@ function previewImage(url: string) {
 @media (max-width: 768px) {
   .chat-container {
     background: #e4f3dc;
+    overflow: hidden;
   }
 
   .customer-sidebar {
@@ -2798,7 +3126,32 @@ function previewImage(url: string) {
   }
 
   .customer-profile-panel {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+    border-left: 0;
+    height: 100%;
+    max-height: 100vh;
+  }
+
+  .customer-profile-panel.profile-hidden {
     display: none;
+  }
+
+  .profile-header {
+    min-height: 58px;
+    padding: 8px 10px;
+    justify-content: flex-start;
+    flex-shrink: 0;
+  }
+
+  .profile-header > view:nth-child(2) {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .profile-title {
+    font-size: 16px;
   }
 
   .chat-main {
@@ -2812,6 +3165,12 @@ function previewImage(url: string) {
     gap: 8px;
   }
 
+  .header-left,
+  .header-info {
+    flex: 1;
+    min-width: 0;
+  }
+
   .header-avatar {
     width: 34px;
     height: 34px;
@@ -2819,7 +3178,7 @@ function previewImage(url: string) {
   }
 
   .header-name {
-    max-width: 34vw;
+    max-width: 42vw;
     font-size: 15px;
   }
 
@@ -2832,12 +3191,21 @@ function previewImage(url: string) {
     height: 34px;
   }
 
+  .header-menu {
+    right: 0;
+    width: min(168px, calc(100vw - 24px));
+  }
+
   .message-area {
     padding: 12px 10px;
   }
 
   .input-area {
-    padding: 8px 10px 10px;
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .input-area.tools-open {
+    box-shadow: 0 -14px 32px rgba(25, 42, 62, 0.1);
   }
 
   .input-row {
@@ -2847,6 +3215,25 @@ function previewImage(url: string) {
   .composer-tool-main {
     width: 36px;
     height: 36px;
+  }
+
+  .composer-panel {
+    display: block;
+    min-height: 132px;
+    margin: 10px -10px calc(-10px - env(safe-area-inset-bottom));
+    padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+    background: #f7f9fb;
+    border-top: 1px solid rgba(136, 153, 166, 0.18);
+    box-sizing: border-box;
+  }
+
+  .composer-panel-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .composer-panel-icon {
+    width: 50px;
+    height: 50px;
   }
 
   .message-input {

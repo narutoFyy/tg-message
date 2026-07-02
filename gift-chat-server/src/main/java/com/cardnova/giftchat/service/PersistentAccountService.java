@@ -5,6 +5,8 @@ import com.cardnova.giftchat.dto.RegisterRequest;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.repository.UserRepository;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -16,24 +18,35 @@ import java.util.UUID;
 @Service
 public class PersistentAccountService {
 
+    private static final String INVALID_LOGIN_MESSAGE = "Invalid identifier or password";
+
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final PasswordService passwordService;
     private final PersistentSupportService persistentSupportService;
     private final NotificationService notificationService;
+    private final LoginRateLimitService loginRateLimitService;
+    private final ObjectProvider<HttpServletRequest> requestProvider;
+    private final AccountProfileService accountProfileService;
 
     public PersistentAccountService(
         UserRepository userRepository,
         JwtService jwtService,
         PasswordService passwordService,
         PersistentSupportService persistentSupportService,
-        NotificationService notificationService
+        NotificationService notificationService,
+        LoginRateLimitService loginRateLimitService,
+        ObjectProvider<HttpServletRequest> requestProvider,
+        AccountProfileService accountProfileService
     ) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
         this.passwordService = passwordService;
         this.persistentSupportService = persistentSupportService;
         this.notificationService = notificationService;
+        this.loginRateLimitService = loginRateLimitService;
+        this.requestProvider = requestProvider;
+        this.accountProfileService = accountProfileService;
     }
 
     public Optional<UserEntity> findByUsername(String username) {
@@ -44,29 +57,34 @@ public class PersistentAccountService {
     public LoginResponse login(String identifier, String password) {
         String normalizedIdentifier = requireTrimmed(identifier, "Identifier is required");
         String normalizedPassword = requireTrimmed(password, "Password is required");
+        String clientIp = clientIp();
 
-        UserEntity user = findByIdentifier(normalizedIdentifier)
-            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        loginRateLimitService.checkAllowed(normalizedIdentifier, clientIp);
 
-        if (!"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
-            throw new IllegalArgumentException("User is not active");
+        try {
+            UserEntity user = findByIdentifier(normalizedIdentifier)
+                .orElseThrow(this::invalidLogin);
+
+            if (!"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
+                throw invalidLogin();
+            }
+
+            if (!passwordService.matches(normalizedPassword, user.getPasswordHash())) {
+                throw invalidLogin();
+            }
+
+            loginRateLimitService.recordSuccess(normalizedIdentifier, clientIp);
+            return accountProfileService.toSession(user);
+        } catch (IllegalArgumentException exception) {
+            if (INVALID_LOGIN_MESSAGE.equals(exception.getMessage())) {
+                loginRateLimitService.recordFailure(normalizedIdentifier, clientIp);
+            }
+            throw exception;
         }
+    }
 
-        if (!passwordService.matches(normalizedPassword, user.getPasswordHash())) {
-            throw new IllegalArgumentException("Password mismatch");
-        }
-
-        handleUserAccessEvent(user, "LOGIN", "User login", "User " + user.getUsername() + " logged in.");
-
-        return new LoginResponse(
-            jwtService.issueAccessToken(user),
-            user.getUsername(),
-            user.getEmail(),
-            user.getPhone(),
-            user.getRoleCode(),
-            nextRoute(user),
-            jwtService.getAccessTokenExpiry().toString()
-        );
+    private IllegalArgumentException invalidLogin() {
+        return new IllegalArgumentException(INVALID_LOGIN_MESSAGE);
     }
 
     @Transactional
@@ -107,15 +125,7 @@ public class PersistentAccountService {
     public LoginResponse registerAndLogin(RegisterRequest request) {
         UserEntity user = register(request);
         handleUserAccessEvent(user, "REGISTER", "New user registered", "User " + user.getUsername() + " registered.");
-        return new LoginResponse(
-            jwtService.issueAccessToken(user),
-            user.getUsername(),
-            user.getEmail(),
-            user.getPhone(),
-            user.getRoleCode(),
-            nextRoute(user),
-            jwtService.getAccessTokenExpiry().toString()
-        );
+        return accountProfileService.toSession(user);
     }
 
     private void handleUserAccessEvent(UserEntity user, String eventType, String title, String body) {
@@ -160,16 +170,6 @@ public class PersistentAccountService {
             .or(() -> userRepository.findByPhone(identifier));
     }
 
-    private String nextRoute(UserEntity user) {
-        if ("ADMIN".equalsIgnoreCase(user.getRoleCode())) {
-            return "/pages/admin-rates/index";
-        }
-        if ("AGENT".equalsIgnoreCase(user.getRoleCode())) {
-            return "/pages/support-chat-v2/index";
-        }
-        return "/pages/support/index";
-    }
-
     private String normalizeNullable(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
@@ -179,5 +179,13 @@ public class PersistentAccountService {
             throw new IllegalArgumentException(message);
         }
         return value.trim();
+    }
+
+    private String clientIp() {
+        HttpServletRequest request = requestProvider.getIfAvailable();
+        if (request == null) {
+            return "unknown";
+        }
+        return request.getRemoteAddr();
     }
 }

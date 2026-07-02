@@ -1,5 +1,6 @@
 package com.cardnova.giftchat.service;
 
+import com.cardnova.giftchat.api.RateLimitException;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -29,7 +30,7 @@ public class MessageRateLimitService {
                 window.pollFirst();
             }
             if (window.size() >= MAX_MESSAGES_PER_WINDOW) {
-                throw new IllegalArgumentException("Too many messages, please wait a moment");
+                throw new RateLimitException("Too many messages, please wait a moment");
             }
             window.addLast(now);
         }

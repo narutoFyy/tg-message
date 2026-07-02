@@ -6,7 +6,7 @@
           <view class="back-btn" @click="goHome">
             <text>&lt;</text>
           </view>
-          <image class="header-avatar" :src="uiIcons.user" mode="aspectFit" />
+          <image class="header-avatar" :src="currentUserAvatar" mode="aspectFill" />
           <view class="header-info">
             <text class="header-name">{{ headerTitle }}</text>
             <text class="header-note">{{ headerSubtitle }}</text>
@@ -14,11 +14,13 @@
           </view>
         </view>
         <view class="header-actions">
-          <view class="action-btn text-action" @click="startVideoCall">Video</view>
+          <view class="action-btn icon-action" title="Video call" @click="startVideoCall">
+            <text class="icon-video"></text>
+          </view>
         </view>
       </view>
 
-      <scroll-view scroll-y class="message-area" :scroll-into-view="messageScrollTarget">
+      <scroll-view scroll-y class="message-area" :scroll-into-view="messageScrollTarget" @click="closeMessageMenu">
         <view class="message-list">
           <view class="date-divider">
             <text>Today</text>
@@ -32,7 +34,7 @@
             <ChatMessageBubble
               :message="message"
               :mine="isMine(message)"
-              :avatar-src="uiIcons.user"
+              :avatar-src="isMine(message) ? currentUserAvatar : uiIcons.user"
               :call-title="videoCallTitle(message)"
               :call-room="videoCallRoom(message)"
               :call-status="videoCallStatus(message)"
@@ -46,6 +48,7 @@
               @answer-call="answerVideoMessage"
               @reject-call="rejectVideoMessage"
               @enter-call="enterVideoMessage"
+              @message-menu="openMessageMenu"
             />
           </view>
 
@@ -60,6 +63,13 @@
       />
 
       <view class="input-area">
+        <view v-if="replyTarget" class="reply-composer">
+          <view class="reply-composer-body">
+            <text class="reply-composer-label">Replying to</text>
+            <text class="reply-composer-text">{{ replyTargetText }}</text>
+          </view>
+          <view class="reply-composer-close" @click="clearReplyTarget">×</view>
+        </view>
         <view class="input-row">
           <view class="composer-tools-wrap">
             <view :class="['composer-tool-main', showComposerTools && 'is-open']" title="Attachments" @click="toggleComposerTools">
@@ -87,7 +97,21 @@
           </view>
         </view>
       </view>
+
+      <view
+        v-if="messageContextMenu"
+        class="message-menu-mask"
+        @click="closeMessageMenu"
+        @contextmenu.prevent.stop="closeMessageMenu"
+      >
+        <view class="message-context-menu" :style="messageMenuStyle" @click.stop @contextmenu.prevent.stop>
+          <view class="message-context-item" @click="copyContextMessage">Copy</view>
+          <view v-if="canQuoteMessage(messageContextMenu.message)" class="message-context-item" @click="quoteContextMessage">Reply</view>
+        </view>
+      </view>
     </view>
+
+    <AppNav current="chat" />
 
     <view v-if="incomingVideoInvite" class="incoming-call-mask">
       <view class="incoming-call-dialog">
@@ -107,10 +131,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+import AppNav from '@/components/AppNav.vue'
 import ChatMessageBubble from '@/components/chat/ChatMessageBubble.vue'
 import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPreview.vue'
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
-import { createBroadcast, fetchVideoSessionBootstrap, uploadImage } from '@/utils/api'
+import { fetchVideoSessionBootstrap, uploadImage } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { uiIcons } from '@/utils/art'
@@ -137,6 +162,9 @@ const audioEnabled = ref(false)
 const handledVideoInvites = new Set<string>()
 const localVideoStatuses = ref<Record<string, VideoSessionItem['status']>>({})
 const incomingVideoInvite = ref<VideoInviteEvent | null>(null)
+const replyTarget = ref<ChatMessage['replyTo'] | null>(null)
+const messageContextMenu = ref<{ message: ChatMessage; x: number; y: number } | null>(null)
+const lastContextMenuPoint = ref<{ clientX: number; clientY: number; time: number } | null>(null)
 
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT')
@@ -149,11 +177,20 @@ const heroLabel = computed(() => isAgent.value ? 'Customer conversation' : 'Dedi
 const heroCopy = computed(() => isAgent.value ? 'Reply to this customer here.' : 'Your support agent will reply in this chat.')
 const balanceSummary = computed(() => store.state.balanceSummary)
 const canSend = computed(() => Boolean(draft.value.trim() || hasAttachment.value))
+const replyTargetText = computed(() => previewMessageContent(replyTarget.value?.content || ''))
+const messageMenuStyle = computed(() => {
+  const menu = messageContextMenu.value
+  if (!menu) return ''
+  return `left:${menu.x}px;top:${menu.y}px;`
+})
 const socketStatusLabel = computed(() => ({
   connecting: 'connecting',
   online: 'online',
   offline: 'reconnecting'
 })[socketStatus.value])
+const currentUserAvatar = computed(() =>
+  store.state.currentUser?.avatarUrl ? resolveMediaUrl(store.state.currentUser.avatarUrl) : uiIcons.user
+)
 
 onShow(() => {
   store.bootstrap().then(async () => {
@@ -174,10 +211,12 @@ onUnmounted(() => {
   closeSocket()
   stopReadRefresh()
   detachPasteListener()
+  detachContextMenuPointListener()
 })
 
 onMounted(() => {
   attachPasteListener()
+  attachContextMenuPointListener()
 })
 
 watch(
@@ -197,6 +236,105 @@ watch(
 
 function isMine(message: ChatMessage) {
   return message.author === 'me'
+}
+
+function previewMessageContent(content: string) {
+  const normalized = (content || '').trim().replace(/\s+/g, ' ')
+  if (!normalized) return ''
+  return normalized.length > 80 ? `${normalized.slice(0, 80)}...` : normalized
+}
+
+function copyableMessageContent(message: ChatMessage) {
+  if (message.type === 'image') return '[Image]'
+  if (message.type === 'gif') return '[GIF]'
+  if (message.type === 'voice') return '[Voice]'
+  if (message.type === 'video') return '[Video call]'
+  return message.content || ''
+}
+
+function clipboardMessageContent(message: ChatMessage) {
+  return message.type === 'text' ? message.content || '' : copyableMessageContent(message)
+}
+
+function closeMessageMenu() {
+  messageContextMenu.value = null
+}
+
+function clearReplyTarget() {
+  replyTarget.value = null
+}
+
+function canQuoteMessage(message: ChatMessage) {
+  return message.author !== 'system' && !message.id.startsWith('local-')
+}
+
+function rememberContextMenuPoint(event: MouseEvent) {
+  lastContextMenuPoint.value = {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    time: Date.now()
+  }
+}
+
+function attachContextMenuPointListener() {
+  // #ifdef H5
+  window.addEventListener('contextmenu', rememberContextMenuPoint, true)
+  // #endif
+}
+
+function detachContextMenuPointListener() {
+  // #ifdef H5
+  window.removeEventListener('contextmenu', rememberContextMenuPoint, true)
+  // #endif
+}
+
+function resolveContextMenuPoint(point?: { clientX: number; clientY: number }) {
+  const recent = lastContextMenuPoint.value
+  if (recent && Date.now() - recent.time < 250) {
+    return recent
+  }
+  return point
+}
+
+function openMessageMenu(message: ChatMessage, point?: { clientX: number; clientY: number }) {
+  showComposerTools.value = false
+  let x = 24
+  let y = 120
+  // #ifdef H5
+  const menuWidth = 118
+  const menuHeight = canQuoteMessage(message) ? 88 : 48
+  const menuPoint = resolveContextMenuPoint(point)
+  const clientX = menuPoint?.clientX || 0
+  const clientY = menuPoint?.clientY || 0
+  x = Math.max(12, Math.min(clientX || 24, window.innerWidth - menuWidth - 12))
+  y = Math.max(12, Math.min(clientY || 120, window.innerHeight - menuHeight - 12))
+  // #endif
+  messageContextMenu.value = { message, x, y }
+}
+
+function copyContextMessage() {
+  const message = messageContextMenu.value?.message
+  closeMessageMenu()
+  if (!message) return
+  const data = clipboardMessageContent(message)
+  if (!data) return
+  uni.setClipboardData({
+    data,
+    success() {
+      showNotice('Copied.')
+    }
+  })
+}
+
+function quoteContextMessage() {
+  const message = messageContextMenu.value?.message
+  closeMessageMenu()
+  if (!message || !canQuoteMessage(message)) return
+  replyTarget.value = {
+    messageId: message.id,
+    author: message.author,
+    content: copyableMessageContent(message)
+  }
 }
 
 function isReadReceipt(payload: ChatRealtimePayload): payload is ChatReadReceiptEvent {
@@ -588,10 +726,12 @@ async function sendText(content: string) {
   if (!value) return
 
   try {
-    await store.sendSupport(value)
+    const replyTo = replyTarget.value || undefined
+    await store.sendSupport(value, 'text', replyTo)
     await sendPendingSupportImage()
     startReadRefresh()
     draft.value = ''
+    clearReplyTarget()
     showNotice('Message sent.')
   } catch (error) {
     showNotice(error instanceof Error ? error.message : 'Send failed')
@@ -601,6 +741,7 @@ async function sendText(content: string) {
 function handleSend() {
   enableAudio()
   showComposerTools.value = false
+  closeMessageMenu()
   if (activeAttachment.value) {
     sendPendingAttachment()
     return
@@ -633,8 +774,10 @@ async function sendPendingAttachment() {
   setStatus(attachment.id, 'uploading')
   try {
     const asset = await uploadImage(attachment.url)
-    await store.sendSupport(asset.publicUrl, attachment.kind)
+    const replyTo = replyTarget.value || undefined
+    await store.sendSupport(asset.publicUrl, attachment.kind, replyTo)
     startReadRefresh()
+    clearReplyTarget()
     clearAttachment(attachment.id)
     if (draft.value.trim()) {
       await sendText(draft.value)
@@ -706,28 +849,6 @@ async function sendGif() {
 
 function showTools() {
   showNotice('Use Image, GIF, Video, or the quick actions below.')
-}
-
-async function sendOwnCustomerBroadcast() {
-  if (!isAgent.value) return
-  const content = draft.value.trim()
-  if (!content) {
-    showNotice('Type a broadcast message first.')
-    return
-  }
-
-  try {
-    const broadcast = await createBroadcast({
-      scope: 'own',
-      content,
-      messageType: 'text'
-    })
-    draft.value = ''
-    await store.refreshSupport().catch(() => {})
-    showNotice(`Broadcast sent to ${broadcast.deliveredCount} customer${broadcast.deliveredCount === 1 ? '' : 's'}.`)
-  } catch (error) {
-    showNotice(error instanceof Error ? error.message : 'Broadcast failed')
-  }
 }
 
 async function startVideoCall() {
@@ -823,9 +944,12 @@ function showNotice(message: string) {
 .chat-container {
   display: flex;
   height: 100vh;
+  min-height: 100vh;
+  padding-bottom: calc(152rpx + env(safe-area-inset-bottom));
   background: #e8eef2;
   overflow: hidden;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .chat-main {
@@ -922,18 +1046,53 @@ function showNotice(message: string) {
 }
 
 .action-btn {
-  min-width: 36px;
+  width: 38px;
   height: 36px;
-  padding: 0 10px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 50%;
   background: rgba(0, 136, 204, 0.1);
   color: #0088cc;
-  font-size: 13px;
-  font-weight: 800;
   cursor: pointer;
+}
+
+.action-btn:hover {
+  background: rgba(0, 136, 204, 0.16);
+}
+
+.icon-video {
+  position: relative;
+  width: 21px;
+  height: 15px;
+  border: 2px solid currentColor;
+  border-radius: 5px;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.icon-video::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.icon-video::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 3px;
+  width: 8px;
+  height: 7px;
+  border-radius: 1px 4px 4px 1px;
+  background: currentColor;
+  clip-path: polygon(0 18%, 100% 0, 100% 100%, 0 82%);
 }
 
 .message-area {
@@ -979,42 +1138,6 @@ function showNotice(message: string) {
 
 .message-wrapper.mine {
   justify-content: flex-end;
-}
-
-.message-bubble {
-  max-width: min(68%, 520px);
-  min-width: 0;
-  padding: 10px 14px;
-  border-radius: 8px;
-  word-break: break-word;
-  box-shadow: 0 2px 8px rgba(25, 42, 62, 0.08);
-}
-
-.message-wrapper.theirs .message-bubble {
-  background: rgba(255, 255, 255, 0.98);
-  border-top-left-radius: 2px;
-}
-
-.message-wrapper.mine .message-bubble {
-  background: rgba(232, 246, 239, 0.98);
-  border-top-right-radius: 2px;
-}
-
-.system-bubble {
-  max-width: 80%;
-  margin: 0 auto;
-  background: rgba(0, 0, 0, 0.1) !important;
-  text-align: center;
-  font-size: 12px;
-  color: #777777;
-  border-radius: 4px !important;
-  box-shadow: none;
-}
-
-.message-text {
-  font-size: 15px;
-  line-height: 1.5;
-  color: #333333;
 }
 
 .message-img {
@@ -1157,12 +1280,14 @@ function showNotice(message: string) {
   border-top: 1px solid rgba(136, 153, 166, 0.22);
   padding: 8px 16px 10px;
   backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 
 .input-row {
   display: flex;
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
 
 .composer-tools-wrap {
@@ -1301,6 +1426,90 @@ function showNotice(message: string) {
   border-bottom: 4px solid transparent;
 }
 
+.reply-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid #0088cc;
+  border-radius: 8px;
+  background: rgba(225, 244, 255, 0.94);
+  box-sizing: border-box;
+}
+
+.reply-composer-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.reply-composer-label {
+  color: #0071a8;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.reply-composer-text {
+  margin-top: 2px;
+  color: #344856;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reply-composer-close {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.06);
+  color: #42515c;
+  font-size: 20px;
+  line-height: 26px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.message-menu-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+}
+
+.message-context-menu {
+  position: fixed;
+  min-width: 112px;
+  padding: 6px;
+  border: 1px solid rgba(38, 59, 48, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(23, 40, 31, 0.18);
+  box-sizing: border-box;
+}
+
+.message-context-item {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  color: #22332a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 36px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.message-context-item:hover {
+  background: rgba(0, 136, 204, 0.1);
+}
+
 .message-input {
   flex: 1;
   min-width: 0;
@@ -1312,6 +1521,7 @@ function showNotice(message: string) {
 }
 
 .send-btn {
+  flex-shrink: 0;
   padding: 10px 24px;
   background: rgba(0, 168, 132, 0.2);
   color: #6f8069;
@@ -1407,20 +1617,37 @@ function showNotice(message: string) {
 }
 
 @media (max-width: 768px) {
+  .chat-container {
+    padding-bottom: calc(146rpx + env(safe-area-inset-bottom));
+  }
+
+  .header-left {
+    flex: 1;
+    min-width: 0;
+  }
+
   .chat-header {
     padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+
+  .header-name {
+    font-size: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .header-note {
-    max-width: 42vw;
+    max-width: 56vw;
   }
 
   .message-area {
     padding: 12px 14px;
-  }
-
-  .message-bubble {
-    max-width: 76%;
   }
 
   .msg-avatar {
@@ -1429,11 +1656,26 @@ function showNotice(message: string) {
   }
 
   .input-area {
-    padding: 8px 12px 10px;
+    padding: 8px 10px 10px;
+  }
+
+  .input-row {
+    gap: 8px;
+  }
+
+  .composer-tool-main {
+    width: 36px;
+    height: 36px;
+  }
+
+  .message-input {
+    padding: 9px 10px;
+    font-size: 14px;
   }
 
   .send-btn {
-    padding: 10px 18px;
+    padding: 9px 14px;
+    font-size: 13px;
   }
 }
 </style>

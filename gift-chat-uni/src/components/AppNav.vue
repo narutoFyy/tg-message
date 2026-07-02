@@ -36,20 +36,23 @@ function go(url: string) {
 <style scoped lang="scss">
 .tabbar {
   position: fixed;
-  left: 24rpx;
-  right: 24rpx;
-  bottom: 20rpx;
-  height: 112rpx;
-  padding: 12rpx 10rpx 14rpx;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(112rpx + env(safe-area-inset-bottom));
+  padding: 12rpx 34rpx calc(14rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
   display: flex;
   align-items: flex-end;
   justify-content: space-around;
   z-index: 30;
   backdrop-filter: blur(18rpx);
+  border-radius: 16rpx 16rpx 0 0;
 }
 
 .tab-item {
-  width: 140rpx;
+  width: 25%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -71,5 +74,22 @@ function go(url: string) {
 .tab-label.active,
 .tab-item:active .tab-label {
   color: #0088cc;
+}
+
+@media (max-width: 380px) {
+  .tabbar {
+    height: calc(106rpx + env(safe-area-inset-bottom));
+    padding-left: 24rpx;
+    padding-right: 24rpx;
+  }
+
+  .tab-icon-image {
+    width: 38rpx;
+    height: 38rpx;
+  }
+
+  .tab-label {
+    font-size: 22rpx;
+  }
 }
 </style>

@@ -2,7 +2,14 @@
   <view :class="['chat-message', mine ? 'mine' : 'theirs', message.author === 'system' ? 'system' : '']">
     <image v-if="!mine && message.author !== 'system'" class="chat-avatar" :src="avatarSrc" mode="aspectFit" />
 
-    <view :class="['chat-bubble', bubbleKindClass, message.author === 'system' ? 'system-bubble' : '']">
+    <view
+      :class="['chat-bubble', bubbleKindClass, message.author === 'system' ? 'system-bubble' : '']"
+      @contextmenu.prevent.stop="emitMessageMenu"
+      @longpress="emitMessageMenu"
+    >
+      <view v-if="message.replyTo" class="reply-preview">
+        <text class="reply-preview-line">{{ replyPreviewText }}</text>
+      </view>
       <MediaMessage
         v-if="message.type === 'image' || message.type === 'gif'"
         :src="message.content"
@@ -87,13 +94,14 @@ const props = withDefaults(defineProps<{
   canEnterCall: false
 })
 
-defineEmits<{
+const emit = defineEmits<{
   (event: 'preview', url: string): void
   (event: 'playVoice', url: string): void
   (event: 'retry', message: ChatMessage): void
   (event: 'answerCall', message: ChatMessage): void
   (event: 'rejectCall', message: ChatMessage): void
   (event: 'enterCall', message: ChatMessage): void
+  (event: 'messageMenu', message: ChatMessage, point?: { clientX: number; clientY: number }): void
 }>()
 
 const defaultCallTitle = 'Video call'
@@ -102,6 +110,30 @@ const bubbleKindClass = computed(() => {
   if (props.message.type === 'video') return 'call-bubble'
   return ''
 })
+
+const replyPreviewText = computed(() => {
+  const content = props.message.replyTo?.content?.trim() || ''
+  if (!content) return ''
+  return content.length > 80 ? `${content.slice(0, 80)}...` : content
+})
+
+function eventPoint(event: Event) {
+  const raw = event as MouseEvent & {
+    touches?: ArrayLike<Touch>
+    changedTouches?: ArrayLike<Touch>
+    detail?: { x?: number; y?: number; clientX?: number; clientY?: number }
+  }
+  const touch = raw.changedTouches?.[0] || raw.touches?.[0]
+  return {
+    clientX: raw.clientX || touch?.clientX || raw.detail?.clientX || raw.detail?.x || 0,
+    clientY: raw.clientY || touch?.clientY || raw.detail?.clientY || raw.detail?.y || 0
+  }
+}
+
+function emitMessageMenu(event: Event) {
+  if (props.message.author === 'system') return
+  emit('messageMenu', props.message, eventPoint(event))
+}
 </script>
 
 <style scoped>
@@ -175,14 +207,20 @@ const bubbleKindClass = computed(() => {
 }
 
 .system-bubble {
-  max-width: 80%;
+  max-width: min(78%, 460px);
+  min-width: 0;
   margin: 0 auto;
-  background: rgba(0, 0, 0, 0.1) !important;
+  padding: 5px 10px;
+  background: rgba(23, 33, 43, 0.1) !important;
   text-align: center;
-  font-size: 12px;
-  color: #777777;
-  border-radius: 4px !important;
+  border-radius: 999px !important;
   box-shadow: none;
+}
+
+.system-bubble .message-text {
+  color: #66737f;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .message-text {
@@ -191,6 +229,27 @@ const bubbleKindClass = computed(() => {
   line-height: 1.5;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.reply-preview {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-left: 3px solid rgba(32, 128, 95, 0.36);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.58);
+  box-sizing: border-box;
+}
+
+.reply-preview-line {
+  display: block;
+  color: #4d6558;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .voice-chip {

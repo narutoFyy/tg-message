@@ -5,6 +5,7 @@ import java.util.List;
 public record SupportConversation(
     String conversationId,
     String customerUsername,
+    String customerAvatarUrl,
     String assignmentStatus,
     String assignedAgent,
     String agentNote,

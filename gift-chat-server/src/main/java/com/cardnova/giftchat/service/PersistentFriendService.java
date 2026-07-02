@@ -371,7 +371,7 @@ public class PersistentFriendService {
             ? directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendshipId)
             : directMessageRepository.findByFriendshipIdSinceSeq(friendshipId, normalizedSinceSeq);
         long latestSeq = directMessageRepository.findMaxServerSeqByFriendshipId(friendshipId);
-        long readSeq = lastReadAt == null ? 0L : directMessageRepository.findReadSeqByFriendshipId(friendshipId, lastReadAt);
+        long readSeq = counterpartReadAt == null ? 0L : directMessageRepository.findReadSeqByFriendshipId(friendshipId, counterpartReadAt);
         int unreadCount = countUnread(
             directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendshipId),
             currentUser.getId(),

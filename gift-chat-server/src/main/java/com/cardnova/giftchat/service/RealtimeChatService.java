@@ -1,6 +1,7 @@
 package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.model.ChatMessage;
+import com.cardnova.giftchat.model.ChatMessageReply;
 import com.cardnova.giftchat.model.RealtimeFanoutEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -80,6 +81,25 @@ public class RealtimeChatService {
         String deliveredAt,
         String failedReason
     ) {
+        broadcast(channelKey, senderUserId, selfAuthor, otherAuthor, messageType, content, messageId, createdAt, clientMessageId, serverSeq, deliveryStatus, deliveredAt, failedReason, null);
+    }
+
+    public void broadcast(
+        String channelKey,
+        String senderUserId,
+        String selfAuthor,
+        String otherAuthor,
+        String messageType,
+        String content,
+        String messageId,
+        String createdAt,
+        String clientMessageId,
+        Long serverSeq,
+        String deliveryStatus,
+        String deliveredAt,
+        String failedReason,
+        ChatMessageReply replyTo
+    ) {
         ChatMessage payload = new ChatMessage(
             messageId,
             otherAuthor,
@@ -92,7 +112,8 @@ public class RealtimeChatService {
             deliveryStatus == null || deliveryStatus.isBlank() ? "delivered" : deliveryStatus.toLowerCase(),
             deliveredAt == null ? "" : deliveredAt,
             failedReason == null ? "" : failedReason,
-            java.util.List.of()
+            java.util.List.of(),
+            replyTo
         );
         broadcastAuthorAwareLocal(channelKey, senderUserId, selfAuthor, otherAuthor, payload);
         publish(channelKey, senderUserId, payload, true, selfAuthor, otherAuthor);
@@ -215,7 +236,8 @@ public class RealtimeChatService {
                     message.deliveryStatus(),
                     message.deliveredAt(),
                     message.failedReason(),
-                    message.attachments()
+                    message.attachments(),
+                    message.replyTo()
                 );
             }
             sendSafely(session, sessionPayload);

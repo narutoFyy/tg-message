@@ -353,6 +353,14 @@ export function logoutSession() {
   return request<boolean>('/auth/logout', 'POST')
 }
 
+export function fetchCurrentAccount() {
+  return request<SessionUser>('/account/me')
+}
+
+export function updateAccountAvatar(avatarUrl: string) {
+  return request<SessionUser>('/account/avatar', 'POST', { avatarUrl })
+}
+
 export function createRate(payload: {
   cardName: string
   region: string
@@ -419,7 +427,7 @@ export function assignSupportConversation(conversationId: string, agentUsername:
   return request<SupportConversationItem>(`/admin/support/conversations/${conversationId}/assign`, 'POST', { agentUsername })
 }
 
-export function sendSupportMessage(conversationId: string, payload: { content: string; messageType: string; clientMessageId?: string }) {
+export function sendSupportMessage(conversationId: string, payload: { content: string; messageType: string; clientMessageId?: string; replyTo?: ChatMessage['replyTo'] }) {
   return request<ChatMessage>(
     `/support/conversations/${conversationId}/messages`,
     'POST',

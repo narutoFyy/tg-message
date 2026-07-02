@@ -3,8 +3,7 @@ package com.cardnova.giftchat.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-public record LoginRequest(
-    @NotBlank @Size(max = 128) String identifier,
-    @NotBlank @Size(max = 128) String password
+public record UpdateAvatarRequest(
+    @NotBlank @Size(max = 255) String avatarUrl
 ) {
 }

@@ -14,7 +14,7 @@ cd gift-chat/deploy
 cp .env.example .env
 ```
 
-Edit `.env` with real MySQL passwords, JWT secret, and your public origin values.
+Edit `.env` with real MySQL passwords, JWT secret, public origin values, and TRTC values if video calls are enabled.
 
 ## 3. Start the stack
 
@@ -54,6 +54,7 @@ If you have a domain:
    - `APP_CORS_ALLOWED_ORIGINS`
    - `APP_UPLOAD_PUBLIC_BASE_URL`
    - `APP_REALTIME_REDIS_ENABLED`
+   - Video call values: `APP_VIDEO_TRTC_SDK_APP_ID`, `APP_VIDEO_TRTC_SECRET_KEY`
    - Tencent Chat values if hybrid mobile delivery/push is enabled: `APP_TENCENT_CHAT_ENABLED`, `APP_TENCENT_CHAT_SDK_APP_ID`, `APP_TENCENT_CHAT_SECRET_KEY` or `APP_TENCENT_CHAT_ADMIN_USER_SIG`
 
 For a public Android download, HTTPS is strongly recommended even if the first deployment uses only the bare IP.
@@ -68,7 +69,11 @@ After enabling HTTPS, verify:
 - No other app or browser tab is occupying the camera or microphone.
 - `/ws/` still upgrades correctly through the HTTPS reverse proxy.
 
-## 6. Operational notes
+## 6. Create the first admin
+
+Production disables demo data seeding. Before inviting real users, create the first admin account in the production database with a strong password hash, then use that admin to create support agents from the admin console. Do not enable `data-dev.sql` or reuse demo passwords in production.
+
+## 7. Operational notes
 
 - Uploaded chat images, voucher images, and voice messages are stored in the `upload-data` Docker volume.
 - Database state is stored in the `mysql-data` Docker volume.

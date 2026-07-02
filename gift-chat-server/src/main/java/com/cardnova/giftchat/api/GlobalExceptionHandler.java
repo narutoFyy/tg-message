@@ -28,6 +28,12 @@ public class GlobalExceptionHandler {
         return new ApiErrorResponse(403, exception.getMessage());
     }
 
+    @ExceptionHandler(RateLimitException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public ApiErrorResponse handleRateLimit(RateLimitException exception) {
+        return new ApiErrorResponse(429, exception.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleValidation(MethodArgumentNotValidException exception) {
@@ -42,5 +48,11 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiErrorResponse handleConstraint(ConstraintViolationException exception) {
         return new ApiErrorResponse(400, exception.getMessage());
+    }
+
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ApiErrorResponse handleUnexpected(Exception exception) {
+        return new ApiErrorResponse(500, "Internal server error");
     }
 }

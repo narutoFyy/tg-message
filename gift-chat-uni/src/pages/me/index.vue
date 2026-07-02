@@ -15,8 +15,13 @@
       </view>
     </view>
 
-    <view class="profile-card" @click="goSettings">
-      <image class="avatar-image" :src="pageArt.profileAvatar" mode="aspectFit" />
+    <view class="profile-card">
+      <view class="avatar-wrap" @click="chooseAvatar">
+        <image class="avatar-image" :src="avatarSrc" mode="aspectFill" />
+        <view class="avatar-edit">
+          <text>{{ avatarUploading ? '...' : '+' }}</text>
+        </view>
+      </view>
       <text class="profile-name">{{ displayName }}</text>
       <view class="invite-row" @click.stop="copyInvite">
         <text class="invite">Invite code: {{ inviteCode }}</text>
@@ -99,17 +104,25 @@ import { onShow } from '@dcloudio/uni-app'
 import AppNav from '@/components/AppNav.vue'
 import { useAppStore } from '@/store/app'
 import { pageArt, uiIcons } from '@/utils/art'
+import { uploadImage } from '@/utils/api'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const store = useAppStore()
 const notice = ref('')
+const avatarUploading = ref(false)
 
 onShow(() => {
   store.bootstrap()
+  store.refreshCurrentAccount().catch(() => undefined)
 })
 
 const supportCount = computed(() => store.state.supportConversations.length)
 const invitationCount = computed(() => store.state.ranking?.currentUser?.score || '0')
 const displayName = computed(() => store.state.currentUser?.username || 'Jay Crown')
+const avatarSrc = computed(() => {
+  const avatarUrl = store.state.currentUser?.avatarUrl
+  return avatarUrl ? resolveMediaUrl(avatarUrl) : pageArt.profileAvatar
+})
 const inviteCode = computed(() => {
   const base = (store.state.currentUser?.username || 'dhceqw').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
   return (base + 'QW').slice(0, 6)
@@ -159,6 +172,30 @@ function goRanking() {
 
 function goSettings() {
   uni.navigateTo({ url: '/pages/settings/index' })
+}
+
+function chooseAvatar() {
+  if (avatarUploading.value) return
+  uni.chooseImage({
+    count: 1,
+    sizeType: ['compressed'],
+    sourceType: ['album', 'camera'],
+    async success(result) {
+      const filePath = result.tempFilePaths?.[0]
+      if (!filePath) return
+      avatarUploading.value = true
+      notice.value = ''
+      try {
+        const asset = await uploadImage(filePath)
+        await store.updateAvatar(asset.publicUrl)
+        notice.value = 'Avatar updated.'
+      } catch (error) {
+        notice.value = error instanceof Error ? error.message : 'Avatar update failed.'
+      } finally {
+        avatarUploading.value = false
+      }
+    }
+  })
 }
 
 function copyInvite() {
@@ -243,9 +280,34 @@ function shareInvite() {
   padding: 12rpx 0 10rpx;
 }
 
+.avatar-wrap {
+  position: relative;
+  width: 152rpx;
+  height: 152rpx;
+}
+
 .avatar-image {
   width: 152rpx;
   height: 152rpx;
+  border-radius: 50%;
+  background: #eef2f4;
+}
+
+.avatar-edit {
+  position: absolute;
+  right: 2rpx;
+  bottom: 2rpx;
+  width: 42rpx;
+  height: 42rpx;
+  border-radius: 50%;
+  background: #0088cc;
+  border: 4rpx solid #ffffff;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  font-weight: 900;
 }
 
 .profile-name {

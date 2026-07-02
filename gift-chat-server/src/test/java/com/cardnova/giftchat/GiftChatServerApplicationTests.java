@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -33,6 +34,7 @@ import java.util.UUID;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("dev")
 class GiftChatServerApplicationTests {
 
     @Autowired
@@ -59,6 +61,60 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.roleCode").value("USER"))
             .andExpect(jsonPath("$.data.username").value("cardnova_user"))
             .andExpect(jsonPath("$.data.nextRoute").value("/pages/support/index"));
+    }
+
+    @Test
+    void loginFailuresDoNotRevealAccountState() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "identifier": "missing_%s",
+                      "password": "wrong-password"
+                    }
+                    """.formatted(UUID.randomUUID().toString().replace("-", ""))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Invalid identifier or password"));
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "identifier": "cardnova_user",
+                      "password": "wrong-password"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Invalid identifier or password"));
+    }
+
+    @Test
+    void repeatedLoginFailuresAreRateLimited() throws Exception {
+        String identifier = "missing_%s".formatted(UUID.randomUUID().toString().replace("-", ""));
+
+        for (int index = 0; index < 5; index++) {
+            mockMvc.perform(post("/api/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                        {
+                          "identifier": "%s",
+                          "password": "wrong-password"
+                        }
+                        """.formatted(identifier)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid identifier or password"));
+        }
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "identifier": "%s",
+                      "password": "wrong-password"
+                    }
+                    """.formatted(identifier)))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.message").value("Too many login attempts, please try again later"));
     }
 
     @Test
@@ -348,12 +404,21 @@ class GiftChatServerApplicationTests {
 
         mockMvc.perform(get("/api/support/conversations/support-2/messages/sync")
                 .param("sinceSeq", Long.toString(firstSeq))
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.messages[?(@.content == 'Support sync delta')]").exists())
+            .andExpect(jsonPath("$.data.messages[?(@.content == 'Support sync baseline')]").doesNotExist())
+            .andExpect(jsonPath("$.data.latestSeq").value(secondSeq))
+            .andExpect(jsonPath("$.data.readSeq").value(firstSeq));
+
+        mockMvc.perform(get("/api/support/conversations/support-2/messages/sync")
+                .param("sinceSeq", Long.toString(firstSeq))
                 .header("Authorization", bearer(agentToken)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.messages[?(@.content == 'Support sync delta')]").exists())
             .andExpect(jsonPath("$.data.messages[?(@.content == 'Support sync baseline')]").doesNotExist())
             .andExpect(jsonPath("$.data.latestSeq").value(secondSeq))
-            .andExpect(jsonPath("$.data.readSeq").value(firstSeq))
+            .andExpect(jsonPath("$.data.readSeq").value(0))
             .andExpect(jsonPath("$.data.unreadCount").value(1));
     }
 
@@ -515,12 +580,21 @@ class GiftChatServerApplicationTests {
 
         mockMvc.perform(get("/api/friends/friendship-1/messages/sync")
                 .param("sinceSeq", Long.toString(firstSeq))
+                .header("Authorization", bearer(user1Token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.messages[?(@.content == 'Friend sync delta')]").exists())
+            .andExpect(jsonPath("$.data.messages[?(@.content == 'Friend sync baseline')]").doesNotExist())
+            .andExpect(jsonPath("$.data.latestSeq").value(secondSeq))
+            .andExpect(jsonPath("$.data.readSeq").value(firstSeq));
+
+        mockMvc.perform(get("/api/friends/friendship-1/messages/sync")
+                .param("sinceSeq", Long.toString(firstSeq))
                 .header("Authorization", bearer(user2Token)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.messages[?(@.content == 'Friend sync delta')]").exists())
             .andExpect(jsonPath("$.data.messages[?(@.content == 'Friend sync baseline')]").doesNotExist())
             .andExpect(jsonPath("$.data.latestSeq").value(secondSeq))
-            .andExpect(jsonPath("$.data.readSeq").value(firstSeq))
+            .andExpect(jsonPath("$.data.readSeq").value(0))
             .andExpect(jsonPath("$.data.unreadCount").value(1));
     }
 
@@ -1196,6 +1270,73 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.mimeType").value("image/png"))
             .andExpect(jsonPath("$.data.publicUrl", containsString(".png")));
+    }
+
+    @Test
+    void uploadImageRejectsOversizedFiles() throws Exception {
+        String userToken = loginToken("cardnova_user");
+        byte[] oversizedPng = new byte[5 * 1024 * 1024 + 1];
+        oversizedPng[0] = (byte) 0x89;
+        oversizedPng[1] = 0x50;
+        oversizedPng[2] = 0x4E;
+        oversizedPng[3] = 0x47;
+        oversizedPng[4] = 0x0D;
+        oversizedPng[5] = 0x0A;
+        oversizedPng[6] = 0x1A;
+        oversizedPng[7] = 0x0A;
+        MockMultipartFile oversizedImage = new MockMultipartFile(
+            "file",
+            "oversized.png",
+            "image/png",
+            oversizedPng
+        );
+
+        mockMvc.perform(multipart("/api/uploads/images")
+                .file(oversizedImage)
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Image file is too large"));
+    }
+
+    @Test
+    void userCanUpdateAvatarFromOwnedUpload() throws Exception {
+        String userToken = loginToken("cardnova_user");
+        byte[] pngHeaderOnly = new byte[] {
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D
+        };
+        MockMultipartFile avatar = new MockMultipartFile(
+            "file",
+            "avatar.png",
+            "image/png",
+            pngHeaderOnly
+        );
+
+        MvcResult uploadResult = mockMvc.perform(multipart("/api/uploads/images")
+                .file(avatar)
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String avatarUrl = objectMapper.readTree(uploadResult.getResponse().getContentAsString())
+            .path("data")
+            .path("publicUrl")
+            .asText();
+
+        mockMvc.perform(post("/api/account/avatar")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "avatarUrl": "%s"
+                    }
+                    """.formatted(avatarUrl)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.avatarUrl").value(avatarUrl));
+
+        mockMvc.perform(get("/api/account/me")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.avatarUrl").value(avatarUrl));
     }
 
     private String loginToken(String identifier) throws Exception {

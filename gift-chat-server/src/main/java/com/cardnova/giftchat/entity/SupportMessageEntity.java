@@ -37,6 +37,15 @@ public class SupportMessageEntity {
     @Column(name = "client_message_id", length = 64)
     private String clientMessageId;
 
+    @Column(name = "reply_to_message_id", length = 36)
+    private String replyToMessageId;
+
+    @Column(name = "reply_to_author", length = 32)
+    private String replyToAuthor;
+
+    @Column(name = "reply_to_content", columnDefinition = "TEXT")
+    private String replyToContent;
+
     @Column(name = "server_seq", nullable = false)
     private Long serverSeq;
 
@@ -118,6 +127,30 @@ public class SupportMessageEntity {
 
     public void setClientMessageId(String clientMessageId) {
         this.clientMessageId = clientMessageId;
+    }
+
+    public String getReplyToMessageId() {
+        return replyToMessageId;
+    }
+
+    public void setReplyToMessageId(String replyToMessageId) {
+        this.replyToMessageId = replyToMessageId;
+    }
+
+    public String getReplyToAuthor() {
+        return replyToAuthor;
+    }
+
+    public void setReplyToAuthor(String replyToAuthor) {
+        this.replyToAuthor = replyToAuthor;
+    }
+
+    public String getReplyToContent() {
+        return replyToContent;
+    }
+
+    public void setReplyToContent(String replyToContent) {
+        this.replyToContent = replyToContent;
     }
 
     public Long getServerSeq() {

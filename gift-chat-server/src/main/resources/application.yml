@@ -8,7 +8,7 @@ spring:
   application:
     name: gift-chat-server
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:}
   servlet:
     multipart:
       max-file-size: 10MB
@@ -40,7 +40,7 @@ app:
   auth:
     jwt-secret: ${APP_AUTH_JWT_SECRET:change-me-in-production}
     access-token-minutes: ${APP_AUTH_ACCESS_TOKEN_MINUTES:720}
-    demo-fallback: ${APP_AUTH_DEMO_FALLBACK:true}
+    demo-fallback: ${APP_AUTH_DEMO_FALLBACK:false}
   upload:
     image-dir: ${APP_UPLOAD_IMAGE_DIR:uploads/images}
     voice-dir: ${APP_UPLOAD_VOICE_DIR:uploads/voices}

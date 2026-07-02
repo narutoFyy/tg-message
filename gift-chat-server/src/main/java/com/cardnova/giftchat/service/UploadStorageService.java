@@ -25,6 +25,8 @@ import java.util.UUID;
 @Transactional
 public class UploadStorageService {
 
+    private static final long MAX_IMAGE_BYTES = 5L * 1024L * 1024L;
+    private static final long MAX_VOICE_BYTES = 10L * 1024L * 1024L;
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/webp", "image/gif");
     private static final Set<String> ALLOWED_VOICE_TYPES = Set.of(
         "audio/mpeg",
@@ -59,11 +61,11 @@ public class UploadStorageService {
     }
 
     public UploadAssetItem saveImage(MultipartFile file) {
-        return saveAsset(file, ALLOWED_IMAGE_TYPES, "Image", imageDir, "images");
+        return saveAsset(file, ALLOWED_IMAGE_TYPES, "Image", imageDir, "images", MAX_IMAGE_BYTES);
     }
 
     public UploadAssetItem saveVoice(MultipartFile file) {
-        return saveAsset(file, ALLOWED_VOICE_TYPES, "Voice", voiceDir, "voices");
+        return saveAsset(file, ALLOWED_VOICE_TYPES, "Voice", voiceDir, "voices", MAX_VOICE_BYTES);
     }
 
     private UploadAssetItem saveAsset(
@@ -71,10 +73,14 @@ public class UploadStorageService {
         Set<String> allowedTypes,
         String label,
         Path storageDir,
-        String publicSegment
+        String publicSegment,
+        long maxBytes
     ) {
         if (file.isEmpty()) {
             throw new IllegalArgumentException(label + " file is empty");
+        }
+        if (file.getSize() > maxBytes) {
+            throw new IllegalArgumentException(label + " file is too large");
         }
 
         String detectedMimeType = detectMimeType(file);

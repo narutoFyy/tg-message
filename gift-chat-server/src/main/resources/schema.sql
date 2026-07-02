@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS app_user (
     role_code VARCHAR(32) NOT NULL,
     status_code VARCHAR(32) NOT NULL,
     tencent_user_id VARCHAR(32) UNIQUE,
+    avatar_url VARCHAR(255),
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );
@@ -42,6 +43,9 @@ CREATE TABLE IF NOT EXISTS support_message (
     message_type VARCHAR(32) NOT NULL,
     content TEXT NOT NULL,
     client_message_id VARCHAR(64),
+    reply_to_message_id VARCHAR(36),
+    reply_to_author VARCHAR(32),
+    reply_to_content TEXT,
     server_seq BIGINT NOT NULL,
     delivery_status VARCHAR(32) NOT NULL DEFAULT 'DELIVERED',
     delivered_at TIMESTAMP,

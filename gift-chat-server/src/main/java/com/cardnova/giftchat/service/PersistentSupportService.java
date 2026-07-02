@@ -5,6 +5,7 @@ import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.SupportMessageEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.model.ChatMessage;
+import com.cardnova.giftchat.model.ChatMessageReply;
 import com.cardnova.giftchat.model.ChatMessageSync;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
@@ -132,6 +133,7 @@ public class PersistentSupportService {
         return new SupportConversation(
             conversation.getId(),
             conversation.getCustomerUser().getUsername(),
+            conversation.getCustomerUser().getAvatarUrl() == null ? "" : conversation.getCustomerUser().getAvatarUrl(),
             conversation.getAssignmentStatus(),
             conversation.getAssignedAgent() == null ? "" : conversation.getAssignedAgent().getUsername(),
             conversation.getAgentNote() == null ? "" : conversation.getAgentNote(),
@@ -191,7 +193,7 @@ public class PersistentSupportService {
             ? supportMessageRepository.findByConversation_IdOrderByCreatedAtAsc(conversationId)
             : supportMessageRepository.findByConversationIdSinceSeq(conversationId, normalizedSinceSeq);
         long latestSeq = supportMessageRepository.findMaxServerSeqByConversationId(conversationId);
-        long readSeq = lastReadAt == null ? 0L : supportMessageRepository.findReadSeqByConversationId(conversationId, lastReadAt);
+        long readSeq = counterpartReadAt == null ? 0L : supportMessageRepository.findReadSeqByConversationId(conversationId, counterpartReadAt);
         int unreadCount = countUnread(syncMessagesForUnread(conversationId), currentUser, lastReadAt);
 
         return new ChatMessageSync(
@@ -227,6 +229,7 @@ public class PersistentSupportService {
         }
 
         String outgoingContent = normalizeOutgoingSupportContent(currentUser, request.messageType(), request.content());
+        ChatMessageReply replyTo = resolveReplyTo(conversation, currentUser, request.replyTo());
 
         SupportMessageEntity saved = appendMessageEntity(
             conversation,
@@ -234,7 +237,8 @@ public class PersistentSupportService {
             isAgent(currentUser) ? "SUPPORT" : "ME",
             request.messageType(),
             outgoingContent,
-            clientMessageId
+            clientMessageId,
+            replyTo
         );
         messageAttachmentService.createFromMessageContent("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent());
 
@@ -253,7 +257,8 @@ public class PersistentSupportService {
             saved.getServerSeq(),
             saved.getDeliveryStatus(),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
-            saved.getFailedReason()
+            saved.getFailedReason(),
+            replyToChatMessage(saved)
         );
         return message;
     }
@@ -274,7 +279,7 @@ public class PersistentSupportService {
         String content
     ) {
         String normalizedRole = senderRole == null ? "SUPPORT" : senderRole.trim().toUpperCase();
-        SupportMessageEntity saved = appendMessageEntity(conversation, sender, normalizedRole, messageType, content, "");
+        SupportMessageEntity saved = appendMessageEntity(conversation, sender, normalizedRole, messageType, content, "", null);
         messageAttachmentService.createFromMessageContent("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent());
         String author = "ADMIN".equals(normalizedRole) ? "support" : normalizedRole.toLowerCase();
 
@@ -291,7 +296,8 @@ public class PersistentSupportService {
             saved.getServerSeq(),
             saved.getDeliveryStatus(),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
-            saved.getFailedReason()
+            saved.getFailedReason(),
+            replyToChatMessage(saved)
         );
 
         return new ChatMessage(
@@ -306,7 +312,8 @@ public class PersistentSupportService {
             normalizeDeliveryStatus(saved.getDeliveryStatus()),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
             saved.getFailedReason() == null ? "" : saved.getFailedReason(),
-            messageAttachmentService.attachmentsFor("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent())
+            messageAttachmentService.attachmentsFor("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent()),
+            replyToChatMessage(saved)
         );
     }
 
@@ -346,7 +353,7 @@ public class PersistentSupportService {
 
     @Transactional
     public void appendSystemMessage(SupportConversationEntity conversation, String content) {
-        SupportMessageEntity saved = appendMessageEntity(conversation, null, "SYSTEM", "TEXT", content, "");
+        SupportMessageEntity saved = appendMessageEntity(conversation, null, "SYSTEM", "TEXT", content, "", null);
 
         realtimeChatService.broadcast(
             RealtimeChatService.supportChannel(conversation.getId()),
@@ -361,7 +368,8 @@ public class PersistentSupportService {
             saved.getServerSeq(),
             saved.getDeliveryStatus(),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
-            saved.getFailedReason()
+            saved.getFailedReason(),
+            replyToChatMessage(saved)
         );
     }
 
@@ -371,7 +379,8 @@ public class PersistentSupportService {
         String senderRole,
         String messageType,
         String content,
-        String clientMessageId
+        String clientMessageId,
+        ChatMessageReply replyTo
     ) {
         LocalDateTime now = LocalDateTime.now();
         SupportMessageEntity entity = new SupportMessageEntity();
@@ -383,6 +392,11 @@ public class PersistentSupportService {
         entity.setContent(content.trim());
         String normalizedClientMessageId = normalizeClientMessageId(clientMessageId);
         entity.setClientMessageId(normalizedClientMessageId.isEmpty() ? null : normalizedClientMessageId);
+        if (replyTo != null) {
+            entity.setReplyToMessageId(replyTo.messageId());
+            entity.setReplyToAuthor(replyTo.author());
+            entity.setReplyToContent(replyTo.content());
+        }
         entity.setServerSeq(supportMessageRepository.findMaxServerSeqByConversationId(conversation.getId()) + 1);
         entity.setDeliveryStatus("DELIVERED");
         entity.setDeliveredAt(now);
@@ -458,7 +472,8 @@ public class PersistentSupportService {
             normalizeDeliveryStatus(message.getDeliveryStatus()),
             message.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(message.getDeliveredAt()),
             message.getFailedReason() == null ? "" : message.getFailedReason(),
-            messageAttachmentService.attachmentsFor("SUPPORT", message.getId(), message.getMessageType(), message.getContent())
+            messageAttachmentService.attachmentsFor("SUPPORT", message.getId(), message.getMessageType(), message.getContent()),
+            replyToChatMessage(message)
         );
     }
 
@@ -475,7 +490,35 @@ public class PersistentSupportService {
             normalizeDeliveryStatus(saved.getDeliveryStatus()),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
             saved.getFailedReason() == null ? "" : saved.getFailedReason(),
-            messageAttachmentService.attachmentsFor("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent())
+            messageAttachmentService.attachmentsFor("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent()),
+            replyToChatMessage(saved)
+        );
+    }
+
+    private ChatMessageReply resolveReplyTo(SupportConversationEntity conversation, UserEntity currentUser, ChatMessageReply replyTo) {
+        if (replyTo == null || replyTo.messageId() == null || replyTo.messageId().isBlank()) {
+            return null;
+        }
+        SupportMessageEntity referenced = supportMessageRepository.findById(replyTo.messageId().trim())
+            .orElseThrow(() -> new IllegalArgumentException("Quoted message not found"));
+        if (!conversation.getId().equals(referenced.getConversation().getId())) {
+            throw new IllegalArgumentException("Quoted message not found");
+        }
+        return new ChatMessageReply(
+            referenced.getId(),
+            resolveAuthor(referenced, currentUser),
+            referenced.getContent()
+        );
+    }
+
+    private ChatMessageReply replyToChatMessage(SupportMessageEntity message) {
+        if (message.getReplyToMessageId() == null || message.getReplyToMessageId().isBlank()) {
+            return null;
+        }
+        return new ChatMessageReply(
+            message.getReplyToMessageId(),
+            message.getReplyToAuthor() == null ? "" : message.getReplyToAuthor(),
+            message.getReplyToContent() == null ? "" : message.getReplyToContent()
         );
     }
 

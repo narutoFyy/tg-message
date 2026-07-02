@@ -20,6 +20,13 @@ export interface ChatMessage {
   deliveredAt?: string
   failedReason?: string
   attachments?: MessageAttachment[]
+  replyTo?: ChatMessageReply | null
+}
+
+export interface ChatMessageReply {
+  messageId: string
+  author?: ChatMessage['author'] | string
+  content: string
 }
 
 export interface MessageAttachment {
@@ -327,6 +334,7 @@ export interface AgentItem {
 export interface SupportConversationItem {
   conversationId: string
   customerUsername: string
+  customerAvatarUrl?: string
   assignmentStatus: string
   assignedAgent: string
   agentNote: string
@@ -339,6 +347,7 @@ export interface SupportConversationItem {
 export interface SupportCustomerInfo {
   id: string
   username: string
+  avatarUrl?: string
   email: string
   phone: string
   status: string
@@ -371,6 +380,7 @@ export interface SessionUser {
   username: string
   email?: string
   phone?: string
+  avatarUrl?: string
   roleCode?: 'USER' | 'AGENT' | 'ADMIN'
   accessToken?: string
   expiresAt?: string

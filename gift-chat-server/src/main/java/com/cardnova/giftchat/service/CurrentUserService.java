@@ -40,20 +40,17 @@ public class CurrentUserService {
             return getDefaultUser();
         }
 
-        if (demoFallback) {
-            String demoUsername = request.getHeader(DEMO_USER_HEADER);
-            if (StringUtils.hasText(demoUsername)) {
-                return userRepository.findByUsername(demoUsername.trim())
-                    .orElseThrow(() -> new UnauthorizedException("Demo user not found"));
-            }
-        }
-
         String authorization = request.getHeader("Authorization");
         if (StringUtils.hasText(authorization)) {
             return resolveByAuthorizationHeader(authorization.trim());
         }
 
         if (demoFallback) {
+            String demoUsername = request.getHeader(DEMO_USER_HEADER);
+            if (StringUtils.hasText(demoUsername)) {
+                return userRepository.findByUsername(demoUsername.trim())
+                    .orElseThrow(() -> new UnauthorizedException("Demo user not found"));
+            }
             return getDefaultUser();
         }
 

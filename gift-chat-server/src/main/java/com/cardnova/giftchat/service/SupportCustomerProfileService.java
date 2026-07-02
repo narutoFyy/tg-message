@@ -81,6 +81,7 @@ public class SupportCustomerProfileService {
         return new SupportCustomerInfo(
             customer.getId(),
             customer.getUsername(),
+            value(customer.getAvatarUrl()),
             value(customer.getEmail()),
             value(customer.getPhone()),
             value(customer.getStatusCode()),

@@ -43,6 +43,7 @@ import {
   fetchBroadcasts,
   fetchFriendRequests,
   fetchFriends,
+  fetchCurrentAccount,
   fetchLoans,
   fetchRanking,
   fetchRates,
@@ -69,6 +70,7 @@ import {
   updateRateStatus as updateRateStatusRequest,
   updateRate as updateRateRequest,
   updateTransactionStatus as updateTransactionStatusRequest,
+  updateAccountAvatar as updateAccountAvatarRequest,
   updateVideoSessionStatus as updateVideoSessionStatusRequest,
   updateWithdrawalStatus as updateWithdrawalStatusRequest
 } from '@/utils/api'
@@ -110,7 +112,6 @@ const state = reactive({
 })
 
 const SUPPORT_READ_CACHE_KEY = 'support-read-message-cache'
-const SUPPORT_MESSAGE_READ_STATE_KEY = 'support-message-read-state-cache'
 const CHAT_CURSOR_CACHE_KEY = 'chat-message-cursor-cache'
 
 type ChannelType = 'friend' | 'support'
@@ -252,7 +253,7 @@ function makeClientMessageId() {
   return `cm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-function makeLocalMessage(content: string, type: ChatMessage['type'], clientMessageId = makeClientMessageId()) {
+function makeLocalMessage(content: string, type: ChatMessage['type'], clientMessageId = makeClientMessageId(), replyTo?: ChatMessage['replyTo']) {
   return normalizeChatMessage({
     id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     author: 'me',
@@ -261,44 +262,9 @@ function makeLocalMessage(content: string, type: ChatMessage['type'], clientMess
     createdAt: 'Sending',
     readState: 'sending',
     clientMessageId,
-    deliveryStatus: 'pending'
+    deliveryStatus: 'pending',
+    replyTo
   } as ChatMessage)
-}
-
-function getSupportMessageReadStateCache() {
-  return (uni.getStorageSync(SUPPORT_MESSAGE_READ_STATE_KEY) || {}) as Record<string, string[]>
-}
-
-function setSupportMessageReadStateCache(conversationId: string, messageIds: string[]) {
-  if (!conversationId || messageIds.length === 0) return
-  const cache = getSupportMessageReadStateCache()
-  cache[conversationId] = Array.from(new Set([...(cache[conversationId] || []), ...messageIds]))
-  uni.setStorageSync(SUPPORT_MESSAGE_READ_STATE_KEY, cache)
-}
-
-function rememberReadSupportMessages(conversationId: string) {
-  const conversation = state.supportConversations.find((item) => item.conversationId === conversationId)
-  const ids = [
-    ...(conversation?.messages || []),
-    ...(conversationId === state.supportConversationId ? state.supportMessages : [])
-  ]
-    .filter((message) => message.author === 'me')
-    .map((message) => message.id)
-  setSupportMessageReadStateCache(conversationId, ids)
-}
-
-function applySupportMessageReadStateCache(conversations: SupportConversationItem[]) {
-  const cache = getSupportMessageReadStateCache()
-  conversations.forEach((conversation) => {
-    const readIds = new Set(cache[conversation.conversationId] || [])
-    if (readIds.size === 0) return
-    conversation.messages.forEach((message) => {
-      if (message.author === 'me' && readIds.has(message.id)) {
-        message.readState = 'read'
-      }
-    })
-  })
-  return conversations
 }
 
 function normalizeOwnSupportMessage(message: ChatMessage) {
@@ -335,7 +301,7 @@ function applySupportReadCache(conversations: SupportConversationItem[]) {
       conversation.unreadCount = 0
     }
   })
-  return applySupportMessageReadStateCache(conversations)
+  return conversations
 }
 
 function syncActiveSupportConversation() {
@@ -472,6 +438,25 @@ export function useAppStore() {
     return session
   }
 
+  async function refreshCurrentAccount() {
+    if (!state.currentUser?.accessToken) {
+      return state.currentUser
+    }
+    const session = await fetchCurrentAccount()
+    state.currentUser = session
+    setSessionToken(session.accessToken)
+    setStoredSessionUser(session)
+    return session
+  }
+
+  async function updateAvatar(avatarUrl: string) {
+    const session = await updateAccountAvatarRequest(avatarUrl)
+    state.currentUser = session
+    setSessionToken(session.accessToken)
+    setStoredSessionUser(session)
+    return session
+  }
+
   async function logout() {
     try {
       await logoutSession()
@@ -487,7 +472,6 @@ export function useAppStore() {
       state.supportCustomerProfileCache = {}
       setSessionToken(undefined)
       setStoredSessionUser(null)
-      uni.removeStorageSync(SUPPORT_MESSAGE_READ_STATE_KEY)
       uni.removeStorageSync(CHAT_CURSOR_CACHE_KEY)
     }
   }
@@ -549,8 +533,8 @@ export function useAppStore() {
     return request
   }
 
-  function appendSupportMessage(content: string, type: ChatMessage['type'] = 'text', clientMessageId?: string) {
-    const fallback = makeLocalMessage(content, type, clientMessageId)
+  function appendSupportMessage(content: string, type: ChatMessage['type'] = 'text', clientMessageId?: string, replyTo?: ChatMessage['replyTo']) {
+    const fallback = makeLocalMessage(content, type, clientMessageId, replyTo)
     mergeUniqueMessage(state.supportMessages, fallback)
     const active = state.supportConversations.find((conversation) => conversation.conversationId === state.supportConversationId)
     if (active) {
@@ -592,7 +576,6 @@ export function useAppStore() {
         }
       })
     }
-    rememberReadSupportMessages(conversationId)
   }
 
   function applySupportPresence(conversationId: string, online: boolean) {
@@ -605,15 +588,16 @@ export function useAppStore() {
     }
   }
 
-  async function sendSupport(content: string, messageType: ChatMessage['type'] = 'text') {
+  async function sendSupport(content: string, messageType: ChatMessage['type'] = 'text', replyTo?: ChatMessage['replyTo']) {
     const conversationId = state.supportConversationId
-    const local = appendSupportMessage(content, messageType)
+    const local = appendSupportMessage(content, messageType, undefined, replyTo)
     const active = state.supportConversations.find((conversation) => conversation.conversationId === state.supportConversationId)
     try {
       const sent = await sendSupportMessage(conversationId, {
         content,
         messageType,
-        clientMessageId: local.clientMessageId
+        clientMessageId: local.clientMessageId,
+        replyTo
       })
       const message = normalizeOwnSupportMessage(sent)
       rememberMessageCursor('support', conversationId, message)
@@ -642,12 +626,13 @@ export function useAppStore() {
       active.messages = active.messages.filter((item) => item.id !== messageId)
     }
     const clientMessageId = message.clientMessageId || makeClientMessageId()
-    const local = appendSupportMessage(message.content, message.type, clientMessageId)
+    const local = appendSupportMessage(message.content, message.type, clientMessageId, message.replyTo)
     try {
       const sent = await sendSupportMessage(state.supportConversationId, {
         content: message.content,
         messageType: message.type,
-        clientMessageId
+        clientMessageId,
+        replyTo: message.replyTo
       })
       const canonical = normalizeOwnSupportMessage(sent)
       rememberMessageCursor('support', state.supportConversationId, canonical)
@@ -1000,6 +985,8 @@ export function useAppStore() {
     refreshSupport,
     login,
     register,
+    refreshCurrentAccount,
+    updateAvatar,
     logout,
     addRate,
     updateRateStatus,

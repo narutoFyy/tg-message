@@ -5,6 +5,7 @@ public record LoginResponse(
     String username,
     String email,
     String phone,
+    String avatarUrl,
     String roleCode,
     String nextRoute,
     String expiresAt

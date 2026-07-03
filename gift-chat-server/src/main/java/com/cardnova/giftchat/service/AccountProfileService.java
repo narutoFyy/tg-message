@@ -59,6 +59,7 @@ public class AccountProfileService {
             user.getEmail(),
             user.getPhone(),
             user.getAvatarUrl() == null ? "" : user.getAvatarUrl(),
+            user.getInviteCode() == null ? "" : user.getInviteCode(),
             user.getRoleCode(),
             nextRoute(user),
             jwtService.getAccessTokenExpiry().toString()

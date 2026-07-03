@@ -6,6 +6,7 @@ public record LoginResponse(
     String email,
     String phone,
     String avatarUrl,
+    String inviteCode,
     String roleCode,
     String nextRoute,
     String expiresAt

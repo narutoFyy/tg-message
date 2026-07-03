@@ -1,6 +1,11 @@
 package com.cardnova.giftchat;
 
 import com.cardnova.giftchat.api.ForbiddenException;
+import com.cardnova.giftchat.config.AuthSafetyConfig;
+import com.cardnova.giftchat.entity.UserEntity;
+import com.cardnova.giftchat.repository.ReferralRewardRepository;
+import com.cardnova.giftchat.repository.UserRepository;
+import com.cardnova.giftchat.service.ReferralRewardService;
 import com.cardnova.giftchat.service.WebSocketChannelAuthorizationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,12 +14,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
@@ -45,6 +52,50 @@ class GiftChatServerApplicationTests {
 
     @Autowired
     private WebSocketChannelAuthorizationService webSocketChannelAuthorizationService;
+
+    @Autowired
+    private ReferralRewardService referralRewardService;
+
+    @Autowired
+    private ReferralRewardRepository referralRewardRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Test
+    void healthEndpointIsPublic() throws Exception {
+        mockMvc.perform(get("/api/health"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("ok"))
+            .andExpect(jsonPath("$.data.time").isString());
+    }
+
+    @Test
+    void productionSafetyRejectsPlaceholderJwtSecret() {
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            authSafety("prod", "replace-with-a-long-random-secret", "https://cardbrother.example", false)
+                .validateProductionAuthSettings());
+
+        assertEquals("APP_AUTH_JWT_SECRET must be a strong non-placeholder value outside dev/test", exception.getMessage());
+    }
+
+    @Test
+    void productionSafetyRejectsDemoFallbackAndUnsafeCors() {
+        assertThrows(IllegalStateException.class, () ->
+            authSafety("prod", "a-very-long-random-jwt-secret-for-production-123", "https://cardbrother.example", true)
+                .validateProductionAuthSettings());
+
+        assertThrows(IllegalStateException.class, () ->
+            authSafety("prod", "a-very-long-random-jwt-secret-for-production-123", "http://localhost:5174", false)
+                .validateProductionAuthSettings());
+    }
+
+    @Test
+    void productionSafetyAcceptsStrongProductionSettings() {
+        assertDoesNotThrow(() ->
+            authSafety("prod", "a-very-long-random-jwt-secret-for-production-123", "https://cardbrother.example", false)
+                .validateProductionAuthSettings());
+    }
 
     @Test
     void loginReturnsJwtForActiveUser() throws Exception {
@@ -167,6 +218,108 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void registerWithInviteCodeCreatesReferralReward() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String username = "invite_user_" + suffix;
+        String email = username + "@example.com";
+        String adminToken = loginToken("admin_mia");
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "username": "%s",
+                      "email": "%s",
+                      "password": "demo12345",
+                      "inviteCode": "CARDNOVA1"
+                    }
+                    """.formatted(username, email)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.username").value(username))
+            .andExpect(jsonPath("$.data.inviteCode").isString());
+
+        mockMvc.perform(get("/api/admin/referral-rewards")
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[?(@.referrerUsername == 'cardnova_user' && @.referredUsername == '%s' && @.rewardType == 'registration')]".formatted(username)).exists());
+    }
+
+    @Test
+    void referralRegistrationRewardIsIdempotent() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String username = "repeat_invite_" + suffix;
+        String email = username + "@example.com";
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "username": "%s",
+                      "email": "%s",
+                      "password": "demo12345",
+                      "inviteCode": "CARDNOVA1"
+                    }
+                    """.formatted(username, email)))
+            .andExpect(status().isOk());
+
+        UserEntity referredUser = userRepository.findByUsername(username)
+            .orElseThrow(() -> new AssertionError("Registered user missing"));
+
+        referralRewardService.rewardRegistration(referredUser);
+        referralRewardService.rewardRegistration(referredUser);
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+            1,
+            referralRewardRepository.countByRewardTypeAndSourceKey("REGISTRATION", referredUser.getId())
+        );
+    }
+
+    @Test
+    void referralAdminEndpointsRequireAdmin() throws Exception {
+        String userToken = loginToken("cardnova_user");
+
+        mockMvc.perform(get("/api/admin/referral-rewards")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("Admin access required"));
+
+        mockMvc.perform(post("/api/admin/referral-rewards/config")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "registrationCashbackEnabled": true,
+                      "registrationCashbackAmount": 1,
+                      "tradeRebateEnabled": true,
+                      "tradeRebatePercent": 5
+                    }
+                    """))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("Admin access required"));
+    }
+
+    @Test
+    void adminCanUpdateReferralRewardConfig() throws Exception {
+        String adminToken = loginToken("admin_mia");
+
+        mockMvc.perform(post("/api/admin/referral-rewards/config")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "registrationCashbackEnabled": true,
+                      "registrationCashbackAmount": 2.50,
+                      "tradeRebateEnabled": true,
+                      "tradeRebatePercent": 7.5
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.registrationCashbackAmount").value("2.50"))
+            .andExpect(jsonPath("$.data.tradeRebatePercent").value("7.5"))
+            .andExpect(jsonPath("$.data.updatedBy").value("admin_mia"));
+    }
+
+    @Test
     void logoutAcceptsCurrentToken() throws Exception {
         String userToken = loginToken("cardnova_user");
 
@@ -184,6 +337,23 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.length()").value(greaterThanOrEqualTo(11)))
             .andExpect(content().string(containsString("Apple(itunes)")))
             .andExpect(content().string(containsString("American Express")));
+    }
+
+    @Test
+    void rankingsEndpointReturnsSalesAndInvitationBoards() throws Exception {
+        String userToken = loginToken("cardnova_user");
+
+        mockMvc.perform(get("/api/rankings?mode=sales")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.mode").value("sales"))
+            .andExpect(jsonPath("$.data.currentUser.username").value("cardnova_user"));
+
+        mockMvc.perform(get("/api/rankings?mode=invitation")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.mode").value("invitation"))
+            .andExpect(jsonPath("$.data.currentUser.username").value("cardnova_user"));
     }
 
     @Test
@@ -1273,6 +1443,49 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void referralTradeRewardIsIdempotentWhenCompletedRepeatedly() throws Exception {
+        String referredToken = loginToken("gift_hunter");
+
+        MvcResult createResult = mockMvc.perform(post("/api/transactions")
+                .header("Authorization", bearer(referredToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "counterpartyUsername": "cardnova_user",
+                      "friendshipId": "friendship-1",
+                      "cardName": "Steam",
+                      "faceValue": "$100",
+                      "payoutAmount": "NGN 100000",
+                      "note": "Idempotent reward test"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("pending"))
+            .andReturn();
+        String tradeId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+
+        for (int index = 0; index < 2; index++) {
+            mockMvc.perform(post("/api/transactions/%s/status".formatted(tradeId))
+                    .header("Authorization", bearer(referredToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                        {
+                          "status": "completed"
+                        }
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("completed"));
+        }
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+            1,
+            referralRewardRepository.countByRewardTypeAndSourceKey("TRADE_REBATE", tradeId)
+        );
+    }
+
+    @Test
     void uploadImageRejectsOversizedFiles() throws Exception {
         String userToken = loginToken("cardnova_user");
         byte[] oversizedPng = new byte[5 * 1024 * 1024 + 1];
@@ -1374,5 +1587,11 @@ class GiftChatServerApplicationTests {
 
     private String bearer(String token) {
         return "Bearer " + token;
+    }
+
+    private AuthSafetyConfig authSafety(String profile, String jwtSecret, String allowedOrigins, boolean demoFallback) {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles(profile);
+        return new AuthSafetyConfig(environment, jwtSecret, allowedOrigins, demoFallback);
     }
 }

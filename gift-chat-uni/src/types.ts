@@ -381,10 +381,32 @@ export interface SessionUser {
   email?: string
   phone?: string
   avatarUrl?: string
+  inviteCode?: string
   roleCode?: 'USER' | 'AGENT' | 'ADMIN'
   accessToken?: string
   expiresAt?: string
   nextRoute?: string
+}
+
+export interface ReferralRewardConfigItem {
+  registrationCashbackEnabled: boolean
+  registrationCashbackAmount: string
+  tradeRebateEnabled: boolean
+  tradeRebatePercent: string
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface ReferralRewardItem {
+  id: string
+  referrerUsername: string
+  referredUsername: string
+  tradeOrderNo: string
+  rewardType: 'registration' | 'trade_rebate' | string
+  amount: string
+  ratePercent: string
+  status: string
+  createdAt: string
 }
 
 export interface CountryOption {

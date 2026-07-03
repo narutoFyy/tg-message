@@ -3,12 +3,16 @@ package com.cardnova.giftchat.controller;
 import com.cardnova.giftchat.api.ApiResponse;
 import com.cardnova.giftchat.dto.AssignSupportConversationRequest;
 import com.cardnova.giftchat.dto.CreateAgentRequest;
+import com.cardnova.giftchat.dto.UpdateReferralRewardConfigRequest;
 import com.cardnova.giftchat.dto.UpdateUserStatusRequest;
 import com.cardnova.giftchat.model.AdminDirectConversation;
 import com.cardnova.giftchat.model.AdminUserItem;
 import com.cardnova.giftchat.model.AgentItem;
+import com.cardnova.giftchat.model.ReferralRewardConfigItem;
+import com.cardnova.giftchat.model.ReferralRewardItem;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.service.AdminService;
+import com.cardnova.giftchat.service.ReferralRewardService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,9 +29,11 @@ import java.util.List;
 public class AdminController {
 
     private final AdminService adminService;
+    private final ReferralRewardService referralRewardService;
 
-    public AdminController(AdminService adminService) {
+    public AdminController(AdminService adminService, ReferralRewardService referralRewardService) {
         this.adminService = adminService;
+        this.referralRewardService = referralRewardService;
     }
 
     @GetMapping("/users")
@@ -69,5 +75,22 @@ public class AdminController {
         @Valid @RequestBody AssignSupportConversationRequest request
     ) {
         return ApiResponse.success("support_conversation_assigned", adminService.assignConversation(conversationId, request.agentUsername()));
+    }
+
+    @GetMapping("/referral-rewards/config")
+    public ApiResponse<ReferralRewardConfigItem> referralRewardConfig() {
+        return ApiResponse.success(referralRewardService.config());
+    }
+
+    @PostMapping("/referral-rewards/config")
+    public ApiResponse<ReferralRewardConfigItem> updateReferralRewardConfig(
+        @Valid @RequestBody UpdateReferralRewardConfigRequest request
+    ) {
+        return ApiResponse.success("referral_reward_config_updated", referralRewardService.updateConfig(request));
+    }
+
+    @GetMapping("/referral-rewards")
+    public ApiResponse<List<ReferralRewardItem>> referralRewards() {
+        return ApiResponse.success(referralRewardService.rewards());
     }
 }

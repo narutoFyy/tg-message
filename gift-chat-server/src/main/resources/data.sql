@@ -1,15 +1,15 @@
-INSERT INTO app_user (id, username, email, phone, password_hash, role_code, status_code, created_at, updated_at)
+INSERT INTO app_user (id, username, email, phone, password_hash, role_code, status_code, invite_code, referred_by_user_id, created_at, updated_at)
 VALUES
-('user-1', 'cardnova_user', 'demo@cardnova.app', '13800138000', '{noop}demo12345', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-2', 'gift_hunter', NULL, '+234 809 000 1234', '{noop}demo12345', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-3', 'tradewithmina', NULL, '+44 7400 221199', '{noop}demo12345', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-4', 'spam_rate_88', NULL, '+86 135 0000 2222', '{noop}demo12345', 'USER', 'BLOCKED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-1', 'support_luna', 'luna@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-2', 'support_angela', 'angela@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-3', 'support_kai', 'kai@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-4', 'support_mina', 'mina@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-5', 'support_zoe', 'zoe@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('admin-1', 'admin_mia', 'admin@cardnova.app', NULL, '{noop}demo12345', 'ADMIN', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('user-1', 'cardnova_user', 'demo@cardnova.app', '13800138000', '{noop}demo12345', 'USER', 'ACTIVE', 'CARDNOVA1', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-2', 'gift_hunter', NULL, '+234 809 000 1234', '{noop}demo12345', 'USER', 'ACTIVE', 'GIFTHUNT2', 'user-1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-3', 'tradewithmina', NULL, '+44 7400 221199', '{noop}demo12345', 'USER', 'ACTIVE', 'TRADEMIN3', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-4', 'spam_rate_88', NULL, '+86 135 0000 2222', '{noop}demo12345', 'USER', 'BLOCKED', 'SPAMRATE4', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-1', 'support_luna', 'luna@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', 'SUPLUNA1', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-2', 'support_angela', 'angela@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', 'SUPANGEL2', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-3', 'support_kai', 'kai@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', 'SUPKAI3', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-4', 'support_mina', 'mina@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', 'SUPMINA4', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-5', 'support_zoe', 'zoe@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', 'SUPZOE5', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('admin-1', 'admin_mia', 'admin@cardnova.app', NULL, '{noop}demo12345', 'ADMIN', 'ACTIVE', 'ADMINMIA', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO gift_card_rate (id, card_name, region_code, rate_value, status_code, updated_at, updated_by)
 VALUES

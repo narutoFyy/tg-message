@@ -38,6 +38,7 @@ public class PersistentTransactionService {
     private final PersistentSupportService persistentSupportService;
     private final NotificationService notificationService;
     private final SupportConversationRepository supportConversationRepository;
+    private final ReferralRewardService referralRewardService;
 
     public PersistentTransactionService(
         TradeOrderRepository tradeOrderRepository,
@@ -47,7 +48,8 @@ public class PersistentTransactionService {
         BlacklistEntryRepository blacklistEntryRepository,
         PersistentSupportService persistentSupportService,
         NotificationService notificationService,
-        SupportConversationRepository supportConversationRepository
+        SupportConversationRepository supportConversationRepository,
+        ReferralRewardService referralRewardService
     ) {
         this.tradeOrderRepository = tradeOrderRepository;
         this.currentUserService = currentUserService;
@@ -57,6 +59,7 @@ public class PersistentTransactionService {
         this.persistentSupportService = persistentSupportService;
         this.notificationService = notificationService;
         this.supportConversationRepository = supportConversationRepository;
+        this.referralRewardService = referralRewardService;
     }
 
     public List<TransactionItem> getTransactions() {
@@ -193,6 +196,9 @@ public class PersistentTransactionService {
         order.setStatusCode(normalizedStatus.toUpperCase());
         order.setUpdatedAt(LocalDateTime.now());
         TradeOrderEntity saved = tradeOrderRepository.save(order);
+        if ("completed".equals(normalizedStatus)) {
+            referralRewardService.rewardCompletedTrade(saved);
+        }
         return toTransactionItem(saved, currentUser.getId());
     }
 

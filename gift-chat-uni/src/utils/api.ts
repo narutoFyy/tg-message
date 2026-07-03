@@ -11,6 +11,8 @@ import type {
   LoanApplicationItem,
   NotificationItem,
   PushDeviceItem,
+  ReferralRewardConfigItem,
+  ReferralRewardItem,
   RankingBoard,
   RateItem,
   SearchFriendResult,
@@ -28,7 +30,7 @@ import type {
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || '/ws'
 const SESSION_TOKEN_KEY = 'gift-chat-access-token'
 const SESSION_USER_KEY = 'gift-chat-session-user'
 
@@ -345,6 +347,7 @@ export function registerAccount(payload: {
   email?: string
   phone?: string
   password: string
+  inviteCode?: string
 }) {
   return request<SessionUser>('/auth/register', 'POST', payload)
 }
@@ -425,6 +428,23 @@ export function fetchAdminDirectConversations(username?: string) {
 
 export function assignSupportConversation(conversationId: string, agentUsername: string) {
   return request<SupportConversationItem>(`/admin/support/conversations/${conversationId}/assign`, 'POST', { agentUsername })
+}
+
+export function fetchReferralRewardConfig() {
+  return request<ReferralRewardConfigItem>('/admin/referral-rewards/config')
+}
+
+export function updateReferralRewardConfig(payload: {
+  registrationCashbackEnabled: boolean
+  registrationCashbackAmount: string
+  tradeRebateEnabled: boolean
+  tradeRebatePercent: string
+}) {
+  return request<ReferralRewardConfigItem>('/admin/referral-rewards/config', 'POST', payload)
+}
+
+export function fetchReferralRewards() {
+  return request<ReferralRewardItem[]>('/admin/referral-rewards')
 }
 
 export function sendSupportMessage(conversationId: string, payload: { content: string; messageType: string; clientMessageId?: string; replyTo?: ChatMessage['replyTo'] }) {

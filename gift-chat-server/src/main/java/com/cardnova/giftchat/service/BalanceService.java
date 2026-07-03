@@ -28,19 +28,22 @@ public class BalanceService {
     private final SupportConversationRepository supportConversationRepository;
     private final TradeOrderRepository tradeOrderRepository;
     private final WithdrawalRequestRepository withdrawalRequestRepository;
+    private final ReferralRewardService referralRewardService;
 
     public BalanceService(
         CurrentUserService currentUserService,
         UserRepository userRepository,
         SupportConversationRepository supportConversationRepository,
         TradeOrderRepository tradeOrderRepository,
-        WithdrawalRequestRepository withdrawalRequestRepository
+        WithdrawalRequestRepository withdrawalRequestRepository,
+        ReferralRewardService referralRewardService
     ) {
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
         this.supportConversationRepository = supportConversationRepository;
         this.tradeOrderRepository = tradeOrderRepository;
         this.withdrawalRequestRepository = withdrawalRequestRepository;
+        this.referralRewardService = referralRewardService;
     }
 
     public BalanceSummary summary() {
@@ -83,8 +86,9 @@ public class BalanceService {
             .filter(withdrawal -> "COMPLETED".equalsIgnoreCase(withdrawal.getStatusCode()))
             .map(withdrawal -> amountFromText(withdrawal.getAmount()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal rewards = referralRewardService.availableRewardsForUsers(userIds);
 
-        BigDecimal available = completed.subtract(withdrawn).max(BigDecimal.ZERO);
+        BigDecimal available = completed.add(rewards).subtract(withdrawn).max(BigDecimal.ZERO);
         return new BalanceSummary(scope, money(available), money(pending), money(withdrawn), users.size());
     }
 

@@ -7,6 +7,7 @@ public record RegisterRequest(
     @NotBlank @Size(min = 3, max = 32) String username,
     @Size(max = 254) String email,
     @Size(max = 32) String phone,
-    @NotBlank @Size(min = 8, max = 128) String password
+    @NotBlank @Size(min = 8, max = 128) String password,
+    @Size(max = 32) String inviteCode
 ) {
 }

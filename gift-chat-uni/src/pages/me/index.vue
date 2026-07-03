@@ -63,12 +63,12 @@
       <view class="rank-row">
         <view class="rank-col">
           <text class="muted label-muted">Sales</text>
-          <text class="rank-value">{{ monthlySales }}/ No.500+</text>
+          <text class="rank-value">{{ monthlySales }}/ No.{{ salesRankLabel }}</text>
         </view>
         <image class="rank-art" :src="pageArt.trophy" mode="aspectFit" />
         <view class="rank-col align-right">
           <text class="muted label-muted">Invitation</text>
-          <text class="rank-value">{{ invitationCount }}/ No.100+</text>
+          <text class="rank-value">{{ invitationCount }}/ No.{{ invitationRankLabel }}</text>
         </view>
       </view>
       <view class="rank-ribbon"></view>
@@ -104,26 +104,34 @@ import { onShow } from '@dcloudio/uni-app'
 import AppNav from '@/components/AppNav.vue'
 import { useAppStore } from '@/store/app'
 import { pageArt, uiIcons } from '@/utils/art'
-import { uploadImage } from '@/utils/api'
+import { fetchRanking, uploadImage } from '@/utils/api'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
+import type { RankingBoard } from '@/types'
 
 const store = useAppStore()
 const notice = ref('')
 const avatarUploading = ref(false)
+const salesRanking = ref<RankingBoard | null>(null)
+const invitationRanking = ref<RankingBoard | null>(null)
 
 onShow(() => {
   store.bootstrap()
   store.refreshCurrentAccount().catch(() => undefined)
+  refreshPersonalRankings()
 })
 
 const supportCount = computed(() => store.state.supportConversations.length)
-const invitationCount = computed(() => store.state.ranking?.currentUser?.score || '0')
+const salesRankLabel = computed(() => rankLabel(salesRanking.value?.currentUser?.rank, '500+'))
+const invitationCount = computed(() => invitationRanking.value?.currentUser?.score || '0 invites')
+const invitationRankLabel = computed(() => rankLabel(invitationRanking.value?.currentUser?.rank, '100+'))
 const displayName = computed(() => store.state.currentUser?.username || 'Jay Crown')
 const avatarSrc = computed(() => {
   const avatarUrl = store.state.currentUser?.avatarUrl
   return avatarUrl ? resolveMediaUrl(avatarUrl) : pageArt.profileAvatar
 })
 const inviteCode = computed(() => {
+  const code = store.state.currentUser?.inviteCode
+  if (code) return code
   const base = (store.state.currentUser?.username || 'dhceqw').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
   return (base + 'QW').slice(0, 6)
 })
@@ -136,6 +144,24 @@ const completedPayout = computed(() =>
 
 const monthlySales = computed(() => formatNaira(completedPayout.value))
 const walletValue = computed(() => formatNaira(completedPayout.value))
+
+async function refreshPersonalRankings() {
+  try {
+    const [sales, invitation] = await Promise.all([
+      fetchRanking('sales'),
+      fetchRanking('invitation')
+    ])
+    salesRanking.value = sales
+    invitationRanking.value = invitation
+  } catch {
+    // The wallet and profile should stay usable even if leaderboard data is unavailable.
+  }
+}
+
+function rankLabel(rank: number | undefined, fallback: string) {
+  if (!rank) return fallback
+  return rank >= 500 ? '500+' : `${rank}`
+}
 
 function parseNgn(value: string) {
   const digits = value.replace(/[^\d.]/g, '')
@@ -503,6 +529,7 @@ function shareInvite() {
   display: flex;
   flex-direction: column;
   gap: 10rpx;
+  min-width: 0;
 }
 
 .align-right {
@@ -517,6 +544,8 @@ function shareInvite() {
   font-size: 34rpx;
   font-weight: 900;
   color: #171717;
+  line-height: 1.24;
+  word-break: break-word;
 }
 
 .rank-art {

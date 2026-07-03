@@ -14,6 +14,10 @@ public interface UserRepository extends JpaRepository<UserEntity, String> {
 
     Optional<UserEntity> findByPhone(String phone);
 
+    Optional<UserEntity> findByInviteCode(String inviteCode);
+
+    List<UserEntity> findByReferredByUserId(String referredByUserId);
+
     List<UserEntity> findByRoleCodeOrderByCreatedAtDesc(String roleCode);
 
     List<UserEntity> findByRoleCodeAndStatusCodeOrderByCreatedAtAsc(String roleCode, String statusCode);

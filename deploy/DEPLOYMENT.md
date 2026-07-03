@@ -15,6 +15,7 @@ cp .env.example .env
 ```
 
 Edit `.env` with real MySQL passwords, JWT secret, public origin values, and TRTC values if video calls are enabled.
+The backend intentionally refuses to start with placeholder JWT secrets, demo fallback, localhost CORS origins, or `your-domain` / `your-server-ip` values in production.
 
 ## 3. Start the stack
 

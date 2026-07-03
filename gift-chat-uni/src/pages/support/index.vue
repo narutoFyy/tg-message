@@ -20,7 +20,7 @@
         </view>
       </view>
 
-      <scroll-view scroll-y class="message-area" :scroll-into-view="messageScrollTarget" @click="closeMessageMenu">
+      <scroll-view scroll-y class="message-area" :scroll-into-view="messageScrollTarget" @click="closeChatPanels">
         <view class="message-list">
           <view class="date-divider">
             <text>Today</text>
@@ -75,20 +75,6 @@
             <view :class="['composer-tool-main', showComposerTools && 'is-open']" title="Attachments" @click="toggleComposerTools">
               <text></text>
               <text></text>
-            </view>
-            <view v-if="showComposerTools" class="composer-popover desktop-only">
-              <view class="composer-option" @click="chooseComposerTool('image')">
-                <text class="composer-option-icon image"></text>
-                <text>Image</text>
-              </view>
-              <view class="composer-option" @click="chooseComposerTool('gif')">
-                <text class="composer-option-icon gif">GIF</text>
-                <text>GIF</text>
-              </view>
-              <view class="composer-option" @click="chooseComposerTool('video')">
-                <text class="composer-option-icon video"></text>
-                <text>Video</text>
-              </view>
             </view>
           </view>
           <input v-model="draft" class="message-input" placeholder="Type a message..." @focus="closeComposerTools" @confirm="handleSend" />
@@ -778,6 +764,11 @@ function closeComposerTools() {
   showComposerTools.value = false
 }
 
+function closeChatPanels() {
+  closeMessageMenu()
+  closeComposerTools()
+}
+
 function chooseComposerTool(action: 'image' | 'gif' | 'video') {
   showComposerTools.value = false
   if (action === 'image') {
@@ -1307,6 +1298,10 @@ function showNotice(message: string) {
   transition: padding 0.18s ease, box-shadow 0.18s ease;
 }
 
+.input-area.tools-open {
+  box-shadow: 0 -14px 32px rgba(25, 42, 62, 0.1);
+}
+
 .input-row {
   display: flex;
   gap: 12px;
@@ -1356,102 +1351,14 @@ function showNotice(message: string) {
   transform: translate(-50%, -50%) rotate(90deg);
 }
 
-.composer-popover {
-  position: absolute;
-  left: 0;
-  bottom: 50px;
-  width: 176px;
-  padding: 8px;
-  border: 1px solid rgba(136, 153, 166, 0.2);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 18px 44px rgba(25, 42, 62, 0.14);
-  box-sizing: border-box;
-  z-index: 18;
-}
-
-.composer-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding: 0 10px;
-  border-radius: 7px;
-  color: #17212b;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.composer-option:hover {
-  background: rgba(0, 136, 204, 0.08);
-}
-
-.composer-option-icon {
-  position: relative;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: rgba(0, 136, 204, 0.1);
-  color: #0088cc;
-  flex-shrink: 0;
-}
-
-.composer-option-icon.image::before {
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 7px;
-  width: 14px;
-  height: 11px;
-  border: 2px solid currentColor;
-  border-radius: 3px;
-  box-sizing: border-box;
-}
-
-.composer-option-icon.image::after {
-  content: '';
-  position: absolute;
-  left: 9px;
-  bottom: 7px;
-  width: 10px;
-  height: 7px;
-  background: linear-gradient(135deg, transparent 0 42%, currentColor 43% 57%, transparent 58%);
-}
-
-.composer-option-icon.gif {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0;
-}
-
-.composer-option-icon.video::before {
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 8px;
-  width: 12px;
-  height: 10px;
-  border: 2px solid currentColor;
-  border-radius: 3px;
-  box-sizing: border-box;
-}
-
-.composer-option-icon.video::after {
-  content: '';
-  position: absolute;
-  right: 5px;
-  top: 10px;
-  border-left: 6px solid currentColor;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-}
-
 .composer-panel {
-  display: none;
+  display: block;
+  min-height: 132px;
+  margin: 10px -16px -10px;
+  padding: 14px 24px 18px;
+  background: #f7f9fb;
+  border-top: 1px solid rgba(136, 153, 166, 0.18);
+  box-sizing: border-box;
 }
 
 .composer-panel-grid {
@@ -1767,10 +1674,6 @@ function showNotice(message: string) {
     padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
   }
 
-  .input-area.tools-open {
-    box-shadow: 0 -14px 32px rgba(25, 42, 62, 0.1);
-  }
-
   .input-row {
     gap: 8px;
   }
@@ -1780,18 +1683,10 @@ function showNotice(message: string) {
     height: 36px;
   }
 
-  .desktop-only {
-    display: none;
-  }
-
   .composer-panel {
-    display: block;
     min-height: 132px;
     margin: 10px -10px calc(-10px - env(safe-area-inset-bottom));
     padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
-    background: #f7f9fb;
-    border-top: 1px solid rgba(136, 153, 166, 0.18);
-    box-sizing: border-box;
   }
 
   .composer-panel-icon {

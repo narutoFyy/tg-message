@@ -18,6 +18,9 @@
       <view style="height: 20rpx"></view>
       <text class="field-label">Password</text>
       <input v-model="form.password" class="field-input" password placeholder="Password" />
+      <view style="height: 20rpx"></view>
+      <text class="field-label">Invite code</text>
+      <input v-model.trim="form.inviteCode" class="field-input" placeholder="Optional invite code" />
       <view style="height: 24rpx"></view>
       <button class="primary-button" @click="handleSubmit">Create account</button>
       <view style="height: 16rpx"></view>
@@ -39,7 +42,8 @@ const form = reactive({
   username: '',
   email: '',
   phone: '',
-  password: ''
+  password: '',
+  inviteCode: ''
 })
 
 onShow(() => {
@@ -47,6 +51,7 @@ onShow(() => {
   form.email = ''
   form.phone = ''
   form.password = ''
+  form.inviteCode = ''
   notice.value = ''
 })
 
@@ -56,6 +61,7 @@ async function handleSubmit() {
     const email = form.email.trim()
     const phone = form.phone.trim()
     const password = form.password
+    const inviteCode = form.inviteCode.trim()
 
     if (!username) {
       notice.value = 'Username is required.'
@@ -77,7 +83,8 @@ async function handleSubmit() {
       username,
       email: email || undefined,
       phone: phone || undefined,
-      password
+      password,
+      inviteCode: inviteCode || undefined
     })
     notice.value = 'Registration complete.'
     uni.redirectTo({ url: safeRouteForRole(session.nextRoute, session, '/pages/support/index') })

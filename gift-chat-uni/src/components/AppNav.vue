@@ -8,6 +8,12 @@
       <image class="tab-icon-image" :src="current === 'chat' ? navIcons.chat.active : navIcons.chat.inactive" mode="aspectFit" />
       <text :class="['tab-label', current === 'chat' && 'active']">Chat</text>
     </view>
+    <view :class="['tab-item', 'game-tab', current === 'games' && 'active-game']" @click="go('/pages/games/index')">
+      <view class="game-button">
+        <image class="game-icon-image" :src="current === 'games' ? navIcons.games.active : navIcons.games.inactive" mode="aspectFit" />
+      </view>
+      <text :class="['tab-label', current === 'games' && 'active']">Games</text>
+    </view>
     <view class="tab-item" @click="go('/pages/transactions/index')">
       <image class="tab-icon-image" :src="current === 'transactions' ? navIcons.swap.active : navIcons.swap.inactive" mode="aspectFit" />
       <text :class="['tab-label', current === 'transactions' && 'active']">Orders</text>
@@ -25,7 +31,7 @@ import { navIcons } from '@/utils/art'
 import { safeRouteForRole } from '@/utils/routeGuard'
 
 defineProps<{
-  current?: 'home' | 'chat' | 'transactions' | 'me'
+  current?: 'home' | 'chat' | 'games' | 'transactions' | 'me'
 }>()
 
 function go(url: string) {
@@ -51,7 +57,7 @@ function go(url: string) {
 }
 
 .tab-item {
-  width: 25%;
+  width: 20%;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -76,6 +82,31 @@ function go(url: string) {
   color: #0088cc;
 }
 
+.game-tab {
+  transform: translateY(-14rpx);
+}
+
+.game-button {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2rpx solid rgba(21, 214, 111, 0.34);
+  box-shadow: 0 10rpx 24rpx rgba(21, 214, 111, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.active-game .game-button {
+  background: #ecfff4;
+}
+
+.game-icon-image {
+  width: 48rpx;
+  height: 48rpx;
+}
+
 @media (max-width: 380px) {
   .tabbar {
     height: calc(106rpx + env(safe-area-inset-bottom));
@@ -86,6 +117,16 @@ function go(url: string) {
   .tab-icon-image {
     width: 38rpx;
     height: 38rpx;
+  }
+
+  .game-button {
+    width: 66rpx;
+    height: 66rpx;
+  }
+
+  .game-icon-image {
+    width: 44rpx;
+    height: 44rpx;
   }
 
   .tab-label {

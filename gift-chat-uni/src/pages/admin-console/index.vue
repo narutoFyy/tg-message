@@ -18,6 +18,7 @@
         <button :class="['ghost-button', activeTab === 'orders' && 'active-tab']" @click="activeTab = 'orders'">Orders</button>
         <button :class="['ghost-button', activeTab === 'withdrawals' && 'active-tab']" @click="activeTab = 'withdrawals'">Withdraw</button>
         <button :class="['ghost-button', activeTab === 'loans' && 'active-tab']" @click="activeTab = 'loans'">Loans</button>
+        <button :class="['ghost-button', activeTab === 'rewards' && 'active-tab']" @click="activeTab = 'rewards'">Rewards</button>
         <button :class="['ghost-button', activeTab === 'notifications' && 'active-tab']" @click="activeTab = 'notifications'">Alerts</button>
       </view>
 
@@ -248,6 +249,47 @@
         </view>
       </view>
 
+      <view v-if="activeTab === 'rewards'" class="panel">
+        <text class="section-title">Referral rewards</text>
+        <view style="height: 18rpx"></view>
+        <view class="reward-setting-row">
+          <view>
+            <text class="row-title">Registration cashback</text>
+            <text class="row-meta">Fixed reward paid to the inviter after a new user registers.</text>
+          </view>
+          <switch :checked="rewardForm.registrationCashbackEnabled" @change="setRegistrationRewardEnabled" />
+        </view>
+        <input v-model="rewardForm.registrationCashbackAmount" class="field-input" type="digit" placeholder="Registration cashback amount" />
+        <view style="height: 18rpx"></view>
+        <view class="reward-setting-row">
+          <view>
+            <text class="row-title">Trade rebate</text>
+            <text class="row-meta">Percent reward paid to the inviter when the new user's order is completed.</text>
+          </view>
+          <switch :checked="rewardForm.tradeRebateEnabled" @change="setTradeRewardEnabled" />
+        </view>
+        <input v-model="rewardForm.tradeRebatePercent" class="field-input" type="digit" placeholder="Trade rebate percent" />
+        <view style="height: 18rpx"></view>
+        <button class="primary-button" @click="saveRewardConfig">Save Reward Rules</button>
+        <view style="height: 12rpx"></view>
+        <text class="row-meta">Updated by {{ referralRewardConfig?.updatedBy || '-' }} / {{ referralRewardConfig?.updatedAt || '-' }}</text>
+      </view>
+
+      <view v-if="activeTab === 'rewards'" class="panel">
+        <text class="section-title">Reward records</text>
+        <view style="height: 18rpx"></view>
+        <view v-for="reward in referralRewards" :key="reward.id" class="list-row">
+          <view>
+            <text class="row-title">{{ reward.referrerUsername }} earned {{ reward.amount }}</text>
+            <text class="row-meta">{{ reward.rewardType }} / invited {{ reward.referredUsername }} / {{ reward.status }}</text>
+            <text class="row-meta">{{ reward.tradeOrderNo || 'Registration reward' }} / {{ reward.createdAt }}</text>
+          </view>
+          <text :class="['status-pill', reward.status === 'available' ? 'active' : 'warning']">
+            {{ reward.ratePercent ? reward.ratePercent + '%' : 'fixed' }}
+          </text>
+        </view>
+      </view>
+
       <view v-if="activeTab === 'notifications'" class="panel">
         <text class="section-title">Admin notifications</text>
         <view style="height: 18rpx"></view>
@@ -275,6 +317,8 @@ import type {
   BroadcastItem,
   LoanApplicationItem,
   NotificationItem,
+  ReferralRewardConfigItem,
+  ReferralRewardItem,
   SupportConversationItem,
   TransactionItem,
   WithdrawalItem
@@ -290,10 +334,13 @@ import {
   fetchBroadcasts,
   fetchLoans,
   fetchNotifications,
+  fetchReferralRewardConfig,
+  fetchReferralRewards,
   fetchTransactions,
   fetchWithdrawals,
   updateAgentStatus,
   updateLoanStatus,
+  updateReferralRewardConfig,
   updateTransactionStatus,
   updateWithdrawalStatus
 } from '@/utils/api'
@@ -301,7 +348,7 @@ import { useAppStore } from '@/store/app'
 
 const store = useAppStore()
 const isAdminReady = ref(false)
-const activeTab = ref<'users' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'loans' | 'notifications'>('users')
+const activeTab = ref<'users' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'loans' | 'rewards' | 'notifications'>('users')
 const notice = ref('')
 const users = ref<AdminUserItem[]>([])
 const agents = ref<AgentItem[]>([])
@@ -311,6 +358,8 @@ const broadcasts = ref<BroadcastItem[]>([])
 const transactions = ref<TransactionItem[]>([])
 const withdrawals = ref<WithdrawalItem[]>([])
 const loans = ref<LoanApplicationItem[]>([])
+const referralRewardConfig = ref<ReferralRewardConfigItem | null>(null)
+const referralRewards = ref<ReferralRewardItem[]>([])
 const notifications = ref<NotificationItem[]>([])
 const directSearch = ref('')
 const assignDrafts = reactive<Record<string, string>>({})
@@ -327,6 +376,13 @@ const agentForm = reactive({
   email: '',
   phone: '',
   password: ''
+})
+
+const rewardForm = reactive({
+  registrationCashbackEnabled: true,
+  registrationCashbackAmount: '1.00',
+  tradeRebateEnabled: true,
+  tradeRebatePercent: '5'
 })
 
 onShow(() => {
@@ -348,7 +404,18 @@ function requireAdmin() {
 
 async function refreshAll() {
   try {
-    const [nextUsers, nextAgents, nextConversations, nextBroadcasts, nextTransactions, nextWithdrawals, nextLoans, nextNotifications] = await Promise.all([
+    const [
+      nextUsers,
+      nextAgents,
+      nextConversations,
+      nextBroadcasts,
+      nextTransactions,
+      nextWithdrawals,
+      nextLoans,
+      nextRewardConfig,
+      nextRewards,
+      nextNotifications
+    ] = await Promise.all([
       fetchAdminUsers(),
       fetchAgents(),
       fetchAdminSupportConversations(),
@@ -356,6 +423,8 @@ async function refreshAll() {
       fetchTransactions(),
       fetchWithdrawals(),
       fetchLoans(),
+      fetchReferralRewardConfig(),
+      fetchReferralRewards(),
       fetchNotifications()
     ])
     users.value = nextUsers
@@ -365,6 +434,9 @@ async function refreshAll() {
     transactions.value = nextTransactions
     withdrawals.value = nextWithdrawals
     loans.value = nextLoans
+    referralRewardConfig.value = nextRewardConfig
+    referralRewards.value = nextRewards
+    applyRewardConfig(nextRewardConfig)
     notifications.value = nextNotifications
     await store.refreshBalanceSummary().catch(() => {})
     nextConversations.forEach((conversation) => {
@@ -378,6 +450,42 @@ async function refreshAll() {
     }
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Admin data failed'
+  }
+}
+
+function applyRewardConfig(config: ReferralRewardConfigItem) {
+  rewardForm.registrationCashbackEnabled = config.registrationCashbackEnabled
+  rewardForm.registrationCashbackAmount = config.registrationCashbackAmount
+  rewardForm.tradeRebateEnabled = config.tradeRebateEnabled
+  rewardForm.tradeRebatePercent = config.tradeRebatePercent
+}
+
+function setRegistrationRewardEnabled(event: Event) {
+  rewardForm.registrationCashbackEnabled = switchValue(event)
+}
+
+function setTradeRewardEnabled(event: Event) {
+  rewardForm.tradeRebateEnabled = switchValue(event)
+}
+
+function switchValue(event: Event) {
+  return Boolean((event as unknown as { detail?: { value?: boolean } }).detail?.value)
+}
+
+async function saveRewardConfig() {
+  try {
+    const updated = await updateReferralRewardConfig({
+      registrationCashbackEnabled: rewardForm.registrationCashbackEnabled,
+      registrationCashbackAmount: rewardForm.registrationCashbackAmount,
+      tradeRebateEnabled: rewardForm.tradeRebateEnabled,
+      tradeRebatePercent: rewardForm.tradeRebatePercent
+    })
+    referralRewardConfig.value = updated
+    applyRewardConfig(updated)
+    notice.value = 'Reward rules saved.'
+    await refreshAll()
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Reward rules failed'
   }
 }
 
@@ -626,6 +734,14 @@ async function assignConversation(conversationId: string) {
   color: #101820;
   line-height: 1.15;
   word-break: break-word;
+}
+
+.reward-setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18rpx;
+  margin-bottom: 14rpx;
 }
 
 .status-pill.danger,

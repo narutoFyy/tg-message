@@ -40,6 +40,7 @@ public class SupportCustomerProfileService {
     private final LoanApplicationRepository loanApplicationRepository;
     private final VideoSessionRepository videoSessionRepository;
     private final UserPresenceService userPresenceService;
+    private final ReferralRewardService referralRewardService;
 
     public SupportCustomerProfileService(
         PersistentSupportService persistentSupportService,
@@ -47,7 +48,8 @@ public class SupportCustomerProfileService {
         WithdrawalRequestRepository withdrawalRequestRepository,
         LoanApplicationRepository loanApplicationRepository,
         VideoSessionRepository videoSessionRepository,
-        UserPresenceService userPresenceService
+        UserPresenceService userPresenceService,
+        ReferralRewardService referralRewardService
     ) {
         this.persistentSupportService = persistentSupportService;
         this.tradeOrderRepository = tradeOrderRepository;
@@ -55,6 +57,7 @@ public class SupportCustomerProfileService {
         this.loanApplicationRepository = loanApplicationRepository;
         this.videoSessionRepository = videoSessionRepository;
         this.userPresenceService = userPresenceService;
+        this.referralRewardService = referralRewardService;
     }
 
     public SupportCustomerProfile getProfile(String conversationId) {
@@ -69,7 +72,7 @@ public class SupportCustomerProfileService {
         return new SupportCustomerProfile(
             conversation.getId(),
             toCustomerInfo(conversation, customer),
-            toBalance(orders, withdrawals),
+            toBalance(customer, orders, withdrawals),
             orders.stream().map(order -> toTransactionItem(order, conversation)).toList(),
             withdrawals.stream().map(this::toWithdrawalItem).toList(),
             loans.stream().map(this::toLoanItem).toList(),
@@ -93,7 +96,7 @@ public class SupportCustomerProfileService {
         );
     }
 
-    private CustomerBalanceSummary toBalance(List<TradeOrderEntity> orders, List<WithdrawalRequestEntity> withdrawals) {
+    private CustomerBalanceSummary toBalance(UserEntity customer, List<TradeOrderEntity> orders, List<WithdrawalRequestEntity> withdrawals) {
         BigDecimal completed = orders.stream()
             .filter(order -> "COMPLETED".equalsIgnoreCase(order.getStatusCode()))
             .map(order -> amountFromText(order.getPayoutAmount()))
@@ -106,9 +109,10 @@ public class SupportCustomerProfileService {
             .filter(withdrawal -> "COMPLETED".equalsIgnoreCase(withdrawal.getStatusCode()))
             .map(withdrawal -> amountFromText(withdrawal.getAmount()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal rewards = referralRewardService.availableRewardsForUsers(List.of(customer.getId()));
 
         return new CustomerBalanceSummary(
-            money(completed.subtract(withdrawn).max(BigDecimal.ZERO)),
+            money(completed.add(rewards).subtract(withdrawn).max(BigDecimal.ZERO)),
             money(pending),
             money(withdrawn)
         );

@@ -1,20 +1,20 @@
-INSERT INTO app_user (id, username, email, phone, password_hash, role_code, status_code, created_at, updated_at)
+INSERT INTO app_user (id, username, email, phone, password_hash, role_code, status_code, invite_code, referred_by_user_id, created_at, updated_at)
 VALUES
-('user-1', 'cardnova_user', 'demo@cardnova.app', '13800138000', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-2', 'gift_hunter', NULL, '+234 809 000 1234', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-3', 'tradewithmina', NULL, '+44 7400 221199', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-4', 'spam_rate_88', NULL, '+86 135 0000 2222', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'BLOCKED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-5', 'john_smith', 'john@example.com', '+234 809 111 2222', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-6', 'mary_jane', 'mary@example.com', '+234 809 222 3333', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-7', 'alex_crypto', 'alex@example.com', '+234 809 333 4444', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-8', 'sarah_trade', 'sarah@example.com', '+234 809 444 5555', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-9', 'david_cards', 'david@example.com', '+234 809 555 6666', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-1', 'support_luna', 'luna@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-2', 'support_angela', 'angela@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-3', 'support_kai', 'kai@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-4', 'support_mina', 'mina@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('agent-5', 'support_zoe', 'zoe@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('admin-1', 'admin_mia', 'admin@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'ADMIN', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('user-1', 'cardnova_user', 'demo@cardnova.app', '13800138000', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'CARDNOVA1', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-2', 'gift_hunter', NULL, '+234 809 000 1234', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'GIFTHUNT2', 'user-1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-3', 'tradewithmina', NULL, '+44 7400 221199', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'TRADEMIN3', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-4', 'spam_rate_88', NULL, '+86 135 0000 2222', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'BLOCKED', 'SPAMRATE4', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-5', 'john_smith', 'john@example.com', '+234 809 111 2222', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'JOHNSMITH', 'user-1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-6', 'mary_jane', 'mary@example.com', '+234 809 222 3333', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'MARYJANE', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-7', 'alex_crypto', 'alex@example.com', '+234 809 333 4444', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'ALEXCRYP', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-8', 'sarah_trade', 'sarah@example.com', '+234 809 444 5555', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'SARAH888', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-9', 'david_cards', 'david@example.com', '+234 809 555 6666', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'DAVID999', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-1', 'support_luna', 'luna@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', 'SUPLUNA1', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-2', 'support_angela', 'angela@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', 'SUPANGEL2', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-3', 'support_kai', 'kai@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', 'SUPKAI3', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-4', 'support_mina', 'mina@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', 'SUPMINA4', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('agent-5', 'support_zoe', 'zoe@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'AGENT', 'ACTIVE', 'SUPZOE5', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('admin-1', 'admin_mia', 'admin@cardnova.app', NULL, 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'ADMIN', 'ACTIVE', 'ADMINMIA', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT INTO gift_card_rate (id, card_name, region_code, rate_value, status_code, updated_at, updated_by)
 VALUES
@@ -89,3 +89,8 @@ VALUES
 INSERT INTO blacklist_entry (id, owner_user_id, blocked_user_id, blocked_phone_snapshot, reason_note, created_at)
 VALUES
 ('black-1', 'user-1', 'user-4', '+86 135 0000 2222', 'Repeated payout spam and abusive messages.', CURRENT_TIMESTAMP);
+
+INSERT INTO referral_reward (id, referrer_user_id, referred_user_id, trade_order_id, source_key, reward_type, amount, rate_percent, status_code, created_at, updated_at)
+VALUES
+('reward-1', 'user-1', 'user-2', NULL, 'user-2', 'REGISTRATION', 1.00, NULL, 'AVAILABLE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('reward-2', 'user-1', 'user-5', NULL, 'user-5', 'REGISTRATION', 1.00, NULL, 'AVAILABLE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

@@ -51,6 +51,8 @@ const store = useAppStore()
 const notice = ref('')
 
 const inviteCode = computed(() => {
+  const code = store.state.currentUser?.inviteCode
+  if (code) return code
   const base = (store.state.currentUser?.username || 'dhceqw').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
   return (base + 'QW').slice(0, 6)
 })

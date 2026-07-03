@@ -38,6 +38,12 @@ public class UserEntity {
     @Column(name = "avatar_url", length = 255)
     private String avatarUrl;
 
+    @Column(name = "invite_code", unique = true, length = 32)
+    private String inviteCode;
+
+    @Column(name = "referred_by_user_id", length = 36)
+    private String referredByUserId;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -114,6 +120,22 @@ public class UserEntity {
 
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
+    }
+
+    public String getInviteCode() {
+        return inviteCode;
+    }
+
+    public void setInviteCode(String inviteCode) {
+        this.inviteCode = inviteCode;
+    }
+
+    public String getReferredByUserId() {
+        return referredByUserId;
+    }
+
+    public void setReferredByUserId(String referredByUserId) {
+        this.referredByUserId = referredByUserId;
     }
 
     public LocalDateTime getCreatedAt() {

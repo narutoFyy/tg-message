@@ -8,8 +8,11 @@ CREATE TABLE IF NOT EXISTS app_user (
     status_code VARCHAR(32) NOT NULL,
     tencent_user_id VARCHAR(32) UNIQUE,
     avatar_url VARCHAR(255),
+    invite_code VARCHAR(32) UNIQUE,
+    referred_by_user_id VARCHAR(36),
     created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_app_user_referred_by FOREIGN KEY (referred_by_user_id) REFERENCES app_user (id)
 );
 
 CREATE TABLE IF NOT EXISTS gift_card_rate (
@@ -241,4 +244,33 @@ CREATE TABLE IF NOT EXISTS video_session (
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_video_initiator FOREIGN KEY (initiator_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_video_receiver FOREIGN KEY (receiver_user_id) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS referral_reward_config (
+    id VARCHAR(32) PRIMARY KEY,
+    registration_cashback_enabled BOOLEAN NOT NULL,
+    registration_cashback_amount DECIMAL(18, 2) NOT NULL,
+    trade_rebate_enabled BOOLEAN NOT NULL,
+    trade_rebate_percent DECIMAL(8, 4) NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    updated_by VARCHAR(36),
+    CONSTRAINT fk_referral_config_updated_by FOREIGN KEY (updated_by) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS referral_reward (
+    id VARCHAR(36) PRIMARY KEY,
+    referrer_user_id VARCHAR(36) NOT NULL,
+    referred_user_id VARCHAR(36) NOT NULL,
+    trade_order_id VARCHAR(36),
+    source_key VARCHAR(64) NOT NULL,
+    reward_type VARCHAR(32) NOT NULL,
+    amount DECIMAL(18, 2) NOT NULL,
+    rate_percent DECIMAL(8, 4),
+    status_code VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_referral_reward_referrer FOREIGN KEY (referrer_user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_referral_reward_referred FOREIGN KEY (referred_user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_referral_reward_trade FOREIGN KEY (trade_order_id) REFERENCES trade_order (id),
+    CONSTRAINT ux_referral_reward_source UNIQUE (reward_type, source_key)
 );

@@ -32,17 +32,20 @@ public class SupportLedgerService {
     private final SupportConversationRepository supportConversationRepository;
     private final TradeOrderRepository tradeOrderRepository;
     private final WithdrawalRequestRepository withdrawalRequestRepository;
+    private final ReferralRewardService referralRewardService;
 
     public SupportLedgerService(
         CurrentUserService currentUserService,
         SupportConversationRepository supportConversationRepository,
         TradeOrderRepository tradeOrderRepository,
-        WithdrawalRequestRepository withdrawalRequestRepository
+        WithdrawalRequestRepository withdrawalRequestRepository,
+        ReferralRewardService referralRewardService
     ) {
         this.currentUserService = currentUserService;
         this.supportConversationRepository = supportConversationRepository;
         this.tradeOrderRepository = tradeOrderRepository;
         this.withdrawalRequestRepository = withdrawalRequestRepository;
+        this.referralRewardService = referralRewardService;
     }
 
     public SupportLedgerReport report() {
@@ -98,6 +101,7 @@ public class SupportLedgerService {
             .filter(withdrawal -> "COMPLETED".equalsIgnoreCase(withdrawal.getStatusCode()))
             .map(withdrawal -> amountFromText(withdrawal.getAmount()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal rewards = referralRewardService.availableRewardsForUsers(List.of(customer.getId()));
 
         int pendingOrderCount = (int) orders.stream()
             .filter(order -> PENDING_STATUSES.contains(order.getStatusCode().toUpperCase()))
@@ -110,7 +114,7 @@ public class SupportLedgerService {
                 ? customer.getUsername()
                 : conversation.getAgentNote(),
             conversation.getAssignedAgent() == null ? "" : conversation.getAssignedAgent().getUsername(),
-            money(completed.subtract(withdrawn).max(BigDecimal.ZERO)),
+            money(completed.add(rewards).subtract(withdrawn).max(BigDecimal.ZERO)),
             money(pending),
             money(withdrawn),
             orders.size(),

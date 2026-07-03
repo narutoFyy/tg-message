@@ -28,6 +28,7 @@ public class PersistentAccountService {
     private final LoginRateLimitService loginRateLimitService;
     private final ObjectProvider<HttpServletRequest> requestProvider;
     private final AccountProfileService accountProfileService;
+    private final ReferralRewardService referralRewardService;
 
     public PersistentAccountService(
         UserRepository userRepository,
@@ -37,7 +38,8 @@ public class PersistentAccountService {
         NotificationService notificationService,
         LoginRateLimitService loginRateLimitService,
         ObjectProvider<HttpServletRequest> requestProvider,
-        AccountProfileService accountProfileService
+        AccountProfileService accountProfileService,
+        ReferralRewardService referralRewardService
     ) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
@@ -47,6 +49,7 @@ public class PersistentAccountService {
         this.loginRateLimitService = loginRateLimitService;
         this.requestProvider = requestProvider;
         this.accountProfileService = accountProfileService;
+        this.referralRewardService = referralRewardService;
     }
 
     public Optional<UserEntity> findByUsername(String username) {
@@ -116,6 +119,11 @@ public class PersistentAccountService {
         entity.setPasswordHash(passwordService.hash(password));
         entity.setRoleCode("USER");
         entity.setStatusCode("ACTIVE");
+        entity.setInviteCode(referralRewardService.generateInviteCode(username));
+        UserEntity referrer = referralRewardService.resolveReferrer(request.inviteCode());
+        if (referrer != null) {
+            entity.setReferredByUserId(referrer.getId());
+        }
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
         return userRepository.save(entity);
@@ -124,6 +132,7 @@ public class PersistentAccountService {
     @Transactional
     public LoginResponse registerAndLogin(RegisterRequest request) {
         UserEntity user = register(request);
+        referralRewardService.rewardRegistration(user);
         handleUserAccessEvent(user, "REGISTER", "New user registered", "User " + user.getUsername() + " registered.");
         return accountProfileService.toSession(user);
     }

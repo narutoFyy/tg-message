@@ -55,6 +55,12 @@
       }
     },
     {
+      "path": "pages/games/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/me/index",
       "style": {
         "navigationStyle": "custom"

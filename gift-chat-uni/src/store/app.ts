@@ -430,6 +430,7 @@ export function useAppStore() {
     email?: string
     phone?: string
     password: string
+    inviteCode?: string
   }) {
     const session = await registerAccount(payload)
     state.currentUser = session

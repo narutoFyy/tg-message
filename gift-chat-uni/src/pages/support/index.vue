@@ -62,7 +62,7 @@
         @clear="clearAttachment"
       />
 
-      <view class="input-area">
+      <view :class="['input-area', showComposerTools && 'tools-open']">
         <view v-if="replyTarget" class="reply-composer">
           <view class="reply-composer-body">
             <text class="reply-composer-label">Replying to</text>
@@ -76,7 +76,7 @@
               <text></text>
               <text></text>
             </view>
-            <view v-if="showComposerTools" class="composer-popover">
+            <view v-if="showComposerTools" class="composer-popover desktop-only">
               <view class="composer-option" @click="chooseComposerTool('image')">
                 <text class="composer-option-icon image"></text>
                 <text>Image</text>
@@ -91,9 +91,25 @@
               </view>
             </view>
           </view>
-          <input v-model="draft" class="message-input" placeholder="Type a message..." @confirm="handleSend" />
+          <input v-model="draft" class="message-input" placeholder="Type a message..." @focus="closeComposerTools" @confirm="handleSend" />
           <view class="send-btn" :class="{ active: canSend }" @click="handleSend">
             <text>Send</text>
+          </view>
+        </view>
+        <view v-if="showComposerTools" class="composer-panel">
+          <view class="composer-panel-grid">
+            <view class="composer-panel-item" @click="chooseComposerTool('image')">
+              <text class="composer-panel-icon image"></text>
+              <text>Image</text>
+            </view>
+            <view class="composer-panel-item" @click="chooseComposerTool('gif')">
+              <text class="composer-panel-icon gif">GIF</text>
+              <text>GIF</text>
+            </view>
+            <view class="composer-panel-item" @click="chooseComposerTool('video')">
+              <text class="composer-panel-icon video"></text>
+              <text>Video</text>
+            </view>
           </view>
         </view>
       </view>
@@ -753,6 +769,13 @@ function handleSend() {
 
 function toggleComposerTools() {
   showComposerTools.value = !showComposerTools.value
+  if (showComposerTools.value) {
+    nextTick(() => scrollMessagesToBottom())
+  }
+}
+
+function closeComposerTools() {
+  showComposerTools.value = false
 }
 
 function chooseComposerTool(action: 'image' | 'gif' | 'video') {
@@ -1281,6 +1304,7 @@ function showNotice(message: string) {
   padding: 8px 16px 10px;
   backdrop-filter: blur(10px);
   flex-shrink: 0;
+  transition: padding 0.18s ease, box-shadow 0.18s ease;
 }
 
 .input-row {
@@ -1424,6 +1448,90 @@ function showNotice(message: string) {
   border-left: 6px solid currentColor;
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
+}
+
+.composer-panel {
+  display: none;
+}
+
+.composer-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.composer-panel-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #263642;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.composer-panel-icon {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #f0f6f8;
+  color: #0088cc;
+  box-shadow: inset 0 0 0 1px rgba(0, 136, 204, 0.08);
+}
+
+.composer-panel-icon.image::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  width: 24px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.composer-panel-icon.image::after {
+  content: '';
+  position: absolute;
+  left: 19px;
+  bottom: 16px;
+  width: 18px;
+  height: 11px;
+  background: linear-gradient(135deg, transparent 0 42%, currentColor 43% 57%, transparent 58%);
+}
+
+.composer-panel-icon.gif {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.composer-panel-icon.video::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 18px;
+  width: 22px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.composer-panel-icon.video::after {
+  content: '';
+  position: absolute;
+  right: 13px;
+  top: 21px;
+  border-left: 9px solid currentColor;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
 }
 
 .reply-composer {
@@ -1656,7 +1764,11 @@ function showNotice(message: string) {
   }
 
   .input-area {
-    padding: 8px 10px 10px;
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .input-area.tools-open {
+    box-shadow: 0 -14px 32px rgba(25, 42, 62, 0.1);
   }
 
   .input-row {
@@ -1666,6 +1778,25 @@ function showNotice(message: string) {
   .composer-tool-main {
     width: 36px;
     height: 36px;
+  }
+
+  .desktop-only {
+    display: none;
+  }
+
+  .composer-panel {
+    display: block;
+    min-height: 132px;
+    margin: 10px -10px calc(-10px - env(safe-area-inset-bottom));
+    padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+    background: #f7f9fb;
+    border-top: 1px solid rgba(136, 153, 166, 0.18);
+    box-sizing: border-box;
+  }
+
+  .composer-panel-icon {
+    width: 50px;
+    height: 50px;
   }
 
   .message-input {

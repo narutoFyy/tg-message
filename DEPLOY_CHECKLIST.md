@@ -6,10 +6,10 @@ Use this before handing the chat build to a customer or after each server redepl
 
 - Frontend: `8086`
 - Backend: `8087`
-- The browser should open the frontend URL only, for example `http://47.252.50.237:8086`.
+- The browser should open the frontend URL only, for example `http://<server-ip>:8086` or `https://<your-domain>`.
 - Frontend build should point API and WebSocket traffic to the public backend route:
   - Same-domain gateway: `VITE_API_BASE_URL=/api`, `VITE_WS_BASE_URL=/ws`
-  - Split ports: `VITE_API_BASE_URL=http://47.252.50.237:8087/api`, `VITE_WS_BASE_URL=ws://47.252.50.237:8087/ws`
+  - Split ports: `VITE_API_BASE_URL=http://<server-ip>:8087/api`, `VITE_WS_BASE_URL=ws://<server-ip>:8087/ws`
 
 ## Nginx Or Gateway
 
@@ -59,8 +59,8 @@ If frontend uses backend port `8087` directly, confirm the server firewall allow
 Run these from your local machine after deployment:
 
 ```powershell
-Invoke-WebRequest http://47.252.50.237:8086/ -UseBasicParsing
-Invoke-WebRequest http://47.252.50.237:8087/api/health -UseBasicParsing
+Invoke-WebRequest http://<server-ip>:8086/ -UseBasicParsing
+Invoke-WebRequest http://<server-ip>:8087/api/health -UseBasicParsing
 ```
 
 If the backend exits during startup, first check that `APP_AUTH_JWT_SECRET` is a long random value and `APP_CORS_ALLOWED_ORIGINS` contains only the real production domain/IP.
@@ -68,7 +68,7 @@ If the backend exits during startup, first check that `APP_AUTH_JWT_SECRET` is a
 After sending one image in chat, copy the image URL from browser DevTools and test it directly:
 
 ```powershell
-Invoke-WebRequest http://47.252.50.237:8087/uploads/images/<file-name>.png -UseBasicParsing
+Invoke-WebRequest http://<server-ip>:8087/uploads/images/<file-name>.png -UseBasicParsing
 ```
 
 Expected result:

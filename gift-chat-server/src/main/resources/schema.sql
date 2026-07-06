@@ -117,11 +117,16 @@ CREATE TABLE IF NOT EXISTS trade_order (
     status_code VARCHAR(32) NOT NULL,
     note VARCHAR(255),
     voucher_image_url VARCHAR(255),
+    cancel_reason VARCHAR(64),
+    cancel_note VARCHAR(255),
+    canceled_by_user_id VARCHAR(36),
+    canceled_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_trade_owner FOREIGN KEY (owner_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_trade_counterparty FOREIGN KEY (counterparty_user_id) REFERENCES app_user (id),
-    CONSTRAINT fk_trade_friendship FOREIGN KEY (friendship_id) REFERENCES friendship (id)
+    CONSTRAINT fk_trade_friendship FOREIGN KEY (friendship_id) REFERENCES friendship (id),
+    CONSTRAINT fk_trade_order_canceled_by FOREIGN KEY (canceled_by_user_id) REFERENCES app_user (id)
 );
 
 CREATE TABLE IF NOT EXISTS upload_asset (
@@ -205,6 +210,10 @@ CREATE TABLE IF NOT EXISTS broadcast_message (
     message_type VARCHAR(32) NOT NULL,
     content TEXT NOT NULL,
     delivered_count INT NOT NULL,
+    country_codes VARCHAR(255),
+    search_keyword VARCHAR(128),
+    target_mode VARCHAR(32) DEFAULT 'FILTER',
+    target_usernames TEXT,
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_broadcast_sender FOREIGN KEY (sender_user_id) REFERENCES app_user (id)
 );
@@ -273,4 +282,35 @@ CREATE TABLE IF NOT EXISTS referral_reward (
     CONSTRAINT fk_referral_reward_referred FOREIGN KEY (referred_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_referral_reward_trade FOREIGN KEY (trade_order_id) REFERENCES trade_order (id),
     CONSTRAINT ux_referral_reward_source UNIQUE (reward_type, source_key)
+);
+
+CREATE TABLE IF NOT EXISTS registration_bonus_config (
+    id VARCHAR(36) PRIMARY KEY,
+    country_code VARCHAR(8) NOT NULL UNIQUE,
+    country_name VARCHAR(64) NOT NULL,
+    currency_code VARCHAR(16) NOT NULL,
+    bonus_amount DECIMAL(18, 2) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    note VARCHAR(255),
+    updated_by VARCHAR(36),
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_registration_bonus_config_updated_by FOREIGN KEY (updated_by) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS registration_bonus_record (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    phone_snapshot VARCHAR(32),
+    country_code VARCHAR(8),
+    country_name VARCHAR(64),
+    currency_code VARCHAR(16),
+    bonus_amount DECIMAL(18, 2) NOT NULL,
+    config_id VARCHAR(36),
+    status_code VARCHAR(32) NOT NULL,
+    reason_note VARCHAR(255),
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_registration_bonus_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_registration_bonus_config FOREIGN KEY (config_id) REFERENCES registration_bonus_config (id),
+    CONSTRAINT ux_registration_bonus_user UNIQUE (user_id)
 );

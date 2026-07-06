@@ -9,6 +9,7 @@ import type {
   LoanApplicationItem,
   RankingBoard,
   RateItem,
+  RegistrationBonusRecordItem,
   SearchFriendResult,
   SessionUser,
   SellOrderPayload,
@@ -44,6 +45,7 @@ import {
   fetchFriendRequests,
   fetchFriends,
   fetchCurrentAccount,
+  fetchMyRegistrationBonus,
   fetchLoans,
   fetchRanking,
   fetchRates,
@@ -69,6 +71,7 @@ import {
   updateLoanStatus as updateLoanStatusRequest,
   updateRateStatus as updateRateStatusRequest,
   updateRate as updateRateRequest,
+  cancelTransaction as cancelTransactionRequest,
   updateTransactionStatus as updateTransactionStatusRequest,
   updateAccountAvatar as updateAccountAvatarRequest,
   updateVideoSessionStatus as updateVideoSessionStatusRequest,
@@ -99,6 +102,7 @@ const state = reactive({
   withdrawals: [] as WithdrawalItem[],
   loans: [] as LoanApplicationItem[],
   broadcasts: [] as BroadcastItem[],
+  registrationBonusRecord: null as RegistrationBonusRecordItem | null,
   balanceSummary: null as BalanceSummary | null,
   activeSupportCustomerProfile: null as SupportCustomerProfile | null,
   supportCustomerProfileLoading: false,
@@ -343,7 +347,7 @@ export function useAppStore() {
     try {
       const previousActiveFriend = state.activeFriendUsername
       const previousSupportConversationId = state.supportConversationId
-      const [rates, friends, blacklist, support, transactions, friendRequests, withdrawals, loans, videoSessions] = await Promise.all([
+      const [rates, friends, blacklist, support, transactions, friendRequests, withdrawals, loans, videoSessions, registrationBonus] = await Promise.all([
         fetchRates(),
         fetchFriends(),
         fetchBlacklist(),
@@ -352,7 +356,8 @@ export function useAppStore() {
         fetchFriendRequests(),
         fetchWithdrawals(),
         fetchLoans(),
-        fetchVideoSessions()
+        fetchVideoSessions(),
+        fetchMyRegistrationBonus()
       ])
 
       const normalizedFriends = friends.map(normalizeFriendProfile)
@@ -367,6 +372,7 @@ export function useAppStore() {
       state.withdrawals = withdrawals
       state.loans = loans
       state.videoSessions = videoSessions
+      state.registrationBonusRecord = registrationBonus
       state.friendRequests = friendRequests
       refreshBalanceSummary().catch(() => {})
       refreshSupportLedger().catch(() => {})
@@ -889,10 +895,19 @@ export function useAppStore() {
     return summary
   }
 
+  async function refreshRegistrationBonus() {
+    const record = await fetchMyRegistrationBonus()
+    state.registrationBonusRecord = record
+    return record
+  }
+
   async function createBroadcast(payload: {
     scope: 'own' | 'all'
     content: string
     messageType: BroadcastItem['messageType']
+    countryCodes?: string[]
+    keyword?: string
+    targetConversationIds?: string[]
   }) {
     const broadcast = await createBroadcastRequest(payload)
     state.broadcasts.unshift(broadcast)
@@ -952,6 +967,17 @@ export function useAppStore() {
 
   async function updateTransactionStatus(transactionId: string, status: TransactionItem['status']) {
     const updated = await updateTransactionStatusRequest(transactionId, status)
+    const index = state.transactions.findIndex((item) => item.id === transactionId)
+    if (index >= 0) {
+      state.transactions.splice(index, 1, updated)
+    }
+    refreshSupportCustomerProfile(state.supportConversationId, true).catch(() => {})
+    refreshSupportLedger().catch(() => {})
+    return updated
+  }
+
+  async function cancelTransaction(transactionId: string, payload: { reason: string; note?: string; notifyCustomer?: boolean }) {
+    const updated = await cancelTransactionRequest(transactionId, payload)
     const index = state.transactions.findIndex((item) => item.id === transactionId)
     if (index >= 0) {
       state.transactions.splice(index, 1, updated)
@@ -1021,12 +1047,14 @@ export function useAppStore() {
     createTransaction,
     createSellOrder,
     updateTransactionStatus,
+    cancelTransaction,
     createWithdrawal,
     updateWithdrawalStatus,
     createLoanApplication,
     updateLoanStatus,
     refreshBroadcasts,
     refreshBalanceSummary,
+    refreshRegistrationBonus,
     createBroadcast,
     createVideoSession,
     getVideoSessionBootstrap,

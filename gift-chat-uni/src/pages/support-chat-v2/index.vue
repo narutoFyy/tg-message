@@ -283,12 +283,42 @@
             <text class="profile-value">{{ profile.customer.phone || '-' }}</text>
           </view>
           <view class="profile-row">
+            <text class="profile-label">Country code</text>
+            <text class="profile-value">{{ profile.customer.phoneCountryCode || '-' }}</text>
+          </view>
+          <view class="profile-row">
             <text class="profile-label">{{ workbenchText.email }}</text>
             <text class="profile-value">{{ profile.customer.email || '-' }}</text>
           </view>
           <view class="profile-row">
             <text class="profile-label">{{ workbenchText.joined }}</text>
             <text class="profile-value">{{ profile.customer.createdAt }}</text>
+          </view>
+        </view>
+
+        <view class="profile-section" v-if="profile.registrationBonus">
+          <view class="section-head">
+            <text class="section-title">Registration bonus</text>
+            <text :class="['work-status', profile.registrationBonus.status]">{{ profile.registrationBonus.status }}</text>
+          </view>
+          <text class="work-line strong">{{ profile.registrationBonus.bonusAmount }} {{ profile.registrationBonus.currencyCode }}</text>
+          <text class="work-line">{{ profile.registrationBonus.countryCode || '-' }} / {{ profile.registrationBonus.reason }}</text>
+        </view>
+
+        <view class="profile-section">
+          <view class="section-head">
+            <text class="section-title">Bank risk</text>
+            <text class="section-count">{{ profile.bankAccountRiskMatches.length }}</text>
+          </view>
+          <view v-if="profile.bankAccountRiskMatches.length === 0" class="mini-empty">No duplicate bank account found.</view>
+          <view v-for="risk in profile.bankAccountRiskMatches.slice(0, 4)" :key="`${risk.username}-${risk.accountNumber}-${risk.submittedAt}`" class="work-item risk-item">
+            <view class="work-top">
+              <text class="work-title">{{ risk.username }}</text>
+              <text :class="['work-status', risk.riskLevel]">{{ risk.riskLevel }}</text>
+            </view>
+            <text class="work-line">{{ risk.reason }}</text>
+            <text class="work-line">{{ risk.bankName }} / {{ risk.accountName }} / {{ risk.accountNumber }}</text>
+            <text class="work-line">{{ risk.phoneCountryCode || '-' }} / {{ risk.assignedAgent || '-' }}</text>
           </view>
         </view>
 
@@ -333,7 +363,9 @@
               <button v-if="selectedOrder.status === 'pending'" class="mini-btn" @click="changeOrderStatus(selectedOrder.id, 'processing')">{{ workbenchText.process }}</button>
               <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn primary" @click="changeOrderStatus(selectedOrder.id, 'completed')">{{ workbenchText.complete }}</button>
               <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn danger" @click="changeOrderStatus(selectedOrder.id, 'disputed')">{{ workbenchText.dispute }}</button>
+              <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn danger" @click="cancelSelectedOrder">{{ workbenchText.cancelOrder }}</button>
             </view>
+            <text v-if="selectedOrder.status === 'canceled'" class="work-line">{{ selectedOrder.cancelReason }} {{ selectedOrder.cancelNote }}</text>
           </view>
         </view>
 
@@ -393,6 +425,48 @@
       </view>
     </view>
 
+    <view v-if="showBroadcastPanel" class="broadcast-mask" @click="closeBroadcastPanel">
+      <view class="broadcast-dialog" @click.stop>
+        <view class="broadcast-head">
+          <text class="broadcast-title">群发消息</text>
+          <text class="broadcast-close" @click="closeBroadcastPanel">×</text>
+        </view>
+        <textarea v-model="broadcastDraft" class="broadcast-textarea" placeholder="输入群发内容" />
+        <input v-model="broadcastKeyword" class="broadcast-input" placeholder="搜索备注、用户名、手机号、银行账户" />
+        <view class="country-filter-row">
+          <button
+            v-for="code in broadcastCountryOptions"
+            :key="code"
+            :class="['filter-chip', broadcastCountryCodes.includes(code) && 'active']"
+            @click="toggleBroadcastCountry(code)"
+          >
+            {{ code }}
+          </button>
+        </view>
+        <view class="broadcast-tools">
+          <button class="mini-btn" @click="selectAllBroadcastResults">全选搜索结果</button>
+          <button class="mini-btn" @click="clearBroadcastSelection">清空选择</button>
+          <text class="broadcast-count">已选 {{ broadcastSelectedConversationIds.length }} / 命中 {{ broadcastFilteredConversations.length }}</text>
+        </view>
+        <scroll-view scroll-y class="broadcast-target-list">
+          <view
+            v-for="conv in broadcastFilteredConversations"
+            :key="conv.conversationId"
+            :class="['broadcast-target', broadcastSelectedConversationIds.includes(conv.conversationId) && 'active']"
+            @click="toggleBroadcastCustomer(conv.conversationId)"
+          >
+            <text class="broadcast-target-name">{{ customerDisplayName(conv) }}</text>
+            <text class="broadcast-target-meta">{{ conv.customerUsername }} {{ conv.agentNote }}</text>
+          </view>
+          <view v-if="broadcastFilteredConversations.length === 0" class="mini-empty">没有匹配客户</view>
+        </scroll-view>
+        <view class="broadcast-actions">
+          <button class="mini-btn" @click="closeBroadcastPanel">取消</button>
+          <button class="mini-btn primary" @click="submitFilteredBroadcast">发送</button>
+        </view>
+      </view>
+    </view>
+
     <view v-if="incomingVideoInvite" class="incoming-call-mask">
       <view class="incoming-call-dialog">
         <text class="incoming-call-title">Video call</text>
@@ -413,7 +487,7 @@ import { useAppStore } from '@/store/app'
 import ChatMessageBubble from '@/components/chat/ChatMessageBubble.vue'
 import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPreview.vue'
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
-import { createBroadcast, translateToChinese, uploadImage } from '@/utils/api'
+import { translateToChinese, uploadImage } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { uiIcons } from '@/utils/art'
@@ -424,6 +498,12 @@ import type { TransactionItem, WithdrawalItem } from '@/types'
 const store = useAppStore()
 const draft = ref('')
 const searchKeyword = ref('')
+const showBroadcastPanel = ref(false)
+const broadcastDraft = ref('')
+const broadcastKeyword = ref('')
+const broadcastCountryOptions = ['+234', '+91', '+233']
+const broadcastCountryCodes = ref<string[]>([])
+const broadcastSelectedConversationIds = ref<string[]>([])
 const socketTask = ref<UniApp.SocketTask | null>(null)
 const socketStatus = ref<'connecting' | 'online' | 'offline'>('connecting')
 const presenceRefreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
@@ -473,9 +553,19 @@ const messageMenuStyle = computed(() => {
 const filteredConversations = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
   if (!keyword) return store.state.supportConversations
-  return store.state.supportConversations.filter(conv =>
-    conv.customerUsername.toLowerCase().includes(keyword)
-  )
+  return store.state.supportConversations.filter(conv => conversationMatchesKeyword(conv, keyword))
+})
+
+const broadcastFilteredConversations = computed(() => {
+  const keyword = broadcastKeyword.value.trim().toLowerCase()
+  const countryCodes = broadcastCountryCodes.value
+  return store.state.supportConversations.filter((conv) => {
+    const matchesKeyword = !keyword || conversationMatchesKeyword(conv, keyword)
+    const profile = store.state.supportCustomerProfileCache[conv.conversationId]
+    const profileCountry = profile?.customer.phoneCountryCode || ''
+    const matchesCountry = countryCodes.length === 0 || !profileCountry || countryCodes.includes(profileCountry)
+    return matchesKeyword && matchesCountry
+  })
 })
 
 const activeCustomer = computed(() =>
@@ -530,11 +620,14 @@ const workbenchCopy = {
     process: '处理中',
     complete: '完成',
     dispute: '争议',
+    cancelOrder: '取消订单',
     markPaid: '标记已付款',
     loading: '正在加载客户资料...',
     selectCustomer: '选择客户后查看订单、余额、提现和贷款。',
     orderUpdated: '订单已更新',
     orderUpdateFailed: '订单更新失败',
+    orderCanceled: '订单已取消',
+    orderCancelFailed: '订单取消失败',
     withdrawalUpdated: '提现已更新',
     withdrawalUpdateFailed: '提现更新失败',
     noCustomer: '未选择客户',
@@ -561,11 +654,14 @@ const workbenchCopy = {
     process: 'Process',
     complete: 'Complete',
     dispute: 'Dispute',
+    cancelOrder: 'Cancel order',
     markPaid: 'Mark paid',
     loading: 'Loading customer details...',
     selectCustomer: 'Select a customer to view orders, balance, withdrawals, and loans.',
     orderUpdated: 'Order updated',
     orderUpdateFailed: 'Order update failed',
+    orderCanceled: 'Order canceled',
+    orderCancelFailed: 'Order cancellation failed',
     withdrawalUpdated: 'Withdrawal updated',
     withdrawalUpdateFailed: 'Withdrawal update failed',
     noCustomer: 'No customer selected',
@@ -578,11 +674,15 @@ const statusCopy: Record<string, { zh: string; en: string }> = {
   processing: { zh: '处理中', en: 'Processing' },
   completed: { zh: '已完成', en: 'Completed' },
   disputed: { zh: '争议', en: 'Disputed' },
+  canceled: { zh: '已取消', en: 'Canceled' },
   approved: { zh: '已通过', en: 'Approved' },
   rejected: { zh: '已拒绝', en: 'Rejected' },
   joining: { zh: '接入中', en: 'Joining' },
   ended: { zh: '已结束', en: 'Ended' },
-  missed: { zh: '未接通', en: 'Missed' }
+  missed: { zh: '未接通', en: 'Missed' },
+  high: { zh: '高风险', en: 'High' },
+  medium: { zh: '中风险', en: 'Medium' },
+  low: { zh: '低风险', en: 'Low' }
 }
 const workbenchText = computed(() => workbenchCopy[workbenchLanguage.value])
 const workbenchLanguageLabel = computed(() => workbenchText.value.switchTo)
@@ -673,6 +773,18 @@ function previewMessageContent(content: string) {
   const normalized = (content || '').trim().replace(/\s+/g, ' ')
   if (!normalized) return ''
   return normalized.length > 80 ? `${normalized.slice(0, 80)}...` : normalized
+}
+
+function conversationMatchesKeyword(conv: SupportConversationItem, keyword: string) {
+  const profile = store.state.supportCustomerProfileCache[conv.conversationId]
+  const searchable = [
+    conv.customerUsername,
+    conv.agentNote,
+    profile?.customer.phone,
+    profile?.customer.phoneCountryCode,
+    ...(profile?.withdrawals || []).flatMap(item => [item.accountName, item.bankName, item.accountNumber])
+  ]
+  return searchable.some(value => (value || '').toLowerCase().includes(keyword))
 }
 
 function copyableMessageContent(message: ChatMessage) {
@@ -808,6 +920,27 @@ async function changeOrderStatus(orderId: string, status: TransactionItem['statu
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : workbenchText.value.orderUpdateFailed, icon: 'none' })
   }
+}
+
+async function cancelSelectedOrder() {
+  const order = selectedOrder.value
+  if (!order) return
+  const reasons = ['Bad card', 'Wrong code', 'Unclear image', 'Customer canceled', 'Duplicate submission', 'Other']
+  uni.showActionSheet({
+    itemList: reasons,
+    async success(result) {
+      const reason = reasons[result.tapIndex] || 'Bad card'
+      try {
+        await store.cancelTransaction(order.id, {
+          reason,
+          notifyCustomer: true
+        })
+        uni.showToast({ title: workbenchText.value.orderCanceled, icon: 'success' })
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : workbenchText.value.orderCancelFailed, icon: 'none' })
+      }
+    }
+  })
 }
 
 async function changeWithdrawalStatus(withdrawalId: string, status: WithdrawalItem['status']) {
@@ -1307,7 +1440,47 @@ function handleHeaderMenu(action: 'note' | 'broadcast' | 'profile') {
     editCustomerNote()
     return
   }
-  sendOwnCustomerBroadcast()
+  openBroadcastPanel()
+}
+
+function openBroadcastPanel() {
+  showHeaderMenu.value = false
+  showComposerTools.value = false
+  closeMessageMenu()
+  showBroadcastPanel.value = true
+  if (!broadcastDraft.value.trim() && draft.value.trim()) {
+    broadcastDraft.value = draft.value.trim()
+  }
+}
+
+function closeBroadcastPanel() {
+  showBroadcastPanel.value = false
+}
+
+function toggleBroadcastCountry(code: string) {
+  const index = broadcastCountryCodes.value.indexOf(code)
+  if (index >= 0) {
+    broadcastCountryCodes.value.splice(index, 1)
+    return
+  }
+  broadcastCountryCodes.value.push(code)
+}
+
+function toggleBroadcastCustomer(conversationId: string) {
+  const index = broadcastSelectedConversationIds.value.indexOf(conversationId)
+  if (index >= 0) {
+    broadcastSelectedConversationIds.value.splice(index, 1)
+    return
+  }
+  broadcastSelectedConversationIds.value.push(conversationId)
+}
+
+function selectAllBroadcastResults() {
+  broadcastSelectedConversationIds.value = broadcastFilteredConversations.value.map(item => item.conversationId)
+}
+
+function clearBroadcastSelection() {
+  broadcastSelectedConversationIds.value = []
 }
 
 function toggleComposerTools() {
@@ -1522,25 +1695,57 @@ function chooseBrowserImageOnce(kind: ComposerAttachmentKind) {
   })
 }
 
-async function sendOwnCustomerBroadcast() {
-  const content = draft.value.trim()
+async function submitFilteredBroadcast() {
+  const content = broadcastDraft.value.trim()
   if (!content) {
     uni.showToast({ title: '请输入群发内容', icon: 'none' })
     return
   }
 
   try {
-    const broadcast = await createBroadcast({
+    const selectedTargets = broadcastSelectedConversationIds.value
+    const confirmed = await confirmSupportBroadcast(content, selectedTargets)
+    if (!confirmed) return
+    const broadcast = await store.createBroadcast({
       scope: 'own',
       content,
-      messageType: 'text'
+      messageType: 'text',
+      countryCodes: broadcastCountryCodes.value,
+      keyword: broadcastKeyword.value.trim(),
+      targetConversationIds: selectedTargets.length > 0 ? selectedTargets : undefined
     })
-    draft.value = ''
+    if (draft.value.trim() === content) {
+      draft.value = ''
+    }
+    broadcastDraft.value = ''
+    broadcastKeyword.value = ''
+    broadcastSelectedConversationIds.value = []
+    closeBroadcastPanel()
     await store.refreshSupport().catch(() => {})
     uni.showToast({ title: `已群发给 ${broadcast.deliveredCount} 位客户`, icon: 'success' })
   } catch (error) {
-    uni.showToast({ title: '群发失败', icon: 'none' })
+    uni.showToast({ title: error instanceof Error ? error.message : '群发失败', icon: 'none' })
   }
+}
+
+function confirmSupportBroadcast(content: string, selectedTargets: string[]) {
+  const countries = broadcastCountryCodes.value.length ? broadcastCountryCodes.value.join(', ') : '全部国家码'
+  const keyword = broadcastKeyword.value.trim() || '无关键词'
+  const targetCount = selectedTargets.length > 0 ? selectedTargets.length : broadcastFilteredConversations.value.length
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '确认群发',
+      content: `国家码：${countries}\n关键词：${keyword}\n客户数：${targetCount}\n内容：${content}`,
+      confirmText: '发送',
+      cancelText: '取消',
+      success(result) {
+        resolve(Boolean(result.confirm))
+      },
+      fail() {
+        resolve(false)
+      }
+    })
+  })
 }
 
 async function startVideoCall() {
@@ -1960,10 +2165,26 @@ function previewImage(url: string) {
 }
 
 .work-status.disputed,
+.work-status.canceled,
 .work-status.rejected,
 .work-status.missed {
   background: #ffe2e2;
   color: #a53030;
+}
+
+.work-status.high {
+  background: #ffe2e2;
+  color: #a53030;
+}
+
+.work-status.medium {
+  background: #fff4cf;
+  color: #8b6400;
+}
+
+.work-status.low {
+  background: #daf7e5;
+  color: #0b7b43;
 }
 
 .work-line {
@@ -2007,6 +2228,161 @@ function previewImage(url: string) {
 .mini-btn.danger {
   background: #ff6961;
   color: #ffffff;
+}
+
+.risk-item {
+  border-color: rgba(244, 91, 91, 0.22);
+}
+
+.broadcast-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(15, 24, 32, 0.36);
+  box-sizing: border-box;
+}
+
+.broadcast-dialog {
+  width: min(560px, 100%);
+  max-height: min(720px, calc(100vh - 36px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(17, 31, 45, 0.22);
+  box-sizing: border-box;
+}
+
+.broadcast-head,
+.broadcast-tools,
+.broadcast-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.broadcast-head,
+.broadcast-tools {
+  justify-content: space-between;
+}
+
+.broadcast-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: #1f2d24;
+}
+
+.broadcast-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #536269;
+  text-align: center;
+  line-height: 32px;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.broadcast-textarea,
+.broadcast-input {
+  width: 100%;
+  border: 1px solid rgba(90, 123, 89, 0.2);
+  border-radius: 8px;
+  background: #f8faf8;
+  color: #1f2d24;
+  box-sizing: border-box;
+}
+
+.broadcast-textarea {
+  min-height: 112px;
+  padding: 11px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.broadcast-input {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.country-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-chip {
+  min-width: 72px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(90, 123, 89, 0.22);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #314138;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 30px;
+}
+
+.filter-chip.active {
+  border-color: #0088cc;
+  background: #e7f5fc;
+  color: #006fa8;
+}
+
+.broadcast-count {
+  color: #68766c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.broadcast-target-list {
+  min-height: 160px;
+  max-height: 260px;
+  border: 1px solid rgba(90, 123, 89, 0.15);
+  border-radius: 8px;
+  background: #fbfcfb;
+  overflow: hidden;
+}
+
+.broadcast-target {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(90, 123, 89, 0.1);
+}
+
+.broadcast-target.active {
+  background: #e7f5fc;
+}
+
+.broadcast-target-name,
+.broadcast-target-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.broadcast-target-name {
+  color: #1f2d24;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.broadcast-target-meta {
+  margin-top: 4px;
+  color: #68766c;
+  font-size: 12px;
+}
+
+.broadcast-actions {
+  justify-content: flex-end;
 }
 
 .mini-empty,

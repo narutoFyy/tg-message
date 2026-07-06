@@ -135,12 +135,16 @@ export interface TransactionItem {
   cardName: string
   faceValue: string
   payoutAmount: string
-  status: 'pending' | 'processing' | 'completed' | 'disputed'
+  status: 'pending' | 'processing' | 'completed' | 'disputed' | 'canceled'
   counterpartyName: string
   counterpartyUsername: string
   friendshipId: string
   note: string
   voucherImageUrl: string
+  cancelReason: string
+  cancelNote: string
+  canceledBy: string
+  canceledAt: string
   createdAt: string
   updatedAt: string
 }
@@ -203,6 +207,10 @@ export interface BroadcastItem {
   messageType: 'text' | 'image' | 'voice' | 'gif' | 'link'
   content: string
   deliveredCount: number
+  countryCodes: string
+  searchKeyword: string
+  targetMode: 'filter' | 'explicit' | string
+  targetUsernames: string
   createdAt: string
 }
 
@@ -350,12 +358,40 @@ export interface SupportCustomerInfo {
   avatarUrl?: string
   email: string
   phone: string
+  phoneCountryCode: string
   status: string
   agentNote: string
   online: boolean
   assignedAgent: string
   createdAt: string
   updatedAt: string
+}
+
+export interface RegistrationBonusRecordItem {
+  id: string
+  username: string
+  phone: string
+  countryCode: string
+  countryName: string
+  currencyCode: string
+  bonusAmount: string
+  status: string
+  reason: string
+  createdAt: string
+}
+
+export interface BankAccountRiskMatch {
+  riskLevel: 'high' | 'medium' | 'low' | string
+  reason: string
+  username: string
+  displayName: string
+  phoneCountryCode: string
+  assignedAgent: string
+  bankName: string
+  accountName: string
+  accountNumber: string
+  submittedAt: string
+  fullAccess: boolean
 }
 
 export interface SupportCustomerProfile {
@@ -366,6 +402,8 @@ export interface SupportCustomerProfile {
   withdrawals: WithdrawalItem[]
   loans: LoanApplicationItem[]
   videoSessions: VideoSessionItem[]
+  registrationBonus?: RegistrationBonusRecordItem | null
+  bankAccountRiskMatches: BankAccountRiskMatch[]
 }
 
 export interface AdminDirectConversationItem {
@@ -407,6 +445,18 @@ export interface ReferralRewardItem {
   ratePercent: string
   status: string
   createdAt: string
+}
+
+export interface RegistrationBonusConfigItem {
+  id: string
+  countryCode: string
+  countryName: string
+  currencyCode: string
+  bonusAmount: string
+  enabled: boolean
+  note: string
+  updatedAt: string
+  updatedBy: string
 }
 
 export interface CountryOption {

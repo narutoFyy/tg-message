@@ -41,6 +41,10 @@ public class SupportCustomerProfileService {
     private final VideoSessionRepository videoSessionRepository;
     private final UserPresenceService userPresenceService;
     private final ReferralRewardService referralRewardService;
+    private final RegistrationBonusService registrationBonusService;
+    private final BankAccountRiskService bankAccountRiskService;
+    private final CurrentUserService currentUserService;
+    private final PhoneCountryCodeResolver phoneCountryCodeResolver;
 
     public SupportCustomerProfileService(
         PersistentSupportService persistentSupportService,
@@ -49,7 +53,11 @@ public class SupportCustomerProfileService {
         LoanApplicationRepository loanApplicationRepository,
         VideoSessionRepository videoSessionRepository,
         UserPresenceService userPresenceService,
-        ReferralRewardService referralRewardService
+        ReferralRewardService referralRewardService,
+        RegistrationBonusService registrationBonusService,
+        BankAccountRiskService bankAccountRiskService,
+        CurrentUserService currentUserService,
+        PhoneCountryCodeResolver phoneCountryCodeResolver
     ) {
         this.persistentSupportService = persistentSupportService;
         this.tradeOrderRepository = tradeOrderRepository;
@@ -58,6 +66,10 @@ public class SupportCustomerProfileService {
         this.videoSessionRepository = videoSessionRepository;
         this.userPresenceService = userPresenceService;
         this.referralRewardService = referralRewardService;
+        this.registrationBonusService = registrationBonusService;
+        this.bankAccountRiskService = bankAccountRiskService;
+        this.currentUserService = currentUserService;
+        this.phoneCountryCodeResolver = phoneCountryCodeResolver;
     }
 
     public SupportCustomerProfile getProfile(String conversationId) {
@@ -76,7 +88,9 @@ public class SupportCustomerProfileService {
             orders.stream().map(order -> toTransactionItem(order, conversation)).toList(),
             withdrawals.stream().map(this::toWithdrawalItem).toList(),
             loans.stream().map(this::toLoanItem).toList(),
-            videoSessions.stream().map(this::toVideoSessionItem).toList()
+            videoSessions.stream().map(this::toVideoSessionItem).toList(),
+            registrationBonusService.recordForUser(customer.getId()),
+            bankAccountRiskService.matchesForCustomer(customer, currentUserService.getCurrentUser())
         );
     }
 
@@ -87,6 +101,7 @@ public class SupportCustomerProfileService {
             value(customer.getAvatarUrl()),
             value(customer.getEmail()),
             value(customer.getPhone()),
+            phoneCountryCodeResolver.resolve(customer.getPhone(), registrationBonusService.configuredCountryCodes()),
             value(customer.getStatusCode()),
             value(conversation.getAgentNote()),
             userPresenceService.isOnline(customer.getId()),
@@ -110,9 +125,10 @@ public class SupportCustomerProfileService {
             .map(withdrawal -> amountFromText(withdrawal.getAmount()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal rewards = referralRewardService.availableRewardsForUsers(List.of(customer.getId()));
+        BigDecimal registrationBonuses = registrationBonusService.availableBonusesForUsers(List.of(customer.getId()));
 
         return new CustomerBalanceSummary(
-            money(completed.add(rewards).subtract(withdrawn).max(BigDecimal.ZERO)),
+            money(completed.add(rewards).add(registrationBonuses).subtract(withdrawn).max(BigDecimal.ZERO)),
             money(pending),
             money(withdrawn)
         );
@@ -133,6 +149,10 @@ public class SupportCustomerProfileService {
             order.getFriendship() == null ? "" : order.getFriendship().getId(),
             value(order.getNote()),
             value(order.getVoucherImageUrl()),
+            value(order.getCancelReason()),
+            value(order.getCancelNote()),
+            order.getCanceledByUser() == null ? "" : order.getCanceledByUser().getUsername(),
+            order.getCanceledAt() == null ? "" : TIME_FORMATTER.format(order.getCanceledAt()),
             TIME_FORMATTER.format(order.getCreatedAt()),
             TIME_FORMATTER.format(order.getUpdatedAt())
         );

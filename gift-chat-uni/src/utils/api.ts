@@ -3,6 +3,7 @@ import type {
   AdminUserItem,
   BalanceSummary,
   AgentItem,
+  BankAccountRiskMatch,
   BroadcastItem,
   ChatMessage,
   ChatMessageSync,
@@ -13,6 +14,8 @@ import type {
   PushDeviceItem,
   ReferralRewardConfigItem,
   ReferralRewardItem,
+  RegistrationBonusConfigItem,
+  RegistrationBonusRecordItem,
   RankingBoard,
   RateItem,
   SearchFriendResult,
@@ -277,6 +280,9 @@ export function createBroadcast(payload: {
   scope: 'own' | 'all'
   content: string
   messageType: BroadcastItem['messageType']
+  countryCodes?: string[]
+  keyword?: string
+  targetConversationIds?: string[]
 }) {
   return request<BroadcastItem>('/broadcasts', 'POST', payload)
 }
@@ -447,6 +453,33 @@ export function fetchReferralRewards() {
   return request<ReferralRewardItem[]>('/admin/referral-rewards')
 }
 
+export function fetchRegistrationBonusConfigs() {
+  return request<RegistrationBonusConfigItem[]>('/admin/registration-bonuses/config')
+}
+
+export function updateRegistrationBonusConfig(payload: {
+  countryCode: string
+  countryName: string
+  currencyCode: string
+  bonusAmount: string
+  enabled: boolean
+  note?: string
+}) {
+  return request<RegistrationBonusConfigItem>('/admin/registration-bonuses/config', 'POST', payload)
+}
+
+export function fetchRegistrationBonusRecords() {
+  return request<RegistrationBonusRecordItem[]>('/admin/registration-bonuses')
+}
+
+export function fetchAdminBankAccountRisks() {
+  return request<BankAccountRiskMatch[]>('/admin/bank-account-risks')
+}
+
+export function fetchMyRegistrationBonus() {
+  return request<RegistrationBonusRecordItem | null>('/account/registration-bonus')
+}
+
 export function sendSupportMessage(conversationId: string, payload: { content: string; messageType: string; clientMessageId?: string; replyTo?: ChatMessage['replyTo'] }) {
   return request<ChatMessage>(
     `/support/conversations/${conversationId}/messages`,
@@ -479,6 +512,10 @@ export function markFriendConversationRead(friendshipId: string) {
 
 export function updateTransactionStatus(transactionId: string, status: TransactionItem['status']) {
   return request<TransactionItem>(`/transactions/${transactionId}/status`, 'POST', { status })
+}
+
+export function cancelTransaction(transactionId: string, payload: { reason: string; note?: string; notifyCustomer?: boolean }) {
+  return request<TransactionItem>(`/transactions/${transactionId}/cancel`, 'POST', payload)
 }
 
 export function uploadImage(filePath: string) {

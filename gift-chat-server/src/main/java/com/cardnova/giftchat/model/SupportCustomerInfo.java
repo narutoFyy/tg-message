@@ -6,6 +6,7 @@ public record SupportCustomerInfo(
     String avatarUrl,
     String email,
     String phone,
+    String phoneCountryCode,
     String status,
     String agentNote,
     boolean online,

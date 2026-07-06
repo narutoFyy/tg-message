@@ -1,6 +1,7 @@
 package com.cardnova.giftchat.controller;
 
 import com.cardnova.giftchat.api.ApiResponse;
+import com.cardnova.giftchat.dto.CancelTransactionRequest;
 import com.cardnova.giftchat.dto.CreateSellOrderRequest;
 import com.cardnova.giftchat.dto.CreateTransactionRequest;
 import com.cardnova.giftchat.dto.UpdateTransactionStatusRequest;
@@ -54,6 +55,17 @@ public class TransactionController {
         return ApiResponse.success(
             "transaction_status_updated",
             persistentTransactionService.updateStatus(transactionId, request.status())
+        );
+    }
+
+    @PostMapping("/{transactionId}/cancel")
+    public ApiResponse<TransactionItem> cancel(
+        @PathVariable String transactionId,
+        @Valid @RequestBody CancelTransactionRequest request
+    ) {
+        return ApiResponse.success(
+            "transaction_canceled",
+            persistentTransactionService.cancelTransaction(transactionId, request.reason(), request.note(), request.notifyCustomer())
         );
     }
 }

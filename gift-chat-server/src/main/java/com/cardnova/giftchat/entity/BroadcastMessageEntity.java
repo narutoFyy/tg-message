@@ -36,6 +36,18 @@ public class BroadcastMessageEntity {
     @Column(name = "delivered_count", nullable = false)
     private int deliveredCount;
 
+    @Column(name = "country_codes", length = 255)
+    private String countryCodes;
+
+    @Column(name = "search_keyword", length = 128)
+    private String searchKeyword;
+
+    @Column(name = "target_mode", length = 32)
+    private String targetMode;
+
+    @Column(name = "target_usernames", columnDefinition = "TEXT")
+    private String targetUsernames;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -93,6 +105,38 @@ public class BroadcastMessageEntity {
 
     public void setDeliveredCount(int deliveredCount) {
         this.deliveredCount = deliveredCount;
+    }
+
+    public String getCountryCodes() {
+        return countryCodes;
+    }
+
+    public void setCountryCodes(String countryCodes) {
+        this.countryCodes = countryCodes;
+    }
+
+    public String getSearchKeyword() {
+        return searchKeyword;
+    }
+
+    public void setSearchKeyword(String searchKeyword) {
+        this.searchKeyword = searchKeyword;
+    }
+
+    public String getTargetMode() {
+        return targetMode;
+    }
+
+    public void setTargetMode(String targetMode) {
+        this.targetMode = targetMode;
+    }
+
+    public String getTargetUsernames() {
+        return targetUsernames;
+    }
+
+    public void setTargetUsernames(String targetUsernames) {
+        this.targetUsernames = targetUsernames;
     }
 
     public LocalDateTime getCreatedAt() {

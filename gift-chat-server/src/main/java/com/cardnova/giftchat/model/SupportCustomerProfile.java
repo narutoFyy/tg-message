@@ -9,6 +9,8 @@ public record SupportCustomerProfile(
     List<TransactionItem> orders,
     List<WithdrawalItem> withdrawals,
     List<LoanApplicationItem> loans,
-    List<VideoSessionItem> videoSessions
+    List<VideoSessionItem> videoSessions,
+    RegistrationBonusRecordItem registrationBonus,
+    List<BankAccountRiskMatch> bankAccountRiskMatches
 ) {
 }

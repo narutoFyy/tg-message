@@ -29,6 +29,10 @@ export const mockTransactions: TransactionItem[] = [
     friendshipId: 'friendship-1',
     note: 'Waiting for card screenshots and receipt confirmation.',
     voucherImageUrl: '',
+    cancelReason: '',
+    cancelNote: '',
+    canceledBy: '',
+    canceledAt: '',
     createdAt: '2026-05-27 09:15',
     updatedAt: '2026-05-27 09:15'
   },
@@ -44,6 +48,10 @@ export const mockTransactions: TransactionItem[] = [
     friendshipId: 'friendship-2',
     note: 'Counterparty is checking the code balance before payout.',
     voucherImageUrl: '',
+    cancelReason: '',
+    cancelNote: '',
+    canceledBy: '',
+    canceledAt: '',
     createdAt: '2026-05-27 10:02',
     updatedAt: '2026-05-27 10:24'
   },
@@ -59,6 +67,10 @@ export const mockTransactions: TransactionItem[] = [
     friendshipId: 'friendship-1',
     note: 'Settled successfully this morning.',
     voucherImageUrl: '',
+    cancelReason: '',
+    cancelNote: '',
+    canceledBy: '',
+    canceledAt: '',
     createdAt: '2026-05-27 07:48',
     updatedAt: '2026-05-27 08:10'
   }

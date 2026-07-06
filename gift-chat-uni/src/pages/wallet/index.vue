@@ -20,6 +20,19 @@
         </view>
       </view>
 
+      <view v-if="registrationBonus" class="panel">
+        <text class="section-title">Registration bonus</text>
+        <view style="height: 18rpx"></view>
+        <view class="bonus-row">
+          <view>
+            <text class="trade-name">{{ registrationBonus.bonusAmount }} {{ registrationBonus.currencyCode || '' }}</text>
+            <text class="trade-meta">{{ registrationBonus.countryCode || 'Unknown country code' }} · {{ registrationBonus.status }} · {{ registrationBonus.createdAt }}</text>
+            <text class="trade-meta">{{ registrationBonus.reason }}</text>
+          </view>
+          <text :class="['status-chip', registrationBonus.status]">{{ registrationBonus.status }}</text>
+        </view>
+      </view>
+
       <view class="panel">
         <text class="section-title">Recent completed payouts</text>
         <view style="height: 18rpx"></view>
@@ -54,6 +67,7 @@ onShow(() => {
 
 const completedTrades = computed(() => store.state.transactions.filter((item) => item.status === 'completed'))
 const pendingTrades = computed(() => store.state.transactions.filter((item) => item.status === 'pending' || item.status === 'processing'))
+const registrationBonus = computed(() => store.state.registrationBonusRecord)
 
 function parseNgn(value: string) {
   return Number(value.replace(/[^\d.]/g, '') || '0')
@@ -130,5 +144,31 @@ function goWithdraw() {
   font-size: 28rpx;
   font-weight: 800;
   color: #0f9b57;
+}
+
+.bonus-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.status-chip {
+  padding: 8rpx 14rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  font-weight: 800;
+  color: #3d3d3d;
+  background: #eef1f3;
+}
+
+.status-chip.available {
+  color: #0f7d45;
+  background: #dff7ea;
+}
+
+.status-chip.skipped {
+  color: #8a5b00;
+  background: #fff1cc;
 }
 </style>

@@ -50,6 +50,19 @@ public class TradeOrderEntity {
     @Column(name = "voucher_image_url", length = 255)
     private String voucherImageUrl;
 
+    @Column(name = "cancel_reason", length = 64)
+    private String cancelReason;
+
+    @Column(name = "cancel_note", length = 255)
+    private String cancelNote;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "canceled_by_user_id")
+    private UserEntity canceledByUser;
+
+    @Column(name = "canceled_at")
+    private LocalDateTime canceledAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -142,6 +155,38 @@ public class TradeOrderEntity {
 
     public void setVoucherImageUrl(String voucherImageUrl) {
         this.voucherImageUrl = voucherImageUrl;
+    }
+
+    public String getCancelReason() {
+        return cancelReason;
+    }
+
+    public void setCancelReason(String cancelReason) {
+        this.cancelReason = cancelReason;
+    }
+
+    public String getCancelNote() {
+        return cancelNote;
+    }
+
+    public void setCancelNote(String cancelNote) {
+        this.cancelNote = cancelNote;
+    }
+
+    public UserEntity getCanceledByUser() {
+        return canceledByUser;
+    }
+
+    public void setCanceledByUser(UserEntity canceledByUser) {
+        this.canceledByUser = canceledByUser;
+    }
+
+    public LocalDateTime getCanceledAt() {
+        return canceledAt;
+    }
+
+    public void setCanceledAt(LocalDateTime canceledAt) {
+        this.canceledAt = canceledAt;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -130,7 +130,8 @@ function statusLabel(status: TransactionItem['status']) {
     pending: 'Pending',
     processing: 'Processing',
     completed: 'Completed',
-    disputed: 'Disputed'
+    disputed: 'Disputed',
+    canceled: 'Canceled'
   }[status]
 }
 
@@ -139,7 +140,8 @@ function statusClass(status: TransactionItem['status']) {
     pending: 'warning',
     processing: 'active',
     completed: 'done',
-    disputed: 'danger'
+    disputed: 'danger',
+    canceled: 'danger'
   }[status]
 }
 
@@ -154,7 +156,8 @@ function actionLabel(status: TransactionItem['status']) {
     processing: 'Mark Processing',
     completed: 'Mark Complete',
     disputed: 'Raise Dispute',
-    pending: 'Mark Pending'
+    pending: 'Mark Pending',
+    canceled: 'Canceled'
   }[status]
 }
 

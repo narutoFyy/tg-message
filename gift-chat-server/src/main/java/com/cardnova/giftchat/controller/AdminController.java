@@ -3,16 +3,23 @@ package com.cardnova.giftchat.controller;
 import com.cardnova.giftchat.api.ApiResponse;
 import com.cardnova.giftchat.dto.AssignSupportConversationRequest;
 import com.cardnova.giftchat.dto.CreateAgentRequest;
+import com.cardnova.giftchat.dto.UpdateRegistrationBonusConfigRequest;
 import com.cardnova.giftchat.dto.UpdateReferralRewardConfigRequest;
 import com.cardnova.giftchat.dto.UpdateUserStatusRequest;
 import com.cardnova.giftchat.model.AdminDirectConversation;
 import com.cardnova.giftchat.model.AdminUserItem;
 import com.cardnova.giftchat.model.AgentItem;
+import com.cardnova.giftchat.model.BankAccountRiskMatch;
 import com.cardnova.giftchat.model.ReferralRewardConfigItem;
 import com.cardnova.giftchat.model.ReferralRewardItem;
+import com.cardnova.giftchat.model.RegistrationBonusConfigItem;
+import com.cardnova.giftchat.model.RegistrationBonusRecordItem;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.service.AdminService;
+import com.cardnova.giftchat.service.BankAccountRiskService;
+import com.cardnova.giftchat.service.CurrentUserService;
 import com.cardnova.giftchat.service.ReferralRewardService;
+import com.cardnova.giftchat.service.RegistrationBonusService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,10 +37,22 @@ public class AdminController {
 
     private final AdminService adminService;
     private final ReferralRewardService referralRewardService;
+    private final RegistrationBonusService registrationBonusService;
+    private final BankAccountRiskService bankAccountRiskService;
+    private final CurrentUserService currentUserService;
 
-    public AdminController(AdminService adminService, ReferralRewardService referralRewardService) {
+    public AdminController(
+        AdminService adminService,
+        ReferralRewardService referralRewardService,
+        RegistrationBonusService registrationBonusService,
+        BankAccountRiskService bankAccountRiskService,
+        CurrentUserService currentUserService
+    ) {
         this.adminService = adminService;
         this.referralRewardService = referralRewardService;
+        this.registrationBonusService = registrationBonusService;
+        this.bankAccountRiskService = bankAccountRiskService;
+        this.currentUserService = currentUserService;
     }
 
     @GetMapping("/users")
@@ -92,5 +111,29 @@ public class AdminController {
     @GetMapping("/referral-rewards")
     public ApiResponse<List<ReferralRewardItem>> referralRewards() {
         return ApiResponse.success(referralRewardService.rewards());
+    }
+
+    @GetMapping("/registration-bonuses/config")
+    public ApiResponse<List<RegistrationBonusConfigItem>> registrationBonusConfigs() {
+        return ApiResponse.success(registrationBonusService.configs());
+    }
+
+    @PostMapping("/registration-bonuses/config")
+    public ApiResponse<RegistrationBonusConfigItem> updateRegistrationBonusConfig(
+        @Valid @RequestBody UpdateRegistrationBonusConfigRequest request
+    ) {
+        return ApiResponse.success("registration_bonus_config_updated", registrationBonusService.updateConfig(request));
+    }
+
+    @GetMapping("/registration-bonuses")
+    public ApiResponse<List<RegistrationBonusRecordItem>> registrationBonusRecords() {
+        return ApiResponse.success(registrationBonusService.records());
+    }
+
+    @GetMapping("/bank-account-risks")
+    public ApiResponse<List<BankAccountRiskMatch>> bankAccountRisks() {
+        var currentUser = currentUserService.getCurrentUser();
+        currentUserService.requireAdmin(currentUser);
+        return ApiResponse.success(bankAccountRiskService.allPlatformMatches(currentUser));
     }
 }

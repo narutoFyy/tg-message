@@ -17,6 +17,7 @@
         <button :class="['ghost-button', activeTab === 'broadcast' && 'active-tab']" @click="activeTab = 'broadcast'">Broadcast</button>
         <button :class="['ghost-button', activeTab === 'orders' && 'active-tab']" @click="activeTab = 'orders'">Orders</button>
         <button :class="['ghost-button', activeTab === 'withdrawals' && 'active-tab']" @click="activeTab = 'withdrawals'">Withdraw</button>
+        <button :class="['ghost-button', activeTab === 'risks' && 'active-tab']" @click="activeTab = 'risks'">Risk</button>
         <button :class="['ghost-button', activeTab === 'loans' && 'active-tab']" @click="activeTab = 'loans'">Loans</button>
         <button :class="['ghost-button', activeTab === 'rewards' && 'active-tab']" @click="activeTab = 'rewards'">Rewards</button>
         <button :class="['ghost-button', activeTab === 'notifications' && 'active-tab']" @click="activeTab = 'notifications'">Alerts</button>
@@ -165,6 +166,18 @@
             {{ type }}
           </button>
         </view>
+        <view style="height: 14rpx"></view>
+        <input v-model="broadcastForm.keyword" class="field-input assign-input" placeholder="Filter by note, username, phone, or bank account" />
+        <view class="broadcast-type-row">
+          <button
+            v-for="code in adminBroadcastCountryOptions"
+            :key="code"
+            :class="['ghost-button', 'mini-button', broadcastForm.countryCodes.includes(code) && 'active-soft']"
+            @click="toggleAdminBroadcastCountry(code)"
+          >
+            {{ code }}
+          </button>
+        </view>
       </view>
 
       <view v-if="activeTab === 'broadcast'" class="panel">
@@ -174,6 +187,8 @@
           <view>
             <text class="row-title">{{ item.senderUsername }} / {{ item.scope }}</text>
             <text class="row-meta">{{ item.messageType }} / delivered {{ item.deliveredCount }} / {{ item.createdAt }}</text>
+            <text class="row-meta">filters: {{ item.countryCodes || 'all countries' }} / {{ item.searchKeyword || 'no keyword' }} / {{ item.targetMode }}</text>
+            <text v-if="item.targetUsernames" class="row-meta">targets: {{ item.targetUsernames }}</text>
             <text class="row-meta">{{ item.content }}</text>
           </view>
         </view>
@@ -200,7 +215,15 @@
             >
               {{ status }}
             </button>
+            <button
+              v-if="order.status === 'pending' || order.status === 'processing'"
+              class="ghost-button mini-button danger-action"
+              @click="cancelOrder(order.id)"
+            >
+              Cancel bad card
+            </button>
           </view>
+          <text v-if="order.status === 'canceled'" class="row-meta">Canceled: {{ order.cancelReason }} {{ order.cancelNote }}</text>
         </view>
       </view>
 
@@ -224,6 +247,21 @@
             Mark Completed
           </button>
         </view>
+      </view>
+
+      <view v-if="activeTab === 'risks'" class="panel">
+        <text class="section-title">Duplicate bank account risk</text>
+        <view style="height: 18rpx"></view>
+        <view v-for="risk in bankAccountRisks" :key="`${risk.username}-${risk.reason}-${risk.accountNumber}-${risk.submittedAt}`" class="list-row">
+          <view>
+            <text class="row-title">{{ risk.username }} / {{ risk.riskLevel }}</text>
+            <text class="row-meta">{{ risk.reason }} / {{ risk.bankName }} / {{ risk.accountName }}</text>
+            <text class="row-meta">{{ risk.accountNumber }} / {{ risk.phoneCountryCode || '-' }} / {{ risk.assignedAgent || '-' }}</text>
+            <text class="row-meta">{{ risk.submittedAt }}</text>
+          </view>
+          <text :class="['status-pill', risk.riskLevel === 'high' ? 'danger' : 'warning']">{{ risk.riskLevel }}</text>
+        </view>
+        <text v-if="bankAccountRisks.length === 0" class="row-meta">No duplicate bank account risk found.</text>
       </view>
 
       <view v-if="activeTab === 'loans'" class="panel">
@@ -290,6 +328,44 @@
         </view>
       </view>
 
+      <view v-if="activeTab === 'rewards'" class="panel">
+        <text class="section-title">Registration bonus by phone country code</text>
+        <view style="height: 18rpx"></view>
+        <view v-for="config in registrationBonusConfigs" :key="config.countryCode" class="bonus-config-card">
+          <view class="reward-setting-row">
+            <view>
+              <text class="row-title">{{ config.countryCode }} / {{ registrationBonusDrafts[config.countryCode]?.countryName || config.countryName }}</text>
+              <text class="row-meta">Paid once when a new account registers with this phone prefix.</text>
+            </view>
+            <switch
+              :checked="registrationBonusDrafts[config.countryCode]?.enabled"
+              @change="setBonusEnabled(config.countryCode, $event)"
+            />
+          </view>
+          <view class="bonus-config-grid">
+            <input v-model="registrationBonusDrafts[config.countryCode].countryName" class="field-input" placeholder="Country name" />
+            <input v-model="registrationBonusDrafts[config.countryCode].currencyCode" class="field-input" placeholder="Currency" />
+            <input v-model="registrationBonusDrafts[config.countryCode].bonusAmount" class="field-input" type="digit" placeholder="Bonus amount" />
+          </view>
+          <input v-model="registrationBonusDrafts[config.countryCode].note" class="field-input" placeholder="Internal note" />
+          <view style="height: 12rpx"></view>
+          <button class="primary-button mini-button" @click="saveRegistrationBonusConfig(config)">Save {{ config.countryCode }}</button>
+          <text class="row-meta">Updated by {{ config.updatedBy || '-' }} / {{ config.updatedAt || '-' }}</text>
+        </view>
+      </view>
+
+      <view v-if="activeTab === 'rewards'" class="panel">
+        <text class="section-title">Registration bonus records</text>
+        <view style="height: 18rpx"></view>
+        <view v-for="record in registrationBonusRecords" :key="record.id" class="list-row">
+          <view>
+            <text class="row-title">{{ record.username }} received {{ record.bonusAmount }} {{ record.currencyCode }}</text>
+            <text class="row-meta">{{ record.countryCode }} / {{ record.phone || 'No phone' }} / {{ record.status }}</text>
+            <text class="row-meta">{{ record.reason }} / {{ record.createdAt }}</text>
+          </view>
+        </view>
+      </view>
+
       <view v-if="activeTab === 'notifications'" class="panel">
         <text class="section-title">Admin notifications</text>
         <view style="height: 18rpx"></view>
@@ -309,25 +385,30 @@
 
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import type {
   AdminDirectConversationItem,
   AdminUserItem,
   AgentItem,
+  BankAccountRiskMatch,
   BroadcastItem,
   LoanApplicationItem,
   NotificationItem,
   ReferralRewardConfigItem,
   ReferralRewardItem,
+  RegistrationBonusConfigItem,
+  RegistrationBonusRecordItem,
   SupportConversationItem,
   TransactionItem,
   WithdrawalItem
 } from '@/types'
 import {
   assignSupportConversation,
+  cancelTransaction,
   createBroadcast,
   createAgent,
   fetchAdminDirectConversations,
+  fetchAdminBankAccountRisks,
   fetchAdminSupportConversations,
   fetchAdminUsers,
   fetchAgents,
@@ -336,11 +417,14 @@ import {
   fetchNotifications,
   fetchReferralRewardConfig,
   fetchReferralRewards,
+  fetchRegistrationBonusConfigs,
+  fetchRegistrationBonusRecords,
   fetchTransactions,
   fetchWithdrawals,
   updateAgentStatus,
   updateLoanStatus,
   updateReferralRewardConfig,
+  updateRegistrationBonusConfig,
   updateTransactionStatus,
   updateWithdrawalStatus
 } from '@/utils/api'
@@ -348,7 +432,7 @@ import { useAppStore } from '@/store/app'
 
 const store = useAppStore()
 const isAdminReady = ref(false)
-const activeTab = ref<'users' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'loans' | 'rewards' | 'notifications'>('users')
+const activeTab = ref<'users' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'risks' | 'loans' | 'rewards' | 'notifications'>('users')
 const notice = ref('')
 const users = ref<AdminUserItem[]>([])
 const agents = ref<AgentItem[]>([])
@@ -357,18 +441,31 @@ const directConversations = ref<AdminDirectConversationItem[]>([])
 const broadcasts = ref<BroadcastItem[]>([])
 const transactions = ref<TransactionItem[]>([])
 const withdrawals = ref<WithdrawalItem[]>([])
+const bankAccountRisks = ref<BankAccountRiskMatch[]>([])
 const loans = ref<LoanApplicationItem[]>([])
 const referralRewardConfig = ref<ReferralRewardConfigItem | null>(null)
 const referralRewards = ref<ReferralRewardItem[]>([])
+const registrationBonusConfigs = ref<RegistrationBonusConfigItem[]>([])
+const registrationBonusRecords = ref<RegistrationBonusRecordItem[]>([])
 const notifications = ref<NotificationItem[]>([])
 const directSearch = ref('')
 const assignDrafts = reactive<Record<string, string>>({})
 const loanReviewDrafts = reactive<Record<string, string>>({})
+const registrationBonusDrafts = reactive<Record<string, {
+  countryName: string
+  currencyCode: string
+  bonusAmount: string
+  enabled: boolean
+  note: string
+}>>({})
 const broadcastTypes = ['text', 'image', 'voice', 'gif', 'link'] as const
+const adminBroadcastCountryOptions = ['+234', '+91', '+233']
 
 const broadcastForm = reactive({
   content: '',
-  messageType: 'text' as BroadcastItem['messageType']
+  messageType: 'text' as BroadcastItem['messageType'],
+  keyword: '',
+  countryCodes: [] as string[]
 })
 
 const agentForm = reactive({
@@ -411,9 +508,12 @@ async function refreshAll() {
       nextBroadcasts,
       nextTransactions,
       nextWithdrawals,
+      nextBankAccountRisks,
       nextLoans,
       nextRewardConfig,
       nextRewards,
+      nextRegistrationBonusConfigs,
+      nextRegistrationBonusRecords,
       nextNotifications
     ] = await Promise.all([
       fetchAdminUsers(),
@@ -422,9 +522,12 @@ async function refreshAll() {
       fetchBroadcasts(),
       fetchTransactions(),
       fetchWithdrawals(),
+      fetchAdminBankAccountRisks(),
       fetchLoans(),
       fetchReferralRewardConfig(),
       fetchReferralRewards(),
+      fetchRegistrationBonusConfigs(),
+      fetchRegistrationBonusRecords(),
       fetchNotifications()
     ])
     users.value = nextUsers
@@ -433,10 +536,14 @@ async function refreshAll() {
     broadcasts.value = nextBroadcasts
     transactions.value = nextTransactions
     withdrawals.value = nextWithdrawals
+    bankAccountRisks.value = nextBankAccountRisks
     loans.value = nextLoans
     referralRewardConfig.value = nextRewardConfig
     referralRewards.value = nextRewards
+    registrationBonusConfigs.value = nextRegistrationBonusConfigs
+    registrationBonusRecords.value = nextRegistrationBonusRecords
     applyRewardConfig(nextRewardConfig)
+    applyRegistrationBonusConfigs(nextRegistrationBonusConfigs)
     notifications.value = nextNotifications
     await store.refreshBalanceSummary().catch(() => {})
     nextConversations.forEach((conversation) => {
@@ -460,12 +567,31 @@ function applyRewardConfig(config: ReferralRewardConfigItem) {
   rewardForm.tradeRebatePercent = config.tradeRebatePercent
 }
 
+function applyRegistrationBonusConfigs(configs: RegistrationBonusConfigItem[]) {
+  configs.forEach((config) => {
+    registrationBonusDrafts[config.countryCode] = {
+      countryName: config.countryName,
+      currencyCode: config.currencyCode,
+      bonusAmount: config.bonusAmount,
+      enabled: config.enabled,
+      note: config.note
+    }
+  })
+}
+
 function setRegistrationRewardEnabled(event: Event) {
   rewardForm.registrationCashbackEnabled = switchValue(event)
 }
 
 function setTradeRewardEnabled(event: Event) {
   rewardForm.tradeRebateEnabled = switchValue(event)
+}
+
+function setBonusEnabled(countryCode: string, event: Event) {
+  const draft = registrationBonusDrafts[countryCode]
+  if (draft) {
+    draft.enabled = switchValue(event)
+  }
 }
 
 function switchValue(event: Event) {
@@ -489,21 +615,99 @@ async function saveRewardConfig() {
   }
 }
 
+async function saveRegistrationBonusConfig(config: RegistrationBonusConfigItem) {
+  try {
+    const draft = registrationBonusDrafts[config.countryCode]
+    if (!draft) return
+    const updated = await updateRegistrationBonusConfig({
+      countryCode: config.countryCode,
+      countryName: draft.countryName,
+      currencyCode: draft.currencyCode,
+      bonusAmount: draft.bonusAmount,
+      enabled: draft.enabled,
+      note: draft.note
+    })
+    const index = registrationBonusConfigs.value.findIndex(item => item.countryCode === updated.countryCode)
+    if (index >= 0) {
+      registrationBonusConfigs.value.splice(index, 1, updated)
+    }
+    applyRegistrationBonusConfigs(registrationBonusConfigs.value)
+    notice.value = `${config.countryCode} registration bonus saved.`
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Registration bonus save failed'
+  }
+}
+
 async function submitBroadcast() {
   try {
     const content = broadcastForm.content.trim()
     if (!content) return
+    const confirmed = await confirmAdminBroadcast(content)
+    if (!confirmed) return
     await createBroadcast({
       scope: 'all',
       content,
-      messageType: broadcastForm.messageType
+      messageType: broadcastForm.messageType,
+      countryCodes: broadcastForm.countryCodes,
+      keyword: broadcastForm.keyword.trim()
     })
     broadcastForm.content = ''
-    notice.value = 'Broadcast sent to all users.'
+    broadcastForm.keyword = ''
+    notice.value = 'Broadcast sent.'
     await refreshAll()
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Broadcast failed'
   }
+}
+
+function confirmAdminBroadcast(content: string) {
+  const countryText = broadcastForm.countryCodes.length ? broadcastForm.countryCodes.join(', ') : 'all countries'
+  const keywordText = broadcastForm.keyword.trim() || 'no keyword'
+  const countText = `${adminBroadcastTargetCount.value} estimated targets`
+  return new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: 'Confirm broadcast',
+      content: `Countries: ${countryText}\nKeyword: ${keywordText}\nTargets: ${countText}\nMessage: ${content}`,
+      confirmText: 'Send',
+      cancelText: 'Cancel',
+      success(result) {
+        resolve(Boolean(result.confirm))
+      },
+      fail() {
+        resolve(false)
+      }
+    })
+  })
+}
+
+const adminBroadcastTargetCount = computed(() => {
+  const keyword = broadcastForm.keyword.trim().toLowerCase()
+  const countries = broadcastForm.countryCodes
+  return users.value.filter((user) => {
+    if (user.role !== 'USER' || user.status !== 'ACTIVE') return false
+    const country = resolveAdminUserCountry(user.phone)
+    if (countries.length > 0 && !countries.includes(country)) return false
+    if (!keyword) return true
+    return [user.username, user.email, user.phone, country]
+      .some(value => (value || '').toLowerCase().includes(keyword))
+  }).length
+})
+
+function resolveAdminUserCountry(phone: string) {
+  const normalized = `+${(phone || '').replace(/^00/, '').replace(/[^0-9]/g, '')}`
+  return adminBroadcastCountryOptions
+    .slice()
+    .sort((left, right) => right.length - left.length)
+    .find(code => normalized.startsWith(code)) || ''
+}
+
+function toggleAdminBroadcastCountry(code: string) {
+  const index = broadcastForm.countryCodes.indexOf(code)
+  if (index >= 0) {
+    broadcastForm.countryCodes.splice(index, 1)
+    return
+  }
+  broadcastForm.countryCodes.push(code)
 }
 
 function transactionStatuses(status: TransactionItem['status']) {
@@ -519,6 +723,19 @@ async function updateOrderStatus(orderId: string, status: TransactionItem['statu
     await refreshAll()
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Order update failed'
+  }
+}
+
+async function cancelOrder(orderId: string) {
+  try {
+    await cancelTransaction(orderId, {
+      reason: 'Bad card',
+      notifyCustomer: true
+    })
+    notice.value = 'Order canceled.'
+    await refreshAll()
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Order cancellation failed'
   }
 }
 
@@ -744,6 +961,18 @@ async function assignConversation(conversationId: string) {
   margin-bottom: 14rpx;
 }
 
+.bonus-config-card {
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid #eef1f3;
+}
+
+.bonus-config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
+  margin-bottom: 12rpx;
+}
+
 .status-pill.danger,
 .danger-action {
   color: #d64242;
@@ -756,5 +985,11 @@ async function assignConversation(conversationId: string) {
   text-align: center;
   font-size: 24rpx;
   color: #5d646d;
+}
+
+@media (max-width: 760px) {
+  .bonus-config-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

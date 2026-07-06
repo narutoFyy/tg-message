@@ -12,6 +12,10 @@ public record TransactionItem(
     String friendshipId,
     String note,
     String voucherImageUrl,
+    String cancelReason,
+    String cancelNote,
+    String canceledBy,
+    String canceledAt,
     String createdAt,
     String updatedAt
 ) {

@@ -29,6 +29,7 @@ public class BalanceService {
     private final TradeOrderRepository tradeOrderRepository;
     private final WithdrawalRequestRepository withdrawalRequestRepository;
     private final ReferralRewardService referralRewardService;
+    private final RegistrationBonusService registrationBonusService;
 
     public BalanceService(
         CurrentUserService currentUserService,
@@ -36,7 +37,8 @@ public class BalanceService {
         SupportConversationRepository supportConversationRepository,
         TradeOrderRepository tradeOrderRepository,
         WithdrawalRequestRepository withdrawalRequestRepository,
-        ReferralRewardService referralRewardService
+        ReferralRewardService referralRewardService,
+        RegistrationBonusService registrationBonusService
     ) {
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
@@ -44,6 +46,7 @@ public class BalanceService {
         this.tradeOrderRepository = tradeOrderRepository;
         this.withdrawalRequestRepository = withdrawalRequestRepository;
         this.referralRewardService = referralRewardService;
+        this.registrationBonusService = registrationBonusService;
     }
 
     public BalanceSummary summary() {
@@ -87,8 +90,9 @@ public class BalanceService {
             .map(withdrawal -> amountFromText(withdrawal.getAmount()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal rewards = referralRewardService.availableRewardsForUsers(userIds);
+        BigDecimal registrationBonuses = registrationBonusService.availableBonusesForUsers(userIds);
 
-        BigDecimal available = completed.add(rewards).subtract(withdrawn).max(BigDecimal.ZERO);
+        BigDecimal available = completed.add(rewards).add(registrationBonuses).subtract(withdrawn).max(BigDecimal.ZERO);
         return new BalanceSummary(scope, money(available), money(pending), money(withdrawn), users.size());
     }
 

@@ -29,6 +29,7 @@ public class PersistentTransactionService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final Set<String> ALLOWED_STATUSES = Set.of("pending", "processing", "completed", "disputed");
+    private static final Set<String> CANCELABLE_STATUSES = Set.of("PENDING", "PROCESSING");
 
     private final TradeOrderRepository tradeOrderRepository;
     private final CurrentUserService currentUserService;
@@ -219,9 +220,54 @@ public class PersistentTransactionService {
             order.getFriendship() == null ? "" : order.getFriendship().getId(),
             order.getNote() == null ? "" : order.getNote(),
             order.getVoucherImageUrl() == null ? "" : order.getVoucherImageUrl(),
+            order.getCancelReason() == null ? "" : order.getCancelReason(),
+            order.getCancelNote() == null ? "" : order.getCancelNote(),
+            order.getCanceledByUser() == null ? "" : order.getCanceledByUser().getUsername(),
+            order.getCanceledAt() == null ? "" : TIME_FORMATTER.format(order.getCanceledAt()),
             TIME_FORMATTER.format(order.getCreatedAt()),
             TIME_FORMATTER.format(order.getUpdatedAt())
         );
+    }
+
+    @Transactional
+    public TransactionItem cancelTransaction(String transactionId, String reason, String note, Boolean notifyCustomer) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        currentUserService.requireAgentOrAdmin(currentUser);
+
+        TradeOrderEntity order = tradeOrderRepository.findById(transactionId)
+            .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+
+        if (!canAccess(order, currentUser)) {
+            throw new IllegalArgumentException("Transaction not accessible");
+        }
+        if (!CANCELABLE_STATUSES.contains(order.getStatusCode().toUpperCase())) {
+            throw new IllegalArgumentException("Only pending or processing orders can be canceled");
+        }
+
+        String normalizedReason = requireReason(reason);
+        String normalizedNote = normalizeCancelNote(note);
+        order.setStatusCode("CANCELED");
+        order.setCancelReason(normalizedReason);
+        order.setCancelNote(normalizedNote);
+        order.setCanceledByUser(currentUser);
+        order.setCanceledAt(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
+        TradeOrderEntity saved = tradeOrderRepository.save(order);
+
+        if (notifyCustomer == null || notifyCustomer) {
+            SupportConversationEntity conversation = persistentSupportService.ensureUserConversation(order.getOwnerUser());
+            if (conversation != null) {
+                persistentSupportService.appendSystemMessage(
+                    conversation,
+                    "Order %s was canceled. Reason: %s%s".formatted(
+                        saved.getOrderNo(),
+                        normalizedReason,
+                        normalizedNote.isBlank() ? "" : ". Note: " + normalizedNote
+                    )
+                );
+            }
+        }
+        return toTransactionItem(saved, currentUser.getId());
     }
 
     private boolean canAccess(TradeOrderEntity order, UserEntity currentUser) {
@@ -261,7 +307,7 @@ public class PersistentTransactionService {
         boolean valid = switch (current) {
             case "pending" -> nextStatus.equals("processing") || nextStatus.equals("completed") || nextStatus.equals("disputed");
             case "processing" -> nextStatus.equals("completed") || nextStatus.equals("disputed");
-            case "completed", "disputed" -> false;
+            case "completed", "disputed", "canceled" -> false;
             default -> false;
         };
 
@@ -301,6 +347,22 @@ public class PersistentTransactionService {
 
     private String normalizeNullable(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String requireReason(String reason) {
+        if (!StringUtils.hasText(reason)) {
+            throw new IllegalArgumentException("Cancel reason is required");
+        }
+        String normalized = reason.trim();
+        return normalized.length() > 64 ? normalized.substring(0, 64) : normalized;
+    }
+
+    private String normalizeCancelNote(String note) {
+        if (!StringUtils.hasText(note)) {
+            return "";
+        }
+        String normalized = note.trim();
+        return normalized.length() > 255 ? normalized.substring(0, 255) : normalized;
     }
 
     private String formatFaceValue(double faceValue, String cardCountry, int quantity) {

@@ -29,6 +29,7 @@ public class PersistentAccountService {
     private final ObjectProvider<HttpServletRequest> requestProvider;
     private final AccountProfileService accountProfileService;
     private final ReferralRewardService referralRewardService;
+    private final RegistrationBonusService registrationBonusService;
 
     public PersistentAccountService(
         UserRepository userRepository,
@@ -39,7 +40,8 @@ public class PersistentAccountService {
         LoginRateLimitService loginRateLimitService,
         ObjectProvider<HttpServletRequest> requestProvider,
         AccountProfileService accountProfileService,
-        ReferralRewardService referralRewardService
+        ReferralRewardService referralRewardService,
+        RegistrationBonusService registrationBonusService
     ) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
@@ -50,6 +52,7 @@ public class PersistentAccountService {
         this.requestProvider = requestProvider;
         this.accountProfileService = accountProfileService;
         this.referralRewardService = referralRewardService;
+        this.registrationBonusService = registrationBonusService;
     }
 
     public Optional<UserEntity> findByUsername(String username) {
@@ -133,6 +136,7 @@ public class PersistentAccountService {
     public LoginResponse registerAndLogin(RegisterRequest request) {
         UserEntity user = register(request);
         referralRewardService.rewardRegistration(user);
+        registrationBonusService.awardRegistrationBonus(user);
         handleUserAccessEvent(user, "REGISTER", "New user registered", "User " + user.getUsername() + " registered.");
         return accountProfileService.toSession(user);
     }

@@ -3,9 +3,11 @@ package com.cardnova.giftchat;
 import com.cardnova.giftchat.api.ForbiddenException;
 import com.cardnova.giftchat.config.AuthSafetyConfig;
 import com.cardnova.giftchat.entity.UserEntity;
+import com.cardnova.giftchat.repository.RegistrationBonusRecordRepository;
 import com.cardnova.giftchat.repository.ReferralRewardRepository;
 import com.cardnova.giftchat.repository.UserRepository;
 import com.cardnova.giftchat.service.ReferralRewardService;
+import com.cardnova.giftchat.service.RegistrationBonusService;
 import com.cardnova.giftchat.service.WebSocketChannelAuthorizationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,7 +59,13 @@ class GiftChatServerApplicationTests {
     private ReferralRewardService referralRewardService;
 
     @Autowired
+    private RegistrationBonusService registrationBonusService;
+
+    @Autowired
     private ReferralRewardRepository referralRewardRepository;
+
+    @Autowired
+    private RegistrationBonusRecordRepository registrationBonusRecordRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -1051,6 +1059,143 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void registrationBonusUsesPhoneCountryCodeAndIsIdempotent() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String username = "bonus_in_" + suffix;
+        String token = registerPhoneToken(username, "+91 90000 " + suffix.substring(0, 4));
+
+        mockMvc.perform(get("/api/account/registration-bonus")
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.username").value(username))
+            .andExpect(jsonPath("$.data.countryCode").value("+91"))
+            .andExpect(jsonPath("$.data.bonusAmount").value("2.00"))
+            .andExpect(jsonPath("$.data.status").value("available"));
+
+        UserEntity user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new AssertionError("Registered bonus user missing"));
+        registrationBonusService.awardRegistrationBonus(user);
+        registrationBonusService.awardRegistrationBonus(user);
+
+        assertEquals(1, registrationBonusRecordRepository.countByUser_Id(user.getId()));
+    }
+
+    @Test
+    void adminCanBroadcastByPhoneCountryCode() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String indiaUsername = "india_broadcast_" + suffix;
+        String indiaToken = registerPhoneToken(indiaUsername, "+91 91111 " + suffix.substring(0, 4));
+        String adminToken = loginToken("admin_mia");
+        String giftHunterToken = loginToken("gift_hunter");
+        String message = "India rate window " + suffix;
+
+        mockMvc.perform(post("/api/broadcasts")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "scope": "all",
+                      "content": "%s",
+                      "messageType": "text",
+                      "countryCodes": ["+91"]
+                    }
+                    """.formatted(message)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.countryCodes").value("+91"))
+            .andExpect(jsonPath("$.data.deliveredCount").value(greaterThanOrEqualTo(1)));
+
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(indiaToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString(message)));
+
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(giftHunterToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString(message))));
+    }
+
+    @Test
+    void duplicateBankAccountsAppearInAdminRiskList() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String firstUsername = "risk_a_" + suffix;
+        String secondUsername = "risk_b_" + suffix;
+        String firstToken = registerPhoneToken(firstUsername, "+234 701 " + suffix.substring(0, 4));
+        String secondToken = registerPhoneToken(secondUsername, "+233 241 " + suffix.substring(0, 4));
+        String adminToken = loginToken("admin_mia");
+        String accountNumber = "445566" + suffix.substring(0, 4);
+
+        createWithdrawal(firstToken, "Risk Alpha", accountNumber);
+        createWithdrawal(secondToken, "Risk Beta", accountNumber);
+
+        mockMvc.perform(get("/api/admin/bank-account-risks")
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[?(@.username == '%s' && @.riskLevel == 'high')]".formatted(firstUsername)).exists())
+            .andExpect(jsonPath("$.data[?(@.username == '%s' && @.riskLevel == 'high')]".formatted(secondUsername)).exists())
+            .andExpect(content().string(containsString("Duplicate bank account number")))
+            .andExpect(content().string(containsString("****" + accountNumber.substring(accountNumber.length() - 4))));
+    }
+
+    @Test
+    void supportAgentCanCancelOwnCustomerOrderWithReason() throws Exception {
+        String userToken = loginToken("cardnova_user");
+        String agentToken = loginToken("support_luna");
+        String otherAgentToken = loginToken("support_angela");
+
+        MvcResult createResult = mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Apple(itunes)",
+                      "cardCountry": "US",
+                      "settlementCountry": "NG",
+                      "faceValue": 20,
+                      "quantity": 1,
+                      "rate": "1$ ≈ ₦1051.75",
+                      "settlementAmount": "₦21035",
+                      "cardType": "Digital",
+                      "speed": "Fast",
+                      "cardData": "bad-code-demo",
+                      "sendChatMessage": false
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("pending"))
+            .andReturn();
+        String orderId = objectMapper.readTree(createResult.getResponse().getContentAsString()).at("/data/id").asText();
+
+        mockMvc.perform(post("/api/transactions/%s/cancel".formatted(orderId))
+                .header("Authorization", bearer(otherAgentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "reason": "Bad card"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Transaction not accessible"));
+
+        mockMvc.perform(post("/api/transactions/%s/cancel".formatted(orderId))
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "reason": "Bad card",
+                      "note": "Unreadable code",
+                      "notifyCustomer": true
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("canceled"))
+            .andExpect(jsonPath("$.data.cancelReason").value("Bad card"))
+            .andExpect(jsonPath("$.data.cancelNote").value("Unreadable code"))
+            .andExpect(jsonPath("$.data.canceledBy").value("support_luna"))
+            .andExpect(jsonPath("$.data.canceledAt").isString());
+    }
+
+    @Test
     void agentBroadcastsToAssignedCustomers() throws Exception {
         String agentToken = loginToken("support_luna");
         String user1Token = loginToken("cardnova_user");
@@ -1583,6 +1728,41 @@ class GiftChatServerApplicationTests {
 
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
         return root.path("data").path("accessToken").asText();
+    }
+
+    private String registerPhoneToken(String username, String phone) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "username": "%s",
+                      "phone": "%s",
+                      "password": "demo12345"
+                    }
+                    """.formatted(username, phone)))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
+        return root.path("data").path("accessToken").asText();
+    }
+
+    private void createWithdrawal(String token, String accountName, String accountNumber) throws Exception {
+        mockMvc.perform(post("/api/withdrawals")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "amount": "₦10000",
+                      "country": "Nigeria",
+                      "accountName": "%s",
+                      "bankName": "Duplicate Risk Bank",
+                      "accountNumber": "%s",
+                      "contact": "risk-contact",
+                      "sendChatMessage": false
+                    }
+                    """.formatted(accountName, accountNumber)))
+            .andExpect(status().isOk());
     }
 
     private String bearer(String token) {

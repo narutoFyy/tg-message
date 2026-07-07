@@ -23,12 +23,12 @@ public class CorsConfig {
                 registry.addMapping("/api/**")
                     .allowedOriginPatterns(trimmedOrigins())
                     .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                    .allowedHeaders("*");
+                    .allowedHeaders("Content-Type", "Authorization");
 
                 registry.addMapping("/uploads/**")
                     .allowedOriginPatterns(trimmedOrigins())
                     .allowedMethods("GET", "OPTIONS")
-                    .allowedHeaders("*");
+                    .allowedHeaders("Content-Type", "Authorization");
             }
         };
     }

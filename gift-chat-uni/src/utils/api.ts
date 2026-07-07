@@ -143,11 +143,15 @@ export function setStoredSessionUser(user?: SessionUser | null) {
 }
 
 export function buildChatSocketUrl(channelType: 'friend' | 'support', channelId: string) {
+  return `${resolveWsBase(WS_BASE_URL)}/chat/${channelType}/${channelId}`
+}
+
+export function buildChatSocketAuthMessage() {
   const token = getAccessToken()
   if (!token) {
     throw new Error('Missing access token')
   }
-  return `${resolveWsBase(WS_BASE_URL)}/chat/${channelType}/${channelId}?token=${encodeURIComponent(token)}`
+  return JSON.stringify({ type: 'auth', token })
 }
 
 export function fetchRates() {

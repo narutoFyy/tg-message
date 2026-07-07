@@ -14,3 +14,6 @@ spring:
 app:
   auth:
     demo-fallback: false
+  login-rate-limit:
+    redis:
+      enabled: ${APP_LOGIN_RATE_LIMIT_REDIS_ENABLED:true}

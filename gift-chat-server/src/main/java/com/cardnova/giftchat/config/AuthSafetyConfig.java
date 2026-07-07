@@ -17,6 +17,7 @@ public class AuthSafetyConfig {
     private static final int MIN_PRODUCTION_JWT_SECRET_LENGTH = 32;
     private static final Set<String> FORBIDDEN_PRODUCTION_JWT_SECRETS = Set.of(
         DEFAULT_JWT_SECRET,
+        "dev-only-local-jwt-secret-please-do-not-use-in-production",
         "replace-with-a-long-random-secret",
         "replace-with-your-jwt-secret"
     );
@@ -60,6 +61,8 @@ public class AuthSafetyConfig {
             || jwtSecret.length() < MIN_PRODUCTION_JWT_SECRET_LENGTH
             || FORBIDDEN_PRODUCTION_JWT_SECRETS.contains(normalized)
             || normalized.contains("change-me")
+            || normalized.contains("dev-only")
+            || normalized.contains("local")
             || normalized.contains("replace-with")) {
             throw new IllegalStateException("APP_AUTH_JWT_SECRET must be a strong non-placeholder value outside dev/test");
         }

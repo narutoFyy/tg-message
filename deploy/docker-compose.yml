@@ -24,11 +24,11 @@ services:
     image: redis:7.2-alpine
     container_name: gift-chat-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -58,6 +58,7 @@ services:
       APP_UPLOAD_PUBLIC_BASE_URL: ${APP_UPLOAD_PUBLIC_BASE_URL}
       APP_REALTIME_REDIS_ENABLED: ${APP_REALTIME_REDIS_ENABLED:-true}
       APP_REALTIME_REDIS_CHANNEL: ${APP_REALTIME_REDIS_CHANNEL:-gift-chat:realtime}
+      APP_LOGIN_RATE_LIMIT_REDIS_ENABLED: ${APP_LOGIN_RATE_LIMIT_REDIS_ENABLED:-true}
       APP_VIDEO_VENDOR: ${APP_VIDEO_VENDOR:-trtc}
       APP_VIDEO_TRTC_SDK_APP_ID: ${APP_VIDEO_TRTC_SDK_APP_ID:-}
       APP_VIDEO_TRTC_SECRET_KEY: ${APP_VIDEO_TRTC_SECRET_KEY:-}
@@ -69,6 +70,7 @@ services:
       APP_TENCENT_CHAT_ADMIN_USER_SIG: ${APP_TENCENT_CHAT_ADMIN_USER_SIG:-}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - upload-data:/var/lib/gift-chat/uploads
     expose:

@@ -1,5 +1,5 @@
 import type { ChatRealtimePayload } from '@/types'
-import { buildChatSocketUrl } from '@/utils/api'
+import { buildChatSocketAuthMessage, buildChatSocketUrl } from '@/utils/api'
 
 type SocketCloseOptions = Parameters<UniApp.SocketTask['close']>[0]
 type ManagedSocket = Pick<UniApp.SocketTask, 'close'>
@@ -81,12 +81,14 @@ export function connectChatSocket(
     }
 
     socketTask.onOpen(() => {
-      attempt = 0
-      startHeartbeat()
-      options.onOpen?.()
+      sendSocketAuth()
     })
 
     socketTask.onMessage((event: { data: string }) => {
+      if (isAuthOk(event.data)) {
+        markAuthenticated()
+        return
+      }
       if (isPong(event.data)) {
         recordPong()
         return
@@ -116,12 +118,14 @@ export function connectChatSocket(
     webSocket = socket
 
     socket.onopen = () => {
-      attempt = 0
-      startHeartbeat()
-      options.onOpen?.()
+      sendSocketAuth()
     }
 
     socket.onmessage = (event) => {
+      if (isAuthOk(event.data)) {
+        markAuthenticated()
+        return
+      }
       if (isPong(event.data)) {
         recordPong()
         return
@@ -154,6 +158,29 @@ export function connectChatSocket(
     heartbeatTimer = setInterval(() => {
       sendHeartbeat()
     }, HEARTBEAT_INTERVAL_MS)
+  }
+
+  const sendSocketAuth = () => {
+    try {
+      const authMessage = buildChatSocketAuthMessage()
+      if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+        webSocket.send(authMessage)
+        return
+      }
+
+      if (socketTask && typeof socketTask.send === 'function') {
+        socketTask.send({ data: authMessage })
+      }
+    } catch {
+      options.onError?.()
+      closeForReconnect()
+    }
+  }
+
+  const markAuthenticated = () => {
+    attempt = 0
+    startHeartbeat()
+    options.onOpen?.()
   }
 
   const stopHeartbeat = () => {
@@ -247,6 +274,15 @@ function useNativeWebSocket() {
 
 function isPong(data: unknown) {
   return String(data).trim().toLowerCase() === 'pong'
+}
+
+function isAuthOk(data: unknown) {
+  try {
+    const payload = JSON.parse(String(data)) as { type?: string }
+    return payload.type === 'auth_ok'
+  } catch {
+    return false
+  }
 }
 
 function handleMessage(data: unknown, onMessage?: (message: ChatRealtimePayload) => void) {

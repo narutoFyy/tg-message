@@ -3,6 +3,8 @@ package com.cardnova.giftchat.controller;
 import com.cardnova.giftchat.api.ApiResponse;
 import com.cardnova.giftchat.dto.AssignSupportConversationRequest;
 import com.cardnova.giftchat.dto.CreateAgentRequest;
+import com.cardnova.giftchat.dto.ResetLotteryEligibilityRequest;
+import com.cardnova.giftchat.dto.UpdateLotteryRecordStatusRequest;
 import com.cardnova.giftchat.dto.UpdateRegistrationBonusConfigRequest;
 import com.cardnova.giftchat.dto.UpdateReferralRewardConfigRequest;
 import com.cardnova.giftchat.dto.UpdateUserStatusRequest;
@@ -10,6 +12,7 @@ import com.cardnova.giftchat.model.AdminDirectConversation;
 import com.cardnova.giftchat.model.AdminUserItem;
 import com.cardnova.giftchat.model.AgentItem;
 import com.cardnova.giftchat.model.BankAccountRiskMatch;
+import com.cardnova.giftchat.model.LotteryRecordItem;
 import com.cardnova.giftchat.model.ReferralRewardConfigItem;
 import com.cardnova.giftchat.model.ReferralRewardItem;
 import com.cardnova.giftchat.model.RegistrationBonusConfigItem;
@@ -18,6 +21,7 @@ import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.service.AdminService;
 import com.cardnova.giftchat.service.BankAccountRiskService;
 import com.cardnova.giftchat.service.CurrentUserService;
+import com.cardnova.giftchat.service.LotteryService;
 import com.cardnova.giftchat.service.ReferralRewardService;
 import com.cardnova.giftchat.service.RegistrationBonusService;
 import jakarta.validation.Valid;
@@ -40,19 +44,22 @@ public class AdminController {
     private final RegistrationBonusService registrationBonusService;
     private final BankAccountRiskService bankAccountRiskService;
     private final CurrentUserService currentUserService;
+    private final LotteryService lotteryService;
 
     public AdminController(
         AdminService adminService,
         ReferralRewardService referralRewardService,
         RegistrationBonusService registrationBonusService,
         BankAccountRiskService bankAccountRiskService,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        LotteryService lotteryService
     ) {
         this.adminService = adminService;
         this.referralRewardService = referralRewardService;
         this.registrationBonusService = registrationBonusService;
         this.bankAccountRiskService = bankAccountRiskService;
         this.currentUserService = currentUserService;
+        this.lotteryService = lotteryService;
     }
 
     @GetMapping("/users")
@@ -135,5 +142,26 @@ public class AdminController {
         var currentUser = currentUserService.getCurrentUser();
         currentUserService.requireAdmin(currentUser);
         return ApiResponse.success(bankAccountRiskService.allPlatformMatches(currentUser));
+    }
+
+    @GetMapping("/lottery/records")
+    public ApiResponse<List<LotteryRecordItem>> lotteryRecords() {
+        return ApiResponse.success(lotteryService.adminRecords());
+    }
+
+    @PostMapping("/lottery/records/{recordId}/status")
+    public ApiResponse<LotteryRecordItem> updateLotteryRecordStatus(
+        @PathVariable String recordId,
+        @Valid @RequestBody UpdateLotteryRecordStatusRequest request
+    ) {
+        return ApiResponse.success("lottery_record_status_updated", lotteryService.updateRecordStatus(recordId, request.status()));
+    }
+
+    @PostMapping("/lottery/users/{userId}/reset")
+    public ApiResponse<Boolean> resetLotteryEligibility(
+        @PathVariable String userId,
+        @Valid @RequestBody ResetLotteryEligibilityRequest request
+    ) {
+        return ApiResponse.success("lottery_eligibility_reset", lotteryService.resetUserEligibility(userId, request.reason()));
     }
 }

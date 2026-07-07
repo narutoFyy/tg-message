@@ -10,6 +10,7 @@ import com.cardnova.giftchat.model.AdminUserItem;
 import com.cardnova.giftchat.model.AgentItem;
 import com.cardnova.giftchat.model.ChatMessage;
 import com.cardnova.giftchat.model.SupportConversation;
+import com.cardnova.giftchat.model.VipSummary;
 import com.cardnova.giftchat.repository.BlacklistEntryRepository;
 import com.cardnova.giftchat.repository.DirectMessageRepository;
 import com.cardnova.giftchat.repository.FriendshipRepository;
@@ -39,6 +40,7 @@ public class AdminService {
     private final PersistentSupportService persistentSupportService;
     private final CurrentUserService currentUserService;
     private final PasswordService passwordService;
+    private final VipService vipService;
 
     public AdminService(
         UserRepository userRepository,
@@ -48,7 +50,8 @@ public class AdminService {
         SupportConversationRepository supportConversationRepository,
         PersistentSupportService persistentSupportService,
         CurrentUserService currentUserService,
-        PasswordService passwordService
+        PasswordService passwordService,
+        VipService vipService
     ) {
         this.userRepository = userRepository;
         this.blacklistEntryRepository = blacklistEntryRepository;
@@ -58,21 +61,13 @@ public class AdminService {
         this.persistentSupportService = persistentSupportService;
         this.currentUserService = currentUserService;
         this.passwordService = passwordService;
+        this.vipService = vipService;
     }
 
     public List<AdminUserItem> users() {
         requireAdmin();
         return userRepository.findAll().stream()
-            .map(user -> new AdminUserItem(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail() == null ? "" : user.getEmail(),
-                user.getPhone() == null ? "" : user.getPhone(),
-                user.getRoleCode(),
-                user.getStatusCode(),
-                blacklistEntryRepository.existsByBlockedUser_Id(user.getId()),
-                USER_TIME_FORMATTER.format(user.getCreatedAt())
-            ))
+            .map(this::toAdminUserItem)
             .toList();
     }
 
@@ -193,6 +188,22 @@ public class AdminService {
             directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendship.getId()).stream()
                 .map(this::toAdminChatMessage)
                 .toList()
+        );
+    }
+
+    private AdminUserItem toAdminUserItem(UserEntity user) {
+        VipSummary vip = vipService.summaryForUser(user.getId());
+        return new AdminUserItem(
+            user.getId(),
+            user.getUsername(),
+            user.getEmail() == null ? "" : user.getEmail(),
+            user.getPhone() == null ? "" : user.getPhone(),
+            user.getRoleCode(),
+            user.getStatusCode(),
+            blacklistEntryRepository.existsByBlockedUser_Id(user.getId()),
+            vip.level(),
+            vip.points(),
+            USER_TIME_FORMATTER.format(user.getCreatedAt())
         );
     }
 

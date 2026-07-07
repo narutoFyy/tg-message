@@ -6,7 +6,11 @@ import type {
   CountryOption,
   FriendProfile,
   FriendRequest,
+  HiddenRecordItem,
   LoanApplicationItem,
+  LotteryDrawResult,
+  LotteryEligibility,
+  LotteryWinnerItem,
   RankingBoard,
   RateItem,
   RegistrationBonusRecordItem,
@@ -15,11 +19,14 @@ import type {
   SellOrderPayload,
   SupportConversationItem,
   SupportCustomerProfile,
+  SupportCustomerSearchResult,
   SupportLedgerReport,
+  SupportMessageSearchResult,
   TransactionItem,
   VideoSessionBootstrap,
   VideoSessionStatusEvent,
   VideoSessionItem,
+  VipSummary,
   WithdrawalItem
 } from '@/types'
 import {
@@ -45,6 +52,9 @@ import {
   fetchFriendRequests,
   fetchFriends,
   fetchCurrentAccount,
+  fetchHiddenRecords,
+  fetchLotteryEligibility,
+  fetchLotteryWinners,
   fetchMyRegistrationBonus,
   fetchLoans,
   fetchRanking,
@@ -56,7 +66,9 @@ import {
   fetchVideoSessionBootstrap,
   fetchVideoSessions,
   fetchWithdrawals,
+  fetchVipSummary,
   getStoredSessionUser,
+  hideAccountRecord,
   loginWithPassword,
   logoutSession,
   registerAccount,
@@ -66,6 +78,9 @@ import {
   setStoredSessionUser,
   sendDirectMessage,
   sendSupportMessage,
+  searchSupportCustomers as searchSupportCustomersRequest,
+  searchSupportMessages as searchSupportMessagesRequest,
+  spinLottery as spinLotteryRequest,
   syncFriendMessages,
   syncSupportMessages,
   updateLoanStatus as updateLoanStatusRequest,
@@ -99,6 +114,12 @@ const state = reactive({
   supportUnreadCount: 0,
   supportConversations: [] as SupportConversationItem[],
   transactions: [] as TransactionItem[],
+  vipSummary: null as VipSummary | null,
+  lotteryEligibility: null as LotteryEligibility | null,
+  lotteryWinners: [] as LotteryWinnerItem[],
+  hiddenRecords: [] as HiddenRecordItem[],
+  supportCustomerSearchResults: [] as SupportCustomerSearchResult[],
+  supportMessageSearchResults: [] as SupportMessageSearchResult[],
   withdrawals: [] as WithdrawalItem[],
   loans: [] as LoanApplicationItem[],
   broadcasts: [] as BroadcastItem[],
@@ -347,7 +368,22 @@ export function useAppStore() {
     try {
       const previousActiveFriend = state.activeFriendUsername
       const previousSupportConversationId = state.supportConversationId
-      const [rates, friends, blacklist, support, transactions, friendRequests, withdrawals, loans, videoSessions, registrationBonus] = await Promise.all([
+      const [
+        rates,
+        friends,
+        blacklist,
+        support,
+        transactions,
+        friendRequests,
+        withdrawals,
+        loans,
+        videoSessions,
+        registrationBonus,
+        vipSummary,
+        lotteryEligibility,
+        lotteryWinners,
+        hiddenRecords
+      ] = await Promise.all([
         fetchRates(),
         fetchFriends(),
         fetchBlacklist(),
@@ -357,7 +393,11 @@ export function useAppStore() {
         fetchWithdrawals(),
         fetchLoans(),
         fetchVideoSessions(),
-        fetchMyRegistrationBonus()
+        fetchMyRegistrationBonus(),
+        fetchVipSummary(),
+        fetchLotteryEligibility(),
+        fetchLotteryWinners(),
+        fetchHiddenRecords()
       ])
 
       const normalizedFriends = friends.map(normalizeFriendProfile)
@@ -373,6 +413,10 @@ export function useAppStore() {
       state.loans = loans
       state.videoSessions = videoSessions
       state.registrationBonusRecord = registrationBonus
+      state.vipSummary = vipSummary
+      state.lotteryEligibility = lotteryEligibility
+      state.lotteryWinners = lotteryWinners
+      state.hiddenRecords = hiddenRecords
       state.friendRequests = friendRequests
       refreshBalanceSummary().catch(() => {})
       refreshSupportLedger().catch(() => {})
@@ -475,6 +519,12 @@ export function useAppStore() {
       state.friendRequests = []
       state.friendSearchResults = []
       state.supportLedger = null
+      state.vipSummary = null
+      state.lotteryEligibility = null
+      state.lotteryWinners = []
+      state.hiddenRecords = []
+      state.supportCustomerSearchResults = []
+      state.supportMessageSearchResults = []
       state.activeSupportCustomerProfile = null
       state.supportCustomerProfileCache = {}
       setSessionToken(undefined)
@@ -901,6 +951,78 @@ export function useAppStore() {
     return record
   }
 
+  async function refreshVipSummary() {
+    const summary = await fetchVipSummary()
+    state.vipSummary = summary
+    return summary
+  }
+
+  async function refreshLotteryEligibility() {
+    const eligibility = await fetchLotteryEligibility()
+    state.lotteryEligibility = eligibility
+    return eligibility
+  }
+
+  async function refreshLotteryWinners() {
+    const winners = await fetchLotteryWinners()
+    state.lotteryWinners = winners
+    return winners
+  }
+
+  async function spinLottery(prizeName?: string) {
+    const result: LotteryDrawResult = await spinLotteryRequest(prizeName)
+    state.lotteryEligibility = result.eligibility
+    await refreshLotteryWinners().catch(() => [])
+    return result
+  }
+
+  async function searchSupportCustomers(keyword: string) {
+    const results = await searchSupportCustomersRequest(keyword)
+    state.supportCustomerSearchResults = results
+    return results
+  }
+
+  async function searchSupportMessages(keyword: string) {
+    const results = await searchSupportMessagesRequest(keyword)
+    state.supportMessageSearchResults = results
+    return results
+  }
+
+  function clearSupportSearchResults() {
+    state.supportCustomerSearchResults = []
+    state.supportMessageSearchResults = []
+  }
+
+  async function hideRecord(payload: {
+    targetType: 'ORDER' | 'MESSAGE' | 'CONVERSATION' | 'order' | 'message' | 'conversation' | string
+    targetId: string
+    hiddenScope?: string
+  }) {
+    const hidden = await hideAccountRecord(payload)
+    state.hiddenRecords.unshift(hidden)
+    const targetType = hidden.targetType.toLowerCase()
+    if (targetType === 'order') {
+      state.transactions = state.transactions.filter((item) => item.id !== hidden.targetId)
+    }
+    if (targetType === 'message') {
+      state.supportMessages = state.supportMessages.filter((item) => item.id !== hidden.targetId)
+      state.friends.forEach((friend) => {
+        friend.messages = friend.messages.filter((item) => item.id !== hidden.targetId)
+      })
+    }
+    if (targetType === 'conversation') {
+      state.supportConversations = state.supportConversations.filter((item) => item.conversationId !== hidden.targetId)
+      state.friends = state.friends.filter((item) => item.id !== hidden.targetId)
+    }
+    return hidden
+  }
+
+  async function refreshHiddenRecords() {
+    const records = await fetchHiddenRecords()
+    state.hiddenRecords = records
+    return records
+  }
+
   async function createBroadcast(payload: {
     scope: 'own' | 'all'
     content: string
@@ -1055,6 +1177,15 @@ export function useAppStore() {
     refreshBroadcasts,
     refreshBalanceSummary,
     refreshRegistrationBonus,
+    refreshVipSummary,
+    refreshLotteryEligibility,
+    refreshLotteryWinners,
+    spinLottery,
+    searchSupportCustomers,
+    searchSupportMessages,
+    clearSupportSearchResults,
+    hideRecord,
+    refreshHiddenRecords,
     createBroadcast,
     createVideoSession,
     getVideoSessionBootstrap,

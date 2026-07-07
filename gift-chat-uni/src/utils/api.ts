@@ -9,7 +9,13 @@ import type {
   ChatMessageSync,
   FriendProfile,
   FriendRequest,
+  HiddenRecordItem,
   LoanApplicationItem,
+  LotteryDrawResult,
+  LotteryEligibility,
+  LotteryPrizeItem,
+  LotteryRecordItem,
+  LotteryWinnerItem,
   NotificationItem,
   PushDeviceItem,
   ReferralRewardConfigItem,
@@ -23,11 +29,14 @@ import type {
   SellOrderPayload,
   SupportConversationItem,
   SupportCustomerProfile,
+  SupportCustomerSearchResult,
   SupportLedgerReport,
+  SupportMessageSearchResult,
   TransactionItem,
   UploadAsset,
   VideoSessionBootstrap,
   VideoSessionItem,
+  VipSummary,
   WithdrawalItem
 } from '@/types'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
@@ -478,6 +487,58 @@ export function fetchAdminBankAccountRisks() {
 
 export function fetchMyRegistrationBonus() {
   return request<RegistrationBonusRecordItem | null>('/account/registration-bonus')
+}
+
+export function fetchVipSummary() {
+  return request<VipSummary>('/vip/me')
+}
+
+export function fetchLotteryEligibility() {
+  return request<LotteryEligibility>('/lottery/eligibility')
+}
+
+export function spinLottery(prizeName?: string) {
+  return request<LotteryDrawResult>('/lottery/spin', 'POST', prizeName ? { prizeName } : undefined)
+}
+
+export function fetchLotteryWinners() {
+  return request<LotteryWinnerItem[]>('/lottery/winners')
+}
+
+export function fetchLotteryPrizes() {
+  return request<LotteryPrizeItem[]>('/lottery/prizes')
+}
+
+export function hideAccountRecord(payload: {
+  targetType: 'ORDER' | 'MESSAGE' | 'CONVERSATION' | 'order' | 'message' | 'conversation' | string
+  targetId: string
+  hiddenScope?: string
+}) {
+  return request<HiddenRecordItem>('/account/hidden-records', 'POST', payload)
+}
+
+export function fetchHiddenRecords() {
+  return request<HiddenRecordItem[]>('/account/hidden-records')
+}
+
+export function searchSupportCustomers(keyword: string) {
+  return request<SupportCustomerSearchResult[]>(`/support/search/customers?keyword=${encodeURIComponent(keyword)}`)
+}
+
+export function searchSupportMessages(keyword: string) {
+  return request<SupportMessageSearchResult[]>(`/support/search/messages?keyword=${encodeURIComponent(keyword)}`)
+}
+
+export function fetchAdminLotteryRecords() {
+  return request<LotteryRecordItem[]>('/admin/lottery/records')
+}
+
+export function updateAdminLotteryRecordStatus(recordId: string, status: string) {
+  return request<LotteryRecordItem>(`/admin/lottery/records/${recordId}/status`, 'POST', { status })
+}
+
+export function resetAdminLotteryEligibility(userId: string, reason: string) {
+  return request<boolean>(`/admin/lottery/users/${userId}/reset`, 'POST', { reason })
 }
 
 export function sendSupportMessage(conversationId: string, payload: { content: string; messageType: string; clientMessageId?: string; replyTo?: ChatMessage['replyTo'] }) {

@@ -149,6 +149,73 @@ export interface TransactionItem {
   updatedAt: string
 }
 
+export interface VipSummary {
+  level: 'VIP1' | 'VIP2' | 'VIP3' | 'VIP4' | string
+  levelName: string
+  points: string
+  nextLevel: string
+  nextThreshold: string
+  remainingPoints: string
+  progressPercent: number
+  maxLevel: boolean
+}
+
+export interface LotteryPrizeItem {
+  id: string
+  name: string
+  prizeType: 'cash' | 'physical' | string
+  weight: number
+  imageUrl: string
+  enabled: boolean
+  sortOrder: number
+}
+
+export interface LotteryEligibility {
+  vipLevel: string
+  eligible: boolean
+  periodType: 'once' | 'week' | 'day' | string
+  periodKey: string
+  periodDrawCount: number
+  nextAvailableAt: string
+  message: string
+}
+
+export interface LotteryDrawResult {
+  eligibility: LotteryEligibility
+  prize: LotteryPrizeItem
+  recordId: string
+  drawnAt: string
+}
+
+export interface LotteryWinnerItem {
+  displayName: string
+  prizeName: string
+  drawnAt: string
+}
+
+export interface LotteryRecordItem {
+  id: string
+  username: string
+  vipLevel: string
+  prizeName: string
+  prizeType: string
+  periodType: string
+  periodKey: string
+  fulfillmentStatus: string
+  processedBy: string
+  processedAt: string
+  drawnAt: string
+}
+
+export interface HiddenRecordItem {
+  id: string
+  targetType: 'order' | 'message' | 'conversation' | string
+  targetId: string
+  hiddenScope: string
+  createdAt: string
+  restoredAt: string
+}
+
 export interface SellOrderPayload {
   cardName: string
   cardCountry: string
@@ -327,6 +394,8 @@ export interface AdminUserItem {
   role: 'USER' | 'AGENT' | 'ADMIN'
   status: string
   blacklisted: boolean
+  vipLevel: string
+  vipPoints: string
   createdAt: string
 }
 
@@ -343,6 +412,10 @@ export interface SupportConversationItem {
   conversationId: string
   customerUsername: string
   customerAvatarUrl?: string
+  customerPhone?: string
+  phoneCountryCode?: string
+  vipLevel?: string
+  vipPoints?: string
   assignmentStatus: string
   assignedAgent: string
   agentNote: string
@@ -365,6 +438,31 @@ export interface SupportCustomerInfo {
   assignedAgent: string
   createdAt: string
   updatedAt: string
+}
+
+export interface SupportCustomerSearchResult {
+  conversationId: string
+  customerUsername: string
+  displayName: string
+  phone: string
+  phoneCountryCode: string
+  email: string
+  vipLevel: string
+  vipPoints: string
+  unreadCount: number
+  lastMessageTime: string
+  online: boolean
+}
+
+export interface SupportMessageSearchResult {
+  conversationId: string
+  messageId: string
+  customerUsername: string
+  displayName: string
+  phoneCountryCode: string
+  senderRole: string
+  snippet: string
+  createdAt: string
 }
 
 export interface RegistrationBonusRecordItem {

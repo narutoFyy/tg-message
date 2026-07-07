@@ -24,7 +24,9 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -1405,6 +1407,208 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void vipPointsAreAwardedOnceWhenSellOrderCompletes() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String userToken = registerToken("vip_points_" + suffix);
+
+        MvcResult createResult = mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Apple",
+                      "cardCountry": "USA",
+                      "settlementCountry": "Nigeria",
+                      "faceValue": 25,
+                      "quantity": 2,
+                      "rate": "500",
+                      "settlementAmount": "NGN 25000",
+                      "cardType": "physical",
+                      "speed": "standard",
+                      "sendChatMessage": false
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        String orderId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+
+        for (int index = 0; index < 2; index++) {
+            mockMvc.perform(post("/api/transactions/%s/status".formatted(orderId))
+                    .header("Authorization", bearer(userToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                        {
+                          "status": "completed"
+                        }
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("completed"));
+        }
+
+        mockMvc.perform(get("/api/vip/me")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.level").value("VIP2"))
+            .andExpect(jsonPath("$.data.points").value("50"))
+            .andExpect(jsonPath("$.data.nextLevel").value("VIP3"));
+    }
+
+    @Test
+    void vipOneLotteryChanceCanOnlyBeUsedOnce() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String userToken = registerToken("lottery_once_" + suffix);
+
+        mockMvc.perform(get("/api/lottery/eligibility")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.vipLevel").value("VIP1"))
+            .andExpect(jsonPath("$.data.eligible").value(true))
+            .andExpect(jsonPath("$.data.periodType").value("ONCE"));
+
+        MvcResult spinResult = mockMvc.perform(post("/api/lottery/spin")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.eligibility.eligible").value(false))
+            .andExpect(jsonPath("$.data.recordId").isString())
+            .andReturn();
+        String prizeName = objectMapper.readTree(spinResult.getResponse().getContentAsString())
+            .path("data")
+            .path("prize")
+            .path("name")
+            .asText();
+        assertTrue(List.of("₦1000", "₦2000", "₦3000", "₦5000").contains(prizeName));
+
+        mockMvc.perform(post("/api/lottery/spin")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message", containsString("Next chance available")));
+
+        String otherUserToken = registerToken("lottery_invalid_" + suffix);
+        mockMvc.perform(post("/api/lottery/spin")
+                .header("Authorization", bearer(otherUserToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "prizeName": "₦15000"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Unsupported lottery prize"));
+    }
+
+    @Test
+    void supportSearchIsScopedAndFindsCustomersAndMessages() throws Exception {
+        String agentToken = loginToken("support_luna");
+        String otherAgentToken = loginToken("support_angela");
+
+        mockMvc.perform(get("/api/support/search/customers")
+                .param("keyword", "john")
+                .header("Authorization", bearer(agentToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[?(@.conversationId == 'support-2' && @.customerUsername == 'john_smith')]").exists());
+
+        mockMvc.perform(get("/api/support/search/messages")
+                .param("keyword", "USA $100")
+                .header("Authorization", bearer(agentToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[?(@.conversationId == 'support-2' && @.messageId == 'support-msg-6')]").exists());
+
+        mockMvc.perform(get("/api/support/search/customers")
+                .param("keyword", "john")
+                .header("Authorization", bearer(otherAgentToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data", hasSize(0)));
+    }
+
+    @Test
+    void userHiddenRecordsDoNotHideOrdersOrMessagesFromStaff() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String username = "hide_user_" + suffix;
+        String userToken = registerToken(username);
+        String adminToken = loginToken("admin_mia");
+        String uniqueMessage = "hide-message-" + suffix;
+
+        MvcResult createOrderResult = mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Steam",
+                      "cardCountry": "USA",
+                      "settlementCountry": "Nigeria",
+                      "faceValue": 10,
+                      "quantity": 1,
+                      "rate": "400",
+                      "settlementAmount": "NGN 4000",
+                      "cardType": "ecode",
+                      "speed": "fast",
+                      "sendChatMessage": false
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        String orderId = objectMapper.readTree(createOrderResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+
+        MvcResult conversationResult = mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String conversationId = objectMapper.readTree(conversationResult.getResponse().getContentAsString())
+            .at("/data/0/conversationId")
+            .asText();
+        String assignedAgent = objectMapper.readTree(conversationResult.getResponse().getContentAsString())
+            .at("/data/0/assignedAgent")
+            .asText();
+        String assignedAgentToken = loginToken(assignedAgent);
+
+        MvcResult messageResult = mockMvc.perform(post("/api/support/conversations/%s/messages".formatted(conversationId))
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "%s",
+                      "messageType": "text"
+                    }
+                    """.formatted(uniqueMessage)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String messageId = objectMapper.readTree(messageResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+
+        hideRecord(userToken, "ORDER", orderId, "ORDER");
+        hideRecord(userToken, "MESSAGE", messageId, "SINGLE");
+
+        MvcResult userOrdersResult = mockMvc.perform(get("/api/transactions")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode userOrders = objectMapper.readTree(userOrdersResult.getResponse().getContentAsString()).path("data");
+        assertFalse(containsDataId(userOrders, orderId));
+
+        MvcResult adminOrdersResult = mockMvc.perform(get("/api/transactions")
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode adminOrders = objectMapper.readTree(adminOrdersResult.getResponse().getContentAsString()).path("data");
+        assertTrue(containsDataId(adminOrders, orderId));
+
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString(uniqueMessage))));
+
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(assignedAgentToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString(uniqueMessage)));
+    }
+
+    @Test
     void loanApplicationCanBeReviewedByAdmin() throws Exception {
         String user1Token = loginToken("cardnova_user");
         String adminToken = loginToken("admin_mia");
@@ -1763,6 +1967,32 @@ class GiftChatServerApplicationTests {
                     }
                     """.formatted(accountName, accountNumber)))
             .andExpect(status().isOk());
+    }
+
+    private void hideRecord(String token, String targetType, String targetId, String hiddenScope) throws Exception {
+        mockMvc.perform(post("/api/account/hidden-records")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "targetType": "%s",
+                      "targetId": "%s",
+                      "hiddenScope": "%s"
+                    }
+                    """.formatted(targetType, targetId, hiddenScope)))
+            .andExpect(status().isOk());
+    }
+
+    private boolean containsDataId(JsonNode array, String id) {
+        if (array == null || !array.isArray()) {
+            return false;
+        }
+        for (JsonNode item : array) {
+            if (id.equals(item.path("id").asText())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String bearer(String token) {

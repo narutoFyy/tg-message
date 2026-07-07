@@ -39,6 +39,10 @@ public class PersistentSupportService {
     private final UserRepository userRepository;
     private final MessageAttachmentService messageAttachmentService;
     private final TranslationService translationService;
+    private final PhoneCountryCodeResolver phoneCountryCodeResolver;
+    private final RegistrationBonusService registrationBonusService;
+    private final VipService vipService;
+    private final UserHiddenRecordService userHiddenRecordService;
 
     public PersistentSupportService(
         SupportConversationRepository supportConversationRepository,
@@ -51,7 +55,11 @@ public class PersistentSupportService {
         UserPresenceService userPresenceService,
         UserRepository userRepository,
         MessageAttachmentService messageAttachmentService,
-        TranslationService translationService
+        TranslationService translationService,
+        PhoneCountryCodeResolver phoneCountryCodeResolver,
+        RegistrationBonusService registrationBonusService,
+        VipService vipService,
+        UserHiddenRecordService userHiddenRecordService
     ) {
         this.supportConversationRepository = supportConversationRepository;
         this.supportMessageRepository = supportMessageRepository;
@@ -64,6 +72,10 @@ public class PersistentSupportService {
         this.userRepository = userRepository;
         this.messageAttachmentService = messageAttachmentService;
         this.translationService = translationService;
+        this.phoneCountryCodeResolver = phoneCountryCodeResolver;
+        this.registrationBonusService = registrationBonusService;
+        this.vipService = vipService;
+        this.userHiddenRecordService = userHiddenRecordService;
     }
 
     @Transactional
@@ -72,6 +84,7 @@ public class PersistentSupportService {
         ensureUserConversation(currentUser);
 
         return conversationsFor(currentUser).stream()
+            .filter(conversation -> shouldShowConversation(conversation, currentUser))
             .map(this::toSupportConversation)
             .toList();
     }
@@ -130,17 +143,26 @@ public class PersistentSupportService {
             .map(SupportMessageEntity::getCreatedAt)
             .max(LocalDateTime::compareTo)
             .orElse(conversation.getUpdatedAt());
+        java.util.Set<String> hiddenMessageIds = hiddenMessageIds(currentUser, messages.stream().map(SupportMessageEntity::getId).toList());
+        java.util.List<SupportMessageEntity> visibleMessages = messages.stream()
+            .filter(message -> !hiddenMessageIds.contains(message.getId()))
+            .toList();
+
         return new SupportConversation(
             conversation.getId(),
             conversation.getCustomerUser().getUsername(),
             conversation.getCustomerUser().getAvatarUrl() == null ? "" : conversation.getCustomerUser().getAvatarUrl(),
+            conversation.getCustomerUser().getPhone() == null ? "" : conversation.getCustomerUser().getPhone(),
+            phoneCountryCodeResolver.resolve(conversation.getCustomerUser().getPhone(), registrationBonusService.configuredCountryCodes()),
+            vipService.summaryForUser(conversation.getCustomerUser().getId()).level(),
+            vipService.summaryForUser(conversation.getCustomerUser().getId()).points(),
             conversation.getAssignmentStatus(),
             conversation.getAssignedAgent() == null ? "" : conversation.getAssignedAgent().getUsername(),
             conversation.getAgentNote() == null ? "" : conversation.getAgentNote(),
-            messages.stream()
+            visibleMessages.stream()
                 .map(message -> toChatMessage(message, currentUser, counterpartReadAt))
                 .toList(),
-            (int) messages.stream()
+            (int) visibleMessages.stream()
                 .filter(message -> message.getSenderUser() != null)
                 .filter(message -> !message.getSenderUser().getId().equals(currentUser.getId()))
                 .filter(message -> lastReadAt == null || message.getCreatedAt().isAfter(lastReadAt))
@@ -168,12 +190,17 @@ public class PersistentSupportService {
         if (!canAccessConversation(currentUser, conversation)) {
             throw new IllegalArgumentException("Support conversation not accessible");
         }
+        if (!shouldShowConversation(conversation, currentUser)) {
+            throw new IllegalArgumentException("Support conversation not accessible");
+        }
 
         LocalDateTime counterpartReadAt = resolveSupportCounterpartReadAt(conversation, currentUser);
         List<SupportMessageEntity> messages = supportMessageRepository.findByConversation_IdOrderByCreatedAtAsc(conversationId);
         int startIndex = cursorStartIndex(messages.stream().map(SupportMessageEntity::getId).toList(), afterId);
+        java.util.Set<String> hiddenMessageIds = hiddenMessageIds(currentUser, messages.stream().map(SupportMessageEntity::getId).toList());
         return messages.stream()
             .skip(startIndex)
+            .filter(message -> !hiddenMessageIds.contains(message.getId()))
             .map(message -> toChatMessage(message, currentUser, counterpartReadAt))
             .toList();
     }
@@ -185,6 +212,9 @@ public class PersistentSupportService {
         if (!canAccessConversation(currentUser, conversation)) {
             throw new IllegalArgumentException("Support conversation not accessible");
         }
+        if (!shouldShowConversation(conversation, currentUser)) {
+            throw new IllegalArgumentException("Support conversation not accessible");
+        }
 
         long normalizedSinceSeq = Math.max(0L, sinceSeq);
         LocalDateTime lastReadAt = conversationReadService.getLastReadAt("support", conversationId, currentUser.getId());
@@ -192,12 +222,16 @@ public class PersistentSupportService {
         List<SupportMessageEntity> syncMessages = normalizedSinceSeq == 0L
             ? supportMessageRepository.findByConversation_IdOrderByCreatedAtAsc(conversationId)
             : supportMessageRepository.findByConversationIdSinceSeq(conversationId, normalizedSinceSeq);
+        java.util.Set<String> hiddenSyncMessageIds = hiddenMessageIds(currentUser, syncMessages.stream().map(SupportMessageEntity::getId).toList());
+        java.util.List<SupportMessageEntity> visibleSyncMessages = syncMessages.stream()
+            .filter(message -> !hiddenSyncMessageIds.contains(message.getId()))
+            .toList();
         long latestSeq = supportMessageRepository.findMaxServerSeqByConversationId(conversationId);
         long readSeq = counterpartReadAt == null ? 0L : supportMessageRepository.findReadSeqByConversationId(conversationId, counterpartReadAt);
         int unreadCount = countUnread(syncMessagesForUnread(conversationId), currentUser, lastReadAt);
 
         return new ChatMessageSync(
-            syncMessages.stream()
+            visibleSyncMessages.stream()
                 .map(message -> toChatMessage(message, currentUser, counterpartReadAt))
                 .toList(),
             latestSeq,
@@ -324,6 +358,18 @@ public class PersistentSupportService {
         return supportConversationRepository.findByCustomerUser_IdOrderByUpdatedAtDesc(user.getId());
     }
 
+    private boolean shouldShowConversation(SupportConversationEntity conversation, UserEntity currentUser) {
+        if (!"USER".equalsIgnoreCase(currentUser.getRoleCode())) {
+            return true;
+        }
+        return !userHiddenRecordService.isHidden(
+            currentUser.getId(),
+            UserHiddenRecordService.TYPE_CONVERSATION,
+            conversation.getId(),
+            "CONVERSATION"
+        );
+    }
+
     @Transactional
     public SupportConversationEntity ensureUserConversation(UserEntity user) {
         if (isAgent(user)) {
@@ -424,6 +470,13 @@ public class PersistentSupportService {
 
     private boolean isAgent(UserEntity user) {
         return "AGENT".equalsIgnoreCase(user.getRoleCode());
+    }
+
+    private java.util.Set<String> hiddenMessageIds(UserEntity currentUser, java.util.Collection<String> messageIds) {
+        if (!"USER".equalsIgnoreCase(currentUser.getRoleCode())) {
+            return java.util.Set.of();
+        }
+        return userHiddenRecordService.hiddenTargetIds(currentUser.getId(), UserHiddenRecordService.TYPE_MESSAGE, messageIds);
     }
 
     private String resolveAuthor(SupportMessageEntity message, UserEntity currentUser) {

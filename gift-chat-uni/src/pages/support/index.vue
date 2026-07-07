@@ -14,6 +14,9 @@
           </view>
         </view>
         <view class="header-actions">
+          <view class="action-btn delete-action" title="Delete chat" @click="hideCurrentConversation">
+            <text>Del</text>
+          </view>
           <view class="action-btn icon-action" title="Video call" @click="startVideoCall">
             <text class="icon-video"></text>
           </view>
@@ -109,6 +112,7 @@
         <view class="message-context-menu" :style="messageMenuStyle" @click.stop @contextmenu.prevent.stop>
           <view class="message-context-item" @click="copyContextMessage">Copy</view>
           <view v-if="canQuoteMessage(messageContextMenu.message)" class="message-context-item" @click="quoteContextMessage">Reply</view>
+          <view v-if="canHideMessage(messageContextMenu.message)" class="message-context-item danger" @click="hideContextMessage">Delete</view>
         </view>
       </view>
     </view>
@@ -270,6 +274,10 @@ function canQuoteMessage(message: ChatMessage) {
   return message.author !== 'system' && !message.id.startsWith('local-')
 }
 
+function canHideMessage(message: ChatMessage) {
+  return message.author !== 'system' && !message.id.startsWith('local-')
+}
+
 function rememberContextMenuPoint(event: MouseEvent) {
   lastContextMenuPoint.value = {
     clientX: event.clientX,
@@ -304,7 +312,7 @@ function openMessageMenu(message: ChatMessage, point?: { clientX: number; client
   let y = 120
   // #ifdef H5
   const menuWidth = 118
-  const menuHeight = canQuoteMessage(message) ? 88 : 48
+  const menuHeight = canQuoteMessage(message) ? 126 : 86
   const menuPoint = resolveContextMenuPoint(point)
   const clientX = menuPoint?.clientX || 0
   const clientY = menuPoint?.clientY || 0
@@ -337,6 +345,56 @@ function quoteContextMessage() {
     author: message.author,
     content: copyableMessageContent(message)
   }
+}
+
+function hideContextMessage() {
+  const message = messageContextMenu.value?.message
+  closeMessageMenu()
+  if (!message || !canHideMessage(message)) return
+  uni.showModal({
+    title: 'Delete message',
+    content: 'This only hides the message from your chat. Support and admin records are kept.',
+    confirmText: 'Delete',
+    confirmColor: '#d64242',
+    success: async (result) => {
+      if (!result.confirm) return
+      try {
+        await store.hideRecord({
+          targetType: 'MESSAGE',
+          targetId: message.id,
+          hiddenScope: 'SINGLE'
+        })
+        showNotice('Deleted from your chat.')
+      } catch (error) {
+        showNotice(error instanceof Error ? error.message : 'Delete failed')
+      }
+    }
+  })
+}
+
+function hideCurrentConversation() {
+  const conversationId = store.state.supportConversationId
+  if (!conversationId) return
+  uni.showModal({
+    title: 'Delete chat',
+    content: 'This only hides the chat from your account. The platform still keeps the full service record.',
+    confirmText: 'Delete',
+    confirmColor: '#d64242',
+    success: async (result) => {
+      if (!result.confirm) return
+      try {
+        await store.hideRecord({
+          targetType: 'CONVERSATION',
+          targetId: conversationId,
+          hiddenScope: 'CONVERSATION'
+        })
+        closeSocket()
+        showNotice('Chat hidden from your account.')
+      } catch (error) {
+        showNotice(error instanceof Error ? error.message : 'Delete failed')
+      }
+    }
+  })
 }
 
 function isReadReceipt(payload: ChatRealtimePayload): payload is ChatReadReceiptEvent {
@@ -1076,6 +1134,21 @@ function showNotice(message: string) {
   background: rgba(0, 136, 204, 0.16);
 }
 
+.delete-action {
+  width: auto;
+  min-width: 44px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: rgba(214, 66, 66, 0.1);
+  color: #c93636;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.delete-action:hover {
+  background: rgba(214, 66, 66, 0.16);
+}
+
 .icon-video {
   position: relative;
   width: 21px;
@@ -1523,6 +1596,14 @@ function showNotice(message: string) {
 
 .message-context-item:hover {
   background: rgba(0, 136, 204, 0.1);
+}
+
+.message-context-item.danger {
+  color: #c93636;
+}
+
+.message-context-item.danger:hover {
+  background: rgba(214, 66, 66, 0.1);
 }
 
 .message-input {

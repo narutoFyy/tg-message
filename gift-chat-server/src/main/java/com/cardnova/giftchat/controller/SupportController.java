@@ -7,10 +7,13 @@ import com.cardnova.giftchat.model.ChatMessage;
 import com.cardnova.giftchat.model.ChatMessageSync;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.model.SupportCustomerProfile;
+import com.cardnova.giftchat.model.SupportCustomerSearchResult;
 import com.cardnova.giftchat.model.SupportLedgerReport;
+import com.cardnova.giftchat.model.SupportMessageSearchResult;
 import com.cardnova.giftchat.service.PersistentSupportService;
 import com.cardnova.giftchat.service.SupportCustomerProfileService;
 import com.cardnova.giftchat.service.SupportLedgerService;
+import com.cardnova.giftchat.service.SupportSearchService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,15 +32,18 @@ public class SupportController {
     private final PersistentSupportService persistentSupportService;
     private final SupportCustomerProfileService supportCustomerProfileService;
     private final SupportLedgerService supportLedgerService;
+    private final SupportSearchService supportSearchService;
 
     public SupportController(
         PersistentSupportService persistentSupportService,
         SupportCustomerProfileService supportCustomerProfileService,
-        SupportLedgerService supportLedgerService
+        SupportLedgerService supportLedgerService,
+        SupportSearchService supportSearchService
     ) {
         this.persistentSupportService = persistentSupportService;
         this.supportCustomerProfileService = supportCustomerProfileService;
         this.supportLedgerService = supportLedgerService;
+        this.supportSearchService = supportSearchService;
     }
 
     @GetMapping("/conversations")
@@ -82,6 +88,16 @@ public class SupportController {
     @GetMapping("/ledger")
     public ApiResponse<SupportLedgerReport> ledger() {
         return ApiResponse.success(supportLedgerService.report());
+    }
+
+    @GetMapping("/search/customers")
+    public ApiResponse<List<SupportCustomerSearchResult>> searchCustomers(@RequestParam String keyword) {
+        return ApiResponse.success(supportSearchService.searchCustomers(keyword));
+    }
+
+    @GetMapping("/search/messages")
+    public ApiResponse<List<SupportMessageSearchResult>> searchMessages(@RequestParam String keyword) {
+        return ApiResponse.success(supportSearchService.searchMessages(keyword));
     }
 
     @PostMapping("/conversations/{conversationId}/messages")

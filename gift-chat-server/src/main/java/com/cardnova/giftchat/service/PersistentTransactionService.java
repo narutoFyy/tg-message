@@ -40,6 +40,8 @@ public class PersistentTransactionService {
     private final NotificationService notificationService;
     private final SupportConversationRepository supportConversationRepository;
     private final ReferralRewardService referralRewardService;
+    private final VipService vipService;
+    private final UserHiddenRecordService userHiddenRecordService;
 
     public PersistentTransactionService(
         TradeOrderRepository tradeOrderRepository,
@@ -50,7 +52,9 @@ public class PersistentTransactionService {
         PersistentSupportService persistentSupportService,
         NotificationService notificationService,
         SupportConversationRepository supportConversationRepository,
-        ReferralRewardService referralRewardService
+        ReferralRewardService referralRewardService,
+        VipService vipService,
+        UserHiddenRecordService userHiddenRecordService
     ) {
         this.tradeOrderRepository = tradeOrderRepository;
         this.currentUserService = currentUserService;
@@ -61,6 +65,8 @@ public class PersistentTransactionService {
         this.notificationService = notificationService;
         this.supportConversationRepository = supportConversationRepository;
         this.referralRewardService = referralRewardService;
+        this.vipService = vipService;
+        this.userHiddenRecordService = userHiddenRecordService;
     }
 
     public List<TransactionItem> getTransactions() {
@@ -73,6 +79,7 @@ public class PersistentTransactionService {
         }
 
         return tradeOrderRepository.findByOwnerUser_IdOrCounterpartyUser_IdOrderByUpdatedAtDesc(currentUser.getId(), currentUser.getId()).stream()
+            .filter(order -> shouldShowToCurrentUser(order, currentUser))
             .map(order -> toTransactionItem(order, currentUser.getId()))
             .toList();
     }
@@ -82,6 +89,9 @@ public class PersistentTransactionService {
         TradeOrderEntity order = tradeOrderRepository.findById(transactionId)
             .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
         if (!canAccess(order, currentUser)) {
+            throw new IllegalArgumentException("Transaction not accessible");
+        }
+        if (!shouldShowToCurrentUser(order, currentUser)) {
             throw new IllegalArgumentException("Transaction not accessible");
         }
         return toTransactionItem(order, currentUser.getId());
@@ -199,6 +209,7 @@ public class PersistentTransactionService {
         TradeOrderEntity saved = tradeOrderRepository.save(order);
         if ("completed".equals(normalizedStatus)) {
             referralRewardService.rewardCompletedTrade(saved);
+            vipService.awardCompletedOrderPoints(saved);
         }
         return toTransactionItem(saved, currentUser.getId());
     }
@@ -279,6 +290,18 @@ public class PersistentTransactionService {
 
     private boolean isAdmin(UserEntity user) {
         return "ADMIN".equalsIgnoreCase(user.getRoleCode());
+    }
+
+    private boolean shouldShowToCurrentUser(TradeOrderEntity order, UserEntity currentUser) {
+        if (!"USER".equalsIgnoreCase(currentUser.getRoleCode())) {
+            return true;
+        }
+        return !userHiddenRecordService.isHidden(
+            currentUser.getId(),
+            UserHiddenRecordService.TYPE_ORDER,
+            order.getId(),
+            "ORDER"
+        );
     }
 
     private boolean canAgentAccessCustomerOrder(TradeOrderEntity order, UserEntity currentUser) {

@@ -1,19 +1,14 @@
 package com.cardnova.giftchat.model;
 
-import java.util.List;
-
-public record SupportConversation(
+public record SupportCustomerSearchResult(
     String conversationId,
     String customerUsername,
-    String customerAvatarUrl,
-    String customerPhone,
+    String displayName,
+    String phone,
     String phoneCountryCode,
+    String email,
     String vipLevel,
     String vipPoints,
-    String assignmentStatus,
-    String assignedAgent,
-    String agentNote,
-    List<ChatMessage> messages,
     int unreadCount,
     String lastMessageTime,
     boolean online

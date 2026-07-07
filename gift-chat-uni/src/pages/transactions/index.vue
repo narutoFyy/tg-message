@@ -1,24 +1,29 @@
 <template>
   <view class="page-shell soft-page transactions-page">
-    <view class="status-row">
-      <text class="clock">05:48</text>
-      <text class="battery">31%</text>
-    </view>
-
-    <view class="hero-card surface-card">
-      <view class="hero-copy">
-        <text class="eyebrow">Orders</text>
-        <text class="title hero-title">Order records and status flow</text>
-        <text class="subtitle">Track sell orders and trade orders, update milestones, and jump back into the related chat.</text>
-      </view>
-      <view class="hero-stats">
-        <view class="stat-pill">
-          <text class="stat-label">Open</text>
-          <text class="stat-value">{{ activeCount }}</text>
+    <view class="winner-card surface-card">
+      <view class="winner-head">
+        <view>
+          <text class="eyebrow">Lucky winners</text>
+          <text class="winner-title">Recent prize records</text>
         </view>
-        <view class="stat-pill mint">
-          <text class="stat-label">Done</text>
-          <text class="stat-value">{{ completedCount }}</text>
+        <text class="winner-link" @click="goLottery">Spin</text>
+      </view>
+      <view class="winner-window">
+        <view v-if="tickerWinners.length" class="winner-track">
+          <view v-for="(winner, index) in tickerWinners" :key="`${winner.drawnAt}-${winner.prizeName}-${index}`" class="winner-row">
+            <view class="winner-main">
+              <text class="winner-prize">{{ winner.prizeName }}</text>
+              <text class="winner-time">{{ winner.drawnAt || 'Just now' }}</text>
+            </view>
+            <text class="winner-name">{{ winner.displayName }}</text>
+          </view>
+        </view>
+        <view v-else class="winner-row static-row">
+          <view class="winner-main">
+            <text class="winner-prize">No winners yet</text>
+            <text class="winner-time">Open the wheel to start</text>
+          </view>
+          <text class="winner-name">Be the first</text>
         </view>
       </view>
     </view>
@@ -61,6 +66,7 @@
 
         <view class="action-row">
           <button class="ghost-button action-button" @click="openSupportChat">Chat</button>
+          <button class="ghost-button action-button danger-action" @click="hideTransaction(item)">Hide</button>
           <button
             v-for="action in nextActions(item.status)"
             :key="`${item.id}-${action}`"
@@ -108,6 +114,7 @@ const filters = [
 
 onShow(() => {
   store.bootstrap()
+  store.refreshLotteryWinners().catch(() => undefined)
 })
 
 const filteredTransactions = computed(() => {
@@ -117,13 +124,11 @@ const filteredTransactions = computed(() => {
   return store.state.transactions.filter((item) => item.status === activeFilter.value)
 })
 
-const activeCount = computed(() =>
-  store.state.transactions.filter((item) => item.status === 'pending' || item.status === 'processing').length
-)
-
-const completedCount = computed(() =>
-  store.state.transactions.filter((item) => item.status === 'completed').length
-)
+const tickerWinners = computed(() => {
+  const winners = store.state.lotteryWinners
+  if (!winners.length) return []
+  return winners.length > 3 ? [...winners, ...winners] : [...winners, ...winners, ...winners]
+})
 
 function statusLabel(status: TransactionItem['status']) {
   return {
@@ -176,74 +181,37 @@ async function advanceStatus(transactionId: string, status: TransactionItem['sta
 function openSupportChat() {
   uni.redirectTo({ url: '/pages/support/index' })
 }
+
+function goLottery() {
+  uni.navigateTo({ url: '/pages/lucky-wheel/index' })
+}
+
+function hideTransaction(item: TransactionItem) {
+  uni.showModal({
+    title: 'Hide order',
+    content: 'This only hides the order from your list. The platform and support team still keep the full record.',
+    confirmText: 'Hide',
+    confirmColor: '#d64242',
+    success: async (result) => {
+      if (!result.confirm) return
+      try {
+        await store.hideRecord({
+          targetType: 'ORDER',
+          targetId: item.id,
+          hiddenScope: 'ORDER'
+        })
+        notice.value = 'Order hidden from your list.'
+      } catch (error) {
+        notice.value = error instanceof Error ? error.message : 'Hide failed'
+      }
+    }
+  })
+}
 </script>
 
 <style scoped lang="scss">
 .transactions-page {
   padding-bottom: 184rpx;
-}
-
-.status-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 28rpx;
-  font-weight: 900;
-  margin-bottom: 18rpx;
-}
-
-.battery {
-  color: #0088cc;
-}
-
-.hero-card {
-  padding: 26rpx;
-  display: flex;
-  justify-content: space-between;
-  gap: 20rpx;
-}
-
-.hero-copy {
-  flex: 1;
-}
-
-.hero-title {
-  margin-top: 10rpx;
-  font-size: 38rpx;
-}
-
-.hero-stats {
-  width: 164rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.stat-pill {
-  min-height: 118rpx;
-  border-radius: 12rpx;
-  padding: 18rpx;
-  background: #f3f6f8;
-  border: 1rpx solid rgba(136, 153, 166, 0.16);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.stat-pill.mint {
-  background: rgba(0, 136, 204, 0.08);
-}
-
-.stat-label {
-  font-size: 24rpx;
-  color: #6e6e6e;
-}
-
-.stat-value {
-  margin-top: 8rpx;
-  font-size: 44rpx;
-  font-weight: 900;
-  color: #181818;
 }
 
 .filter-row {
@@ -253,6 +221,112 @@ function openSupportChat() {
   gap: 12rpx;
   overflow-x: auto;
   white-space: nowrap;
+}
+
+.winner-card {
+  margin-top: 0;
+  padding: 24rpx;
+}
+
+.winner-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.winner-title {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 34rpx;
+  font-weight: 900;
+  color: #17212b;
+}
+
+.winner-link {
+  min-width: 108rpx;
+  height: 62rpx;
+  border-radius: 10rpx;
+  background: #0088cc;
+  color: #ffffff;
+  font-size: 26rpx;
+  font-weight: 800;
+  line-height: 62rpx;
+  text-align: center;
+}
+
+.winner-window {
+  position: relative;
+  height: 250rpx;
+  margin-top: 18rpx;
+  overflow: hidden;
+  border-radius: 10rpx;
+  background: #f6fafc;
+  border: 1rpx solid rgba(0, 136, 204, 0.1);
+}
+
+.winner-track {
+  animation: winnerScroll 12s linear infinite;
+}
+
+.winner-row {
+  min-height: 84rpx;
+  padding: 0 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  box-sizing: border-box;
+  border-bottom: 1rpx solid rgba(0, 136, 204, 0.08);
+}
+
+.static-row {
+  height: 250rpx;
+}
+
+.winner-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.winner-prize {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 900;
+  color: #17212b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.winner-time {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #758391;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.winner-name {
+  max-width: 280rpx;
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #53616e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes winnerScroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
 }
 
 .filter-pill {
@@ -394,6 +468,11 @@ function openSupportChat() {
   padding-top: 20rpx;
   padding-bottom: 20rpx;
   font-size: 26rpx;
+}
+
+.danger-action {
+  color: #d64242;
+  border-color: rgba(214, 66, 66, 0.22);
 }
 
 .empty-card {

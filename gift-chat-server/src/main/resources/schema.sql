@@ -314,3 +314,67 @@ CREATE TABLE IF NOT EXISTS registration_bonus_record (
     CONSTRAINT fk_registration_bonus_config FOREIGN KEY (config_id) REFERENCES registration_bonus_config (id),
     CONSTRAINT ux_registration_bonus_user UNIQUE (user_id)
 );
+
+CREATE TABLE IF NOT EXISTS vip_point_ledger (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    trade_order_id VARCHAR(36),
+    source_key VARCHAR(96) NOT NULL,
+    points_delta DECIMAL(18, 2) NOT NULL,
+    reason_code VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_vip_point_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_vip_point_trade FOREIGN KEY (trade_order_id) REFERENCES trade_order (id),
+    CONSTRAINT ux_vip_point_source UNIQUE (source_key)
+);
+
+CREATE TABLE IF NOT EXISTS lottery_prize (
+    id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    prize_type VARCHAR(32) NOT NULL,
+    weight_value INT NOT NULL,
+    image_url VARCHAR(255),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS lottery_draw_record (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    vip_level VARCHAR(16) NOT NULL,
+    prize_id VARCHAR(36) NOT NULL,
+    period_type VARCHAR(16) NOT NULL,
+    period_key VARCHAR(32) NOT NULL,
+    drawn_at TIMESTAMP NOT NULL,
+    fulfillment_status VARCHAR(32) NOT NULL,
+    processed_by VARCHAR(36),
+    processed_at TIMESTAMP,
+    CONSTRAINT fk_lottery_draw_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_lottery_draw_prize FOREIGN KEY (prize_id) REFERENCES lottery_prize (id),
+    CONSTRAINT fk_lottery_draw_processed_by FOREIGN KEY (processed_by) REFERENCES app_user (id),
+    CONSTRAINT ux_lottery_draw_period UNIQUE (user_id, period_type, period_key)
+);
+
+CREATE TABLE IF NOT EXISTS lottery_eligibility_reset (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    admin_user_id VARCHAR(36) NOT NULL,
+    reason VARCHAR(255),
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_lottery_reset_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_lottery_reset_admin FOREIGN KEY (admin_user_id) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS user_hidden_record (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    target_type VARCHAR(32) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    hidden_scope VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    restored_at TIMESTAMP,
+    CONSTRAINT fk_user_hidden_record_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    CONSTRAINT ux_user_hidden_record UNIQUE (user_id, target_type, target_id, hidden_scope)
+);

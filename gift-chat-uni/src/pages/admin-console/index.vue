@@ -11,6 +11,7 @@
 
       <view class="panel tab-row">
         <button :class="['ghost-button', activeTab === 'users' && 'active-tab']" @click="activeTab = 'users'">Users</button>
+        <button :class="['ghost-button', activeTab === 'growth' && 'active-tab']" @click="activeTab = 'growth'">Growth</button>
         <button :class="['ghost-button', activeTab === 'agents' && 'active-tab']" @click="activeTab = 'agents'">Agents</button>
         <button :class="['ghost-button', activeTab === 'support' && 'active-tab']" @click="activeTab = 'support'">Support</button>
         <button :class="['ghost-button', activeTab === 'direct' && 'active-tab']" @click="activeTab = 'direct'">Direct</button>
@@ -51,7 +52,7 @@
           <view>
             <text class="row-title">{{ user.username }}</text>
             <text class="row-meta">{{ user.phone || 'No phone' }} / {{ user.email || 'No email' }}</text>
-            <text class="row-meta">{{ user.role }} / {{ user.status }} / {{ user.createdAt }}</text>
+            <text class="row-meta">{{ user.role }} / {{ user.status }} / {{ user.vipLevel }} / {{ user.vipPoints }} pts / {{ user.createdAt }}</text>
           </view>
           <text :class="['status-pill', user.blacklisted ? 'paused' : 'active']">
             {{ user.blacklisted ? 'Blacklisted' : 'Clear' }}
@@ -178,6 +179,96 @@
             {{ code }}
           </button>
         </view>
+      </view>
+
+      <view v-if="activeTab === 'growth'" class="panel growth-summary-panel">
+        <view class="growth-stat">
+          <text class="row-meta">VIP1</text>
+          <text class="balance-number">{{ vipCount('VIP1') }}</text>
+        </view>
+        <view class="growth-stat">
+          <text class="row-meta">VIP2</text>
+          <text class="balance-number">{{ vipCount('VIP2') }}</text>
+        </view>
+        <view class="growth-stat">
+          <text class="row-meta">VIP3</text>
+          <text class="balance-number">{{ vipCount('VIP3') }}</text>
+        </view>
+        <view class="growth-stat">
+          <text class="row-meta">VIP4</text>
+          <text class="balance-number">{{ vipCount('VIP4') }}</text>
+        </view>
+      </view>
+
+      <view v-if="activeTab === 'growth'" class="panel">
+        <text class="section-title">VIP rules</text>
+        <view style="height: 18rpx"></view>
+        <view class="rule-grid">
+          <view v-for="rule in vipRules" :key="rule.level" class="rule-card">
+            <text class="row-title">{{ rule.level }}</text>
+            <text class="row-meta">{{ rule.threshold }}</text>
+            <text class="row-meta">{{ rule.draw }}</text>
+          </view>
+        </view>
+      </view>
+
+      <view v-if="activeTab === 'growth'" class="panel">
+        <text class="section-title">User VIP progress</text>
+        <view style="height: 18rpx"></view>
+        <view v-for="user in userVipRows" :key="user.id" class="list-row">
+          <view>
+            <text class="row-title">{{ user.username }}</text>
+            <text class="row-meta">{{ user.phone || 'No phone' }} / {{ user.email || 'No email' }}</text>
+            <text class="row-meta">{{ user.vipLevel }} / {{ user.vipPoints }} pts / {{ user.status }}</text>
+          </view>
+          <button class="ghost-button mini-button" @click="resetLotteryChance(user.id)">
+            Reset Draw
+          </button>
+        </view>
+      </view>
+
+      <view v-if="activeTab === 'growth'" class="panel">
+        <text class="section-title">Lottery prize pool</text>
+        <view style="height: 18rpx"></view>
+        <view class="prize-grid">
+          <view v-for="prize in lotteryPrizes" :key="prize.id" class="prize-card">
+            <text class="row-title">{{ prize.name }}</text>
+            <text class="row-meta">{{ prize.prizeType }} / weight {{ prize.weight }} / sort {{ prize.sortOrder }}</text>
+            <text :class="['status-pill', prize.enabled ? 'active' : 'paused']">{{ prize.enabled ? 'Enabled' : 'Disabled' }}</text>
+          </view>
+        </view>
+      </view>
+
+      <view v-if="activeTab === 'growth'" class="panel">
+        <view class="section-head-row">
+          <view>
+            <text class="section-title">Lottery records</text>
+            <text class="row-meta">{{ pendingLotteryCount }} pending fulfillment</text>
+          </view>
+          <button class="ghost-button mini-button" @click="refreshGrowthData">Refresh</button>
+        </view>
+        <view style="height: 18rpx"></view>
+        <view v-for="record in lotteryRecords" :key="record.id" class="conversation-card">
+          <view class="list-row compact-row">
+            <view>
+              <text class="row-title">{{ record.username }} / {{ record.prizeName }}</text>
+              <text class="row-meta">{{ record.vipLevel }} / {{ record.periodType }} {{ record.periodKey }} / {{ record.drawnAt }}</text>
+              <text class="row-meta">Processed by {{ record.processedBy || '-' }} / {{ record.processedAt || '-' }}</text>
+            </view>
+            <text :class="['status-pill', lotteryStatusClass(record.fulfillmentStatus)]">{{ record.fulfillmentStatus }}</text>
+          </view>
+          <view class="broadcast-type-row">
+            <button
+              v-for="status in lotteryStatuses"
+              :key="`${record.id}-${status}`"
+              class="ghost-button mini-button"
+              @click="updateLotteryStatus(record.id, status)"
+            >
+              {{ status }}
+            </button>
+          </view>
+        </view>
+        <text v-if="lotteryRecords.length === 0" class="row-meta">No lottery records yet.</text>
       </view>
 
       <view v-if="activeTab === 'broadcast'" class="panel">
@@ -393,6 +484,8 @@ import type {
   BankAccountRiskMatch,
   BroadcastItem,
   LoanApplicationItem,
+  LotteryPrizeItem,
+  LotteryRecordItem,
   NotificationItem,
   ReferralRewardConfigItem,
   ReferralRewardItem,
@@ -409,6 +502,7 @@ import {
   createAgent,
   fetchAdminDirectConversations,
   fetchAdminBankAccountRisks,
+  fetchAdminLotteryRecords,
   fetchAdminSupportConversations,
   fetchAdminUsers,
   fetchAgents,
@@ -419,9 +513,12 @@ import {
   fetchReferralRewards,
   fetchRegistrationBonusConfigs,
   fetchRegistrationBonusRecords,
+  fetchLotteryPrizes,
   fetchTransactions,
   fetchWithdrawals,
+  resetAdminLotteryEligibility,
   updateAgentStatus,
+  updateAdminLotteryRecordStatus,
   updateLoanStatus,
   updateReferralRewardConfig,
   updateRegistrationBonusConfig,
@@ -432,7 +529,7 @@ import { useAppStore } from '@/store/app'
 
 const store = useAppStore()
 const isAdminReady = ref(false)
-const activeTab = ref<'users' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'risks' | 'loans' | 'rewards' | 'notifications'>('users')
+const activeTab = ref<'users' | 'growth' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'risks' | 'loans' | 'rewards' | 'notifications'>('users')
 const notice = ref('')
 const users = ref<AdminUserItem[]>([])
 const agents = ref<AgentItem[]>([])
@@ -443,6 +540,8 @@ const transactions = ref<TransactionItem[]>([])
 const withdrawals = ref<WithdrawalItem[]>([])
 const bankAccountRisks = ref<BankAccountRiskMatch[]>([])
 const loans = ref<LoanApplicationItem[]>([])
+const lotteryRecords = ref<LotteryRecordItem[]>([])
+const lotteryPrizes = ref<LotteryPrizeItem[]>([])
 const referralRewardConfig = ref<ReferralRewardConfigItem | null>(null)
 const referralRewards = ref<ReferralRewardItem[]>([])
 const registrationBonusConfigs = ref<RegistrationBonusConfigItem[]>([])
@@ -460,6 +559,13 @@ const registrationBonusDrafts = reactive<Record<string, {
 }>>({})
 const broadcastTypes = ['text', 'image', 'voice', 'gif', 'link'] as const
 const adminBroadcastCountryOptions = ['+234', '+91', '+233']
+const lotteryStatuses = ['pending', 'processing', 'fulfilled', 'canceled']
+const vipRules = [
+  { level: 'VIP1', threshold: '0-19 pts', draw: 'One welcome draw' },
+  { level: 'VIP2', threshold: '20-99 pts', draw: 'One draw per week' },
+  { level: 'VIP3', threshold: '100-499 pts', draw: 'One draw per day' },
+  { level: 'VIP4', threshold: '500+ pts', draw: 'One draw per day' }
+]
 
 const broadcastForm = reactive({
   content: '',
@@ -510,6 +616,8 @@ async function refreshAll() {
       nextWithdrawals,
       nextBankAccountRisks,
       nextLoans,
+      nextLotteryRecords,
+      nextLotteryPrizes,
       nextRewardConfig,
       nextRewards,
       nextRegistrationBonusConfigs,
@@ -524,6 +632,8 @@ async function refreshAll() {
       fetchWithdrawals(),
       fetchAdminBankAccountRisks(),
       fetchLoans(),
+      fetchAdminLotteryRecords(),
+      fetchLotteryPrizes(),
       fetchReferralRewardConfig(),
       fetchReferralRewards(),
       fetchRegistrationBonusConfigs(),
@@ -538,6 +648,8 @@ async function refreshAll() {
     withdrawals.value = nextWithdrawals
     bankAccountRisks.value = nextBankAccountRisks
     loans.value = nextLoans
+    lotteryRecords.value = nextLotteryRecords
+    lotteryPrizes.value = nextLotteryPrizes
     referralRewardConfig.value = nextRewardConfig
     referralRewards.value = nextRewards
     registrationBonusConfigs.value = nextRegistrationBonusConfigs
@@ -693,6 +805,33 @@ const adminBroadcastTargetCount = computed(() => {
   }).length
 })
 
+const userVipRows = computed(() => users.value
+  .filter(user => user.role === 'USER')
+  .slice()
+  .sort((left, right) => {
+    const levelDiff = vipLevelWeight(right.vipLevel) - vipLevelWeight(left.vipLevel)
+    if (levelDiff !== 0) return levelDiff
+    return Number(right.vipPoints || 0) - Number(left.vipPoints || 0)
+  }))
+
+const pendingLotteryCount = computed(() => lotteryRecords.value
+  .filter(record => record.fulfillmentStatus === 'pending')
+  .length)
+
+function vipCount(level: string) {
+  return users.value.filter(user => user.role === 'USER' && user.vipLevel === level).length
+}
+
+function vipLevelWeight(level: string) {
+  return { VIP1: 1, VIP2: 2, VIP3: 3, VIP4: 4 }[level as 'VIP1' | 'VIP2' | 'VIP3' | 'VIP4'] || 0
+}
+
+function lotteryStatusClass(status: string) {
+  if (status === 'fulfilled') return 'active'
+  if (status === 'canceled') return 'danger'
+  return 'warning'
+}
+
 function resolveAdminUserCountry(phone: string) {
   const normalized = `+${(phone || '').replace(/^00/, '').replace(/[^0-9]/g, '')}`
   return adminBroadcastCountryOptions
@@ -714,6 +853,52 @@ function transactionStatuses(status: TransactionItem['status']) {
   if (status === 'pending') return ['processing', 'disputed'] as TransactionItem['status'][]
   if (status === 'processing') return ['completed', 'disputed'] as TransactionItem['status'][]
   return [] as TransactionItem['status'][]
+}
+
+async function refreshGrowthData() {
+  try {
+    const [nextUsers, nextRecords, nextPrizes] = await Promise.all([
+      fetchAdminUsers(),
+      fetchAdminLotteryRecords(),
+      fetchLotteryPrizes()
+    ])
+    users.value = nextUsers
+    lotteryRecords.value = nextRecords
+    lotteryPrizes.value = nextPrizes
+    notice.value = 'Growth data refreshed.'
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Growth refresh failed'
+  }
+}
+
+async function updateLotteryStatus(recordId: string, status: string) {
+  try {
+    await updateAdminLotteryRecordStatus(recordId, status)
+    notice.value = `Lottery record moved to ${status}.`
+    await refreshGrowthData()
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Lottery status update failed'
+  }
+}
+
+function resetLotteryChance(userId: string) {
+  const user = users.value.find(item => item.id === userId)
+  uni.showModal({
+    title: 'Reset draw chance',
+    content: `Allow ${user?.username || 'this user'} to draw again for the current VIP period?`,
+    confirmText: 'Reset',
+    cancelText: 'Cancel',
+    success: async (result) => {
+      if (!result.confirm) return
+      try {
+        await resetAdminLotteryEligibility(userId, 'Admin reset from Growth console')
+        notice.value = 'Lottery chance reset.'
+        await refreshGrowthData()
+      } catch (error) {
+        notice.value = error instanceof Error ? error.message : 'Lottery reset failed'
+      }
+    }
+  })
 }
 
 async function updateOrderStatus(orderId: string, status: TransactionItem['status']) {
@@ -953,6 +1138,31 @@ async function assignConversation(conversationId: string) {
   word-break: break-word;
 }
 
+.growth-summary-panel,
+.rule-grid,
+.prize-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.growth-stat,
+.rule-card,
+.prize-card {
+  min-width: 0;
+  padding: 18rpx;
+  border-radius: 14rpx;
+  background: #f6f8fa;
+  border: 1rpx solid #eef1f3;
+}
+
+.section-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
 .reward-setting-row {
   display: flex;
   justify-content: space-between;
@@ -980,6 +1190,11 @@ async function assignConversation(conversationId: string) {
   background: rgba(244, 91, 91, 0.14);
 }
 
+.status-pill.warning {
+  color: #b26a00;
+  background: rgba(255, 178, 76, 0.18);
+}
+
 .notice-text {
   display: block;
   text-align: center;
@@ -988,6 +1203,12 @@ async function assignConversation(conversationId: string) {
 }
 
 @media (max-width: 760px) {
+  .growth-summary-panel,
+  .rule-grid,
+  .prize-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .bonus-config-grid {
     grid-template-columns: 1fr;
   }

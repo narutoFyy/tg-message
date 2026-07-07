@@ -44,6 +44,7 @@ public class PersistentFriendService {
     private final TencentMessageMirrorService tencentMessageMirrorService;
     private final MessageRateLimitService messageRateLimitService;
     private final MessageAttachmentService messageAttachmentService;
+    private final UserHiddenRecordService userHiddenRecordService;
 
     public PersistentFriendService(
         FriendshipRepository friendshipRepository,
@@ -55,7 +56,8 @@ public class PersistentFriendService {
         RealtimeChatService realtimeChatService,
         TencentMessageMirrorService tencentMessageMirrorService,
         MessageRateLimitService messageRateLimitService,
-        MessageAttachmentService messageAttachmentService
+        MessageAttachmentService messageAttachmentService,
+        UserHiddenRecordService userHiddenRecordService
     ) {
         this.friendshipRepository = friendshipRepository;
         this.directMessageRepository = directMessageRepository;
@@ -67,6 +69,7 @@ public class PersistentFriendService {
         this.tencentMessageMirrorService = tencentMessageMirrorService;
         this.messageRateLimitService = messageRateLimitService;
         this.messageAttachmentService = messageAttachmentService;
+        this.userHiddenRecordService = userHiddenRecordService;
     }
 
     public List<FriendProfile> getFriends() {
@@ -74,6 +77,7 @@ public class PersistentFriendService {
 
         return friendshipRepository.findByRequesterUser_IdOrAddresseeUser_IdOrderByUpdatedAtDesc(currentUser.getId(), currentUser.getId()).stream()
             .filter(friendship -> "ACCEPTED".equals(friendship.getStatusCode()))
+            .filter(friendship -> shouldShowFriendship(friendship, currentUser.getId()))
             .map(friendship -> toFriendProfile(friendship, currentUser.getId()))
             .toList();
     }
@@ -340,6 +344,9 @@ public class PersistentFriendService {
         if (!isParticipant(friendship, currentUser.getId()) || !"ACCEPTED".equals(friendship.getStatusCode())) {
             throw new IllegalArgumentException("Friendship not accessible");
         }
+        if (!shouldShowFriendship(friendship, currentUser.getId())) {
+            throw new IllegalArgumentException("Friendship not accessible");
+        }
 
         UserEntity counterpart = friendship.getRequesterUser().getId().equals(currentUser.getId())
             ? friendship.getAddresseeUser()
@@ -347,8 +354,14 @@ public class PersistentFriendService {
         LocalDateTime counterpartReadAt = conversationReadService.getReadAt("friend", friendship.getId(), counterpart.getId());
         List<DirectMessageEntity> messages = directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendship.getId());
         int startIndex = cursorStartIndex(messages.stream().map(DirectMessageEntity::getId).toList(), afterId);
+        java.util.Set<String> hiddenMessageIds = userHiddenRecordService.hiddenTargetIds(
+            currentUser.getId(),
+            UserHiddenRecordService.TYPE_MESSAGE,
+            messages.stream().map(DirectMessageEntity::getId).toList()
+        );
         return messages.stream()
             .skip(startIndex)
+            .filter(message -> !hiddenMessageIds.contains(message.getId()))
             .map(message -> toChatMessage(message, currentUser.getId(), counterpartReadAt))
             .toList();
     }
@@ -358,6 +371,9 @@ public class PersistentFriendService {
         FriendshipEntity friendship = friendshipRepository.findById(friendshipId)
             .orElseThrow(() -> new IllegalArgumentException("Friendship not found"));
         if (!isParticipant(friendship, currentUser.getId()) || !"ACCEPTED".equals(friendship.getStatusCode())) {
+            throw new IllegalArgumentException("Friendship not accessible");
+        }
+        if (!shouldShowFriendship(friendship, currentUser.getId())) {
             throw new IllegalArgumentException("Friendship not accessible");
         }
 
@@ -370,16 +386,30 @@ public class PersistentFriendService {
         List<DirectMessageEntity> syncMessages = normalizedSinceSeq == 0L
             ? directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendshipId)
             : directMessageRepository.findByFriendshipIdSinceSeq(friendshipId, normalizedSinceSeq);
+        java.util.Set<String> hiddenSyncMessageIds = userHiddenRecordService.hiddenTargetIds(
+            currentUser.getId(),
+            UserHiddenRecordService.TYPE_MESSAGE,
+            syncMessages.stream().map(DirectMessageEntity::getId).toList()
+        );
+        java.util.List<DirectMessageEntity> visibleSyncMessages = syncMessages.stream()
+            .filter(message -> !hiddenSyncMessageIds.contains(message.getId()))
+            .toList();
         long latestSeq = directMessageRepository.findMaxServerSeqByFriendshipId(friendshipId);
         long readSeq = counterpartReadAt == null ? 0L : directMessageRepository.findReadSeqByFriendshipId(friendshipId, counterpartReadAt);
+        java.util.List<DirectMessageEntity> allMessages = directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendshipId);
+        java.util.Set<String> hiddenAllMessageIds = userHiddenRecordService.hiddenTargetIds(
+            currentUser.getId(),
+            UserHiddenRecordService.TYPE_MESSAGE,
+            allMessages.stream().map(DirectMessageEntity::getId).toList()
+        );
         int unreadCount = countUnread(
-            directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendshipId),
+            allMessages.stream().filter(message -> !hiddenAllMessageIds.contains(message.getId())).toList(),
             currentUser.getId(),
             lastReadAt
         );
 
         return new ChatMessageSync(
-            syncMessages.stream()
+            visibleSyncMessages.stream()
                 .map(message -> toChatMessage(message, currentUser.getId(), counterpartReadAt))
                 .toList(),
             latestSeq,
@@ -394,6 +424,14 @@ public class PersistentFriendService {
             : friendship.getRequesterUser();
 
         List<DirectMessageEntity> messages = directMessageRepository.findByFriendship_IdOrderByCreatedAtAsc(friendship.getId());
+        java.util.Set<String> hiddenMessageIds = userHiddenRecordService.hiddenTargetIds(
+            currentUserId,
+            UserHiddenRecordService.TYPE_MESSAGE,
+            messages.stream().map(DirectMessageEntity::getId).toList()
+        );
+        java.util.List<DirectMessageEntity> visibleMessages = messages.stream()
+            .filter(message -> !hiddenMessageIds.contains(message.getId()))
+            .toList();
         LocalDateTime lastReadAt = conversationReadService.getLastReadAt("friend", friendship.getId(), currentUserId);
         LocalDateTime counterpartReadAt = conversationReadService.getReadAt("friend", friendship.getId(), counterpart.getId());
 
@@ -404,10 +442,10 @@ public class PersistentFriendService {
             counterpart.getPhone() == null ? "" : counterpart.getPhone(),
             "ACTIVE".equals(counterpart.getStatusCode()) ? "online" : "offline",
             FRIEND_TAGS,
-            messages.stream()
+            visibleMessages.stream()
                 .map(message -> toChatMessage(message, currentUserId, counterpartReadAt))
                 .toList(),
-            (int) messages.stream()
+            (int) visibleMessages.stream()
                 .filter(message -> !message.getSenderUser().getId().equals(currentUserId))
                 .filter(message -> lastReadAt == null || message.getCreatedAt().isAfter(lastReadAt))
                 .count(),
@@ -418,6 +456,15 @@ public class PersistentFriendService {
     private boolean isParticipant(FriendshipEntity friendship, String currentUserId) {
         return friendship.getRequesterUser().getId().equals(currentUserId)
             || friendship.getAddresseeUser().getId().equals(currentUserId);
+    }
+
+    private boolean shouldShowFriendship(FriendshipEntity friendship, String currentUserId) {
+        return !userHiddenRecordService.isHidden(
+            currentUserId,
+            UserHiddenRecordService.TYPE_CONVERSATION,
+            friendship.getId(),
+            "CONVERSATION"
+        );
     }
 
     private ChatMessage toChatMessage(DirectMessageEntity message, String currentUserId, LocalDateTime counterpartReadAt) {

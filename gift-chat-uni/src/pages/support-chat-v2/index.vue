@@ -4,42 +4,122 @@
     <view class="customer-sidebar" :class="{ 'sidebar-hidden': isMobile && showChat }">
       <!-- 顶部搜索栏 -->
       <view class="sidebar-header">
+        <view class="search-mode-row">
+          <view
+            :class="['search-mode-pill', searchMode === 'customers' && 'active']"
+            @click="setSearchMode('customers')"
+          >
+            Users
+          </view>
+          <view
+            :class="['search-mode-pill', searchMode === 'messages' && 'active']"
+            @click="setSearchMode('messages')"
+          >
+            Messages
+          </view>
+        </view>
         <view class="search-box">
-          <text class="search-icon">🔍</text>
-          <input v-model="searchKeyword" class="search-input" placeholder="搜索客户" />
+          <text class="search-icon">S</text>
+          <input v-model="searchKeyword" class="search-input" :placeholder="searchPlaceholder" />
         </view>
       </view>
 
       <!-- 客户列表 -->
       <scroll-view scroll-y class="customer-list-scroll">
-        <view
-          v-for="conv in filteredConversations"
-          :key="conv.conversationId"
-          :class="['customer-item', { 'active': conv.conversationId === activeConversationId }]"
-          @click="selectCustomer(conv)"
-        >
-          <!-- 头像 -->
-          <view class="customer-avatar">
-            <image class="avatar-img" :src="customerAvatar(conv)" mode="aspectFill" />
-            <view :class="['online-dot', { offline: !conv.online }]"></view>
+        <view v-if="isSearching && searchMode === 'messages'" class="search-result-list">
+          <view v-if="supportSearchLoading" class="mini-search-state">Searching...</view>
+          <view
+            v-for="item in store.state.supportMessageSearchResults"
+            :key="item.messageId"
+            class="message-search-item"
+            @click="selectMessageSearchResult(item.conversationId)"
+          >
+            <view class="info-row">
+              <text class="customer-name">{{ item.displayName || item.customerUsername }}</text>
+              <text class="message-time">{{ formatTime(item.createdAt) }}</text>
+            </view>
+            <text class="customer-note">{{ countryLabel(item.phoneCountryCode) }} / {{ item.senderRole }}</text>
+            <text class="last-message search-snippet">{{ item.snippet }}</text>
           </view>
-
-          <!-- 客户信息 -->
-          <view class="customer-info">
-            <view class="info-row">
-              <text class="customer-name">{{ customerDisplayName(conv) }}</text>
-              <text class="message-time">{{ formatTime(conv.lastMessageTime) }}</text>
-            </view>
-            <text v-if="conv.agentNote" class="customer-note">{{ conv.customerUsername }}</text>
-            <view class="info-row">
-              <text class="last-message">{{ getLastMessage(conv) }}</text>
-              <view v-if="displayUnreadCount(conv) > 0" class="unread-badge">{{ displayUnreadCount(conv) }}</view>
-            </view>
+          <view v-if="!supportSearchLoading && store.state.supportMessageSearchResults.length === 0" class="empty-list">
+            <text class="empty-text">No message records</text>
           </view>
         </view>
 
-        <view v-if="filteredConversations.length === 0" class="empty-list">
-          <text class="empty-text">暂无客户</text>
+        <view v-else-if="isSearching" class="search-result-list">
+          <view v-if="supportSearchLoading" class="mini-search-state">Searching...</view>
+          <view
+            v-for="item in store.state.supportCustomerSearchResults"
+            :key="item.conversationId"
+            :class="['customer-item', { 'active': item.conversationId === activeConversationId }]"
+            @click="selectSearchCustomer(item.conversationId)"
+          >
+            <view class="customer-avatar">
+              <view class="avatar-letter">{{ (item.displayName || item.customerUsername || 'U').slice(0, 1).toUpperCase() }}</view>
+              <view :class="['online-dot', { offline: !item.online }]"></view>
+            </view>
+            <view class="customer-info">
+              <view class="info-row">
+                <text class="customer-name">{{ item.displayName || item.customerUsername }}</text>
+                <text class="message-time">{{ formatTime(item.lastMessageTime) }}</text>
+              </view>
+              <text class="customer-note">{{ countryLabel(item.phoneCountryCode) }} / {{ item.vipLevel }} / {{ item.vipPoints }} pts</text>
+              <view class="info-row">
+                <text class="last-message">{{ item.phone || '@' + item.customerUsername }}</text>
+                <view v-if="item.unreadCount > 0" class="unread-badge">{{ item.unreadCount }}</view>
+              </view>
+            </view>
+          </view>
+          <view v-if="!supportSearchLoading && store.state.supportCustomerSearchResults.length === 0" class="empty-list">
+            <text class="empty-text">No users found</text>
+          </view>
+        </view>
+
+        <view v-else>
+          <view v-for="group in countryGroups" :key="group.code" class="country-group">
+            <view class="country-group-head" @click="toggleCountryGroup(group.code)">
+              <view>
+                <text class="country-title">{{ group.label }}</text>
+                <text class="country-subtitle">{{ group.code }}</text>
+              </view>
+              <view class="country-head-right">
+                <text class="country-count">{{ group.conversations.length }}</text>
+                <text :class="['country-caret', collapsedCountryGroups[group.code] && 'collapsed']">⌄</text>
+              </view>
+            </view>
+            <view v-if="!collapsedCountryGroups[group.code]">
+              <view
+                v-for="conv in group.conversations"
+                :key="conv.conversationId"
+                :class="['customer-item', { 'active': conv.conversationId === activeConversationId }]"
+                @click="selectCustomer(conv)"
+              >
+                <!-- 头像 -->
+                <view class="customer-avatar">
+                  <image class="avatar-img" :src="customerAvatar(conv)" mode="aspectFill" />
+                  <view :class="['online-dot', { offline: !conv.online }]"></view>
+                </view>
+
+                <!-- 客户信息 -->
+                <view class="customer-info">
+                  <view class="info-row">
+                    <text class="customer-name">{{ customerDisplayName(conv) }}</text>
+                    <text class="message-time">{{ formatTime(conv.lastMessageTime) }}</text>
+                  </view>
+                  <text v-if="conv.agentNote" class="customer-note">{{ conv.customerUsername }}</text>
+                  <text v-else class="customer-note">{{ conv.vipLevel || 'VIP1' }} / {{ conv.vipPoints || '0' }} pts</text>
+                  <view class="info-row">
+                    <text class="last-message">{{ getLastMessage(conv) }}</text>
+                    <view v-if="displayUnreadCount(conv) > 0" class="unread-badge">{{ displayUnreadCount(conv) }}</view>
+                  </view>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view v-if="countryGroups.length === 0" class="empty-list">
+            <text class="empty-text">暂无客户</text>
+          </view>
         </view>
       </scroll-view>
 
@@ -207,6 +287,7 @@
         <view class="message-context-menu" :style="messageMenuStyle" @click.stop @contextmenu.prevent.stop>
           <view class="message-context-item" @click="copyContextMessage">复制</view>
           <view v-if="canQuoteMessage(messageContextMenu.message)" class="message-context-item" @click="quoteContextMessage">引用</view>
+          <view v-if="canHideMessage(messageContextMenu.message)" class="message-context-item danger" @click="hideContextMessage">Delete</view>
         </view>
       </view>
     </view>
@@ -498,6 +579,12 @@ import type { TransactionItem, WithdrawalItem } from '@/types'
 const store = useAppStore()
 const draft = ref('')
 const searchKeyword = ref('')
+const searchMode = ref<'customers' | 'messages'>('customers')
+const supportSearchLoading = ref(false)
+const SUPPORT_GROUP_COLLAPSED_KEY = 'support-country-groups-collapsed'
+const collapsedCountryGroups = ref<Record<string, boolean>>({})
+let supportSearchTimer: ReturnType<typeof setTimeout> | null = null
+let supportSearchSerial = 0
 const showBroadcastPanel = ref(false)
 const broadcastDraft = ref('')
 const broadcastKeyword = ref('')
@@ -550,10 +637,33 @@ const messageMenuStyle = computed(() => {
   return `left:${menu.x}px;top:${menu.y}px;`
 })
 
-const filteredConversations = computed(() => {
-  const keyword = searchKeyword.value.trim().toLowerCase()
-  if (!keyword) return store.state.supportConversations
-  return store.state.supportConversations.filter(conv => conversationMatchesKeyword(conv, keyword))
+const trimmedSearchKeyword = computed(() => searchKeyword.value.trim())
+const isSearching = computed(() => trimmedSearchKeyword.value.length > 0)
+const searchPlaceholder = computed(() => searchMode.value === 'messages' ? 'Search chat records' : 'Search users')
+const sortedConversations = computed(() =>
+  [...store.state.supportConversations].sort((left, right) => {
+    const unreadDiff = displayUnreadCount(right) - displayUnreadCount(left)
+    if (unreadDiff !== 0) return unreadDiff
+    return conversationTimestamp(right) - conversationTimestamp(left)
+  })
+)
+const countryGroups = computed(() => {
+  const groups = new Map<string, SupportConversationItem[]>()
+  sortedConversations.value.forEach((conv) => {
+    const code = normalizeCountryCode(conv.phoneCountryCode)
+    groups.set(code, [...(groups.get(code) || []), conv])
+  })
+  return Array.from(groups.entries())
+    .map(([code, conversations]) => ({
+      code,
+      label: countryLabel(code),
+      conversations
+    }))
+    .sort((left, right) => {
+      if (left.code === 'Unknown') return 1
+      if (right.code === 'Unknown') return -1
+      return left.label.localeCompare(right.label)
+    })
 })
 
 const broadcastFilteredConversations = computed(() => {
@@ -719,6 +829,7 @@ onShow(() => {
 })
 
 onMounted(() => {
+  loadCollapsedCountryGroups()
   attachPasteListener()
   attachContextMenuPointListener()
   startPresenceRefresh()
@@ -754,7 +865,18 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => [trimmedSearchKeyword.value, searchMode.value] as const,
+  ([keyword, mode]) => {
+    scheduleSupportSearch(keyword, mode)
+  }
+)
+
 onUnmounted(() => {
+  if (supportSearchTimer) {
+    clearTimeout(supportSearchTimer)
+    supportSearchTimer = null
+  }
   stopPresenceRefresh()
   stopReadRefresh()
   closeSocket()
@@ -767,6 +889,86 @@ function checkMobile() {
   // #ifdef H5
   isMobile.value = window.innerWidth < 768
   // #endif
+}
+
+function setSearchMode(mode: 'customers' | 'messages') {
+  searchMode.value = mode
+}
+
+function normalizeCountryCode(code?: string) {
+  return (code || '').trim() || 'Unknown'
+}
+
+function countryLabel(code?: string) {
+  const normalized = normalizeCountryCode(code)
+  return {
+    '+234': 'Nigeria',
+    '+91': 'India',
+    '+233': 'Ghana',
+    '+86': 'China',
+    '+44': 'United Kingdom',
+    '+1': 'United States',
+    Unknown: 'Unknown country'
+  }[normalized] || normalized
+}
+
+function conversationTimestamp(conv: SupportConversationItem) {
+  const time = Date.parse(conv.lastMessageTime || '')
+  return Number.isFinite(time) ? time : 0
+}
+
+function loadCollapsedCountryGroups() {
+  const cached = uni.getStorageSync(SUPPORT_GROUP_COLLAPSED_KEY)
+  if (cached && typeof cached === 'object') {
+    collapsedCountryGroups.value = cached as Record<string, boolean>
+  }
+}
+
+function saveCollapsedCountryGroups() {
+  uni.setStorageSync(SUPPORT_GROUP_COLLAPSED_KEY, collapsedCountryGroups.value)
+}
+
+function toggleCountryGroup(code: string) {
+  collapsedCountryGroups.value = {
+    ...collapsedCountryGroups.value,
+    [code]: !collapsedCountryGroups.value[code]
+  }
+  saveCollapsedCountryGroups()
+}
+
+function scheduleSupportSearch(keyword: string, mode: 'customers' | 'messages') {
+  if (supportSearchTimer) {
+    clearTimeout(supportSearchTimer)
+    supportSearchTimer = null
+  }
+  if (!keyword) {
+    supportSearchLoading.value = false
+    store.clearSupportSearchResults()
+    return
+  }
+  supportSearchLoading.value = true
+  supportSearchTimer = setTimeout(() => {
+    runSupportSearch(keyword, mode)
+  }, 260)
+}
+
+async function runSupportSearch(keyword: string, mode: 'customers' | 'messages') {
+  const serial = ++supportSearchSerial
+  try {
+    if (mode === 'messages') {
+      await store.searchSupportMessages(keyword)
+    } else {
+      await store.searchSupportCustomers(keyword)
+    }
+  } catch (error) {
+    if (serial === supportSearchSerial) {
+      uni.showToast({ title: error instanceof Error ? error.message : 'Search failed', icon: 'none' })
+    }
+  } finally {
+    if (serial === supportSearchSerial) {
+      supportSearchLoading.value = false
+    }
+  }
 }
 
 function previewMessageContent(content: string) {
@@ -811,6 +1013,10 @@ function canQuoteMessage(message: ChatMessage) {
   return message.author !== 'system' && !message.id.startsWith('local-')
 }
 
+function canHideMessage(message: ChatMessage) {
+  return message.author !== 'system' && !message.id.startsWith('local-')
+}
+
 function rememberContextMenuPoint(event: MouseEvent) {
   lastContextMenuPoint.value = {
     clientX: event.clientX,
@@ -846,7 +1052,7 @@ function openMessageMenu(message: ChatMessage, point?: { clientX: number; client
   let y = 120
   // #ifdef H5
   const menuWidth = 118
-  const menuHeight = canQuoteMessage(message) ? 88 : 48
+  const menuHeight = canQuoteMessage(message) ? 126 : 86
   const menuPoint = resolveContextMenuPoint(point)
   const clientX = menuPoint?.clientX || 0
   const clientY = menuPoint?.clientY || 0
@@ -881,6 +1087,31 @@ function quoteContextMessage() {
   }
 }
 
+function hideContextMessage() {
+  const message = messageContextMenu.value?.message
+  closeMessageMenu()
+  if (!message || !canHideMessage(message)) return
+  uni.showModal({
+    title: 'Delete message',
+    content: 'This only hides the message from this user view. The server, support and admin records are kept.',
+    confirmText: 'Delete',
+    confirmColor: '#d64242',
+    success: async (result) => {
+      if (!result.confirm) return
+      try {
+        await store.hideRecord({
+          targetType: 'MESSAGE',
+          targetId: message.id,
+          hiddenScope: 'SINGLE'
+        })
+        uni.showToast({ title: 'Deleted from view', icon: 'none' })
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : 'Delete failed', icon: 'none' })
+      }
+    }
+  })
+}
+
 async function selectCustomer(conv: SupportConversationItem) {
   showHeaderMenu.value = false
   showComposerTools.value = false
@@ -904,6 +1135,17 @@ async function selectCustomer(conv: SupportConversationItem) {
     console.error('标记已读失败:', error)
     uni.showToast({ title: '标记已读失败', icon: 'none' })
   }
+}
+
+function selectSearchCustomer(conversationId: string) {
+  const conversation = store.state.supportConversations.find(item => item.conversationId === conversationId)
+  if (conversation) {
+    selectCustomer(conversation)
+  }
+}
+
+function selectMessageSearchResult(conversationId: string) {
+  selectSearchCustomer(conversationId)
 }
 
 function selectLedgerCustomer(conversationId: string) {
@@ -2412,6 +2654,32 @@ function previewImage(url: string) {
   background: #f9fbf8;
 }
 
+.search-mode-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.search-mode-pill {
+  height: 32px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #647066;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 32px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid rgba(90, 123, 89, 0.16);
+}
+
+.search-mode-pill.active {
+  background: #00a884;
+  color: #ffffff;
+  border-color: #00a884;
+}
+
 .search-box {
   display: flex;
   align-items: center;
@@ -2436,6 +2704,112 @@ function previewImage(url: string) {
 .customer-list-scroll {
   flex: 1;
   overflow-y: auto;
+}
+
+.country-group {
+  border-bottom: 1px solid rgba(90, 123, 89, 0.08);
+}
+
+.country-group-head {
+  min-height: 42px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(244, 249, 244, 0.92);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.country-title,
+.country-subtitle {
+  display: block;
+}
+
+.country-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #304239;
+}
+
+.country-subtitle {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #7a887d;
+}
+
+.country-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.country-count {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: rgba(0, 168, 132, 0.12);
+  color: #007c61;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 22px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.country-caret {
+  font-size: 16px;
+  color: #6d796f;
+  transform: rotate(0deg);
+  transition: transform 0.16s ease;
+}
+
+.country-caret.collapsed {
+  transform: rotate(-90deg);
+}
+
+.search-result-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-search-state {
+  padding: 12px 14px;
+  color: #6f7f73;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.message-search-item {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(90, 123, 89, 0.1);
+  cursor: pointer;
+}
+
+.message-search-item:hover {
+  background: rgba(225, 244, 222, 0.72);
+}
+
+.search-snippet {
+  display: block;
+  margin-top: 6px;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.avatar-letter {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #dfeee4;
+  color: #1f5f49;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 48px;
+  text-align: center;
 }
 
 .customer-item {
@@ -3441,6 +3815,14 @@ function previewImage(url: string) {
 
 .message-context-item:hover {
   background: rgba(0, 168, 132, 0.1);
+}
+
+.message-context-item.danger {
+  color: #c93636;
+}
+
+.message-context-item.danger:hover {
+  background: rgba(214, 66, 66, 0.1);
 }
 
 .message-input {

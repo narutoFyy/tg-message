@@ -8,6 +8,8 @@ public record AdminUserItem(
     String role,
     String status,
     boolean blacklisted,
+    String vipLevel,
+    String vipPoints,
     String createdAt
 ) {
 }

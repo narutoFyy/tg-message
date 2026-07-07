@@ -30,13 +30,24 @@
     </view>
 
     <view class="vip-card" @click="goPerformance">
-      <view class="vip-left">
-        <image class="vip-badge" :src="pageArt.vipBadge" mode="aspectFit" />
-        <text class="vip-label">VIP 1</text>
+      <view class="vip-top-row">
+        <view class="vip-left">
+          <image class="vip-badge" :src="pageArt.vipBadge" mode="aspectFit" />
+          <view class="vip-copy-block">
+            <text class="vip-label">{{ vipSummary?.level || 'VIP1' }}</text>
+            <text class="vip-copy">{{ vipSummary?.points || '0' }} pts</text>
+          </view>
+        </view>
+        <view class="bronze-pill">
+          <text>{{ vipSummary?.levelName || 'Bronze' }}</text>
+          <text class="bronze-arrow">></text>
+        </view>
       </view>
-      <view class="bronze-pill">
-        <text>Bronze</text>
-        <text class="bronze-arrow">></text>
+      <view class="vip-progress-wrap">
+        <view class="vip-progress-track">
+          <view class="vip-progress-fill" :style="{ width: `${vipProgress}%` }"></view>
+        </view>
+        <text class="vip-progress-text">{{ vipProgressText }}</text>
       </view>
       <view class="vip-notch"></view>
     </view>
@@ -49,13 +60,21 @@
         </view>
         <image class="quick-art wallet-art" :src="pageArt.wallet" mode="aspectFit" />
       </view>
-      <view class="quick-card support-card" @click="goSupport">
+      <view class="quick-card invite-card" @click="shareInvite">
         <view>
-          <text class="quick-title">Support</text>
-          <text class="quick-value">{{ supportCount }}</text>
+          <text class="quick-title">Invited Users</text>
+          <text class="quick-value">{{ invitedUserCount }}</text>
         </view>
         <image class="quick-art friend-art" :src="pageArt.friend" mode="aspectFit" />
       </view>
+    </view>
+
+    <view class="lottery-card" @click="goLottery">
+      <view>
+        <text class="quick-title">Lucky Wheel</text>
+        <text class="quick-value">{{ lotteryHint }}</text>
+      </view>
+      <image class="quick-art lottery-art" src="/static/lottery/gsmz.jpg" mode="aspectFit" />
     </view>
 
     <view class="rank-card" @click="goRanking">
@@ -117,12 +136,30 @@ const invitationRanking = ref<RankingBoard | null>(null)
 onShow(() => {
   store.bootstrap()
   store.refreshCurrentAccount().catch(() => undefined)
+  store.refreshVipSummary().catch(() => undefined)
+  store.refreshLotteryEligibility().catch(() => undefined)
   refreshPersonalRankings()
 })
 
-const supportCount = computed(() => store.state.supportConversations.length)
+const vipSummary = computed(() => store.state.vipSummary)
+const vipProgress = computed(() => Math.max(0, Math.min(100, vipSummary.value?.progressPercent ?? 0)))
+const vipProgressText = computed(() => {
+  const vip = vipSummary.value
+  if (!vip) return '0 / 20 to VIP2'
+  if (vip.maxLevel) return 'Highest level reached'
+  return `${vip.points} / ${vip.nextThreshold} to ${vip.nextLevel} · ${vip.remainingPoints} pts left`
+})
+const lotteryHint = computed(() => {
+  const eligibility = store.state.lotteryEligibility
+  if (!eligibility) return 'Check eligibility'
+  return eligibility.eligible ? 'Available now' : (eligibility.nextAvailableAt || 'Not available')
+})
 const salesRankLabel = computed(() => rankLabel(salesRanking.value?.currentUser?.rank, '500+'))
 const invitationCount = computed(() => invitationRanking.value?.currentUser?.score || '0 invites')
+const invitedUserCount = computed(() => {
+  const match = invitationCount.value.match(/\d+/)
+  return match ? match[0] : '0'
+})
 const invitationRankLabel = computed(() => rankLabel(invitationRanking.value?.currentUser?.rank, '100+'))
 const displayName = computed(() => store.state.currentUser?.username || 'Jay Crown')
 const avatarSrc = computed(() => {
@@ -194,6 +231,10 @@ function goPerformance() {
 
 function goRanking() {
   uni.navigateTo({ url: '/pages/ranking/index' })
+}
+
+function goLottery() {
+  uni.navigateTo({ url: '/pages/lucky-wheel/index' })
 }
 
 function goSettings() {
@@ -361,17 +402,80 @@ function shareInvite() {
   position: relative;
   z-index: 1;
   margin-top: 22rpx;
-  min-height: 122rpx;
+  min-height: 176rpx;
   border-radius: 16rpx;
-  padding: 0 26rpx;
+  padding: 24rpx 26rpx 26rpx;
   background:
     linear-gradient(120deg, rgba(255, 255, 255, 0.08), transparent 36%),
     linear-gradient(180deg, #17212b, #223241);
   color: #ffffff;
   display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 22rpx;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.vip-top-row {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 20rpx;
+}
+
+.vip-copy {
+  display: block;
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.vip-progress-wrap {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+.vip-progress-track {
+  height: 10rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.22);
   overflow: hidden;
+}
+
+.vip-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #f7d56f;
+}
+
+.vip-progress-text {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 21rpx;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.lottery-card {
+  margin-top: 18rpx;
+  min-height: 146rpx;
+  padding: 24rpx;
+  border-radius: 18rpx;
+  background: #fff7df;
+  border: 1rpx solid rgba(224, 160, 38, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+}
+
+.lottery-art {
+  border-radius: 16rpx;
 }
 
 .vip-card::before,
@@ -403,21 +507,31 @@ function shareInvite() {
   gap: 18rpx;
   position: relative;
   z-index: 1;
+  flex: 1;
+  min-width: 0;
 }
 
 .vip-badge {
   width: 72rpx;
   height: 56rpx;
+  flex: 0 0 auto;
+}
+
+.vip-copy-block {
+  min-width: 0;
 }
 
 .vip-label {
+  display: block;
   font-size: 44rpx;
   font-weight: 900;
+  line-height: 1.1;
 }
 
 .bronze-pill {
   position: relative;
   z-index: 1;
+  flex: 0 0 auto;
   min-width: 208rpx;
   height: 74rpx;
   border-radius: 10rpx;
@@ -468,8 +582,8 @@ function shareInvite() {
   background: #f3f6f8;
 }
 
-.support-card {
-  background: rgba(0, 136, 204, 0.08);
+.invite-card {
+  background: rgba(20, 216, 111, 0.12);
 }
 
 .quick-title {

@@ -1,6 +1,6 @@
 INSERT INTO app_user (id, username, email, phone, password_hash, role_code, status_code, invite_code, referred_by_user_id, created_at, updated_at)
 VALUES
-('user-1', 'cardnova_user', 'demo@cardnova.app', '13800138000', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'CARDNOVA1', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-1', 'cardnova_user', 'demo@cardnova.app', '+86 13800138000', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'CARDNOVA1', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('user-2', 'gift_hunter', NULL, '+234 809 000 1234', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'GIFTHUNT2', 'user-1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('user-3', 'tradewithmina', NULL, '+44 7400 221199', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'ACTIVE', 'TRADEMIN3', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('user-4', 'spam_rate_88', NULL, '+86 135 0000 2222', 'pbkdf2$600000$N7SXtMJI4Je7qGo1CwID+A==$IPGHri/uhCVaBgw9v5rJnVsCgC1hvtHtrTz+xxGSazc=', 'USER', 'BLOCKED', 'SPAMRATE4', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

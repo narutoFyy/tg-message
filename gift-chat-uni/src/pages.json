@@ -61,6 +61,12 @@
       }
     },
     {
+      "path": "pages/lucky-wheel/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/me/index",
       "style": {
         "navigationStyle": "custom"

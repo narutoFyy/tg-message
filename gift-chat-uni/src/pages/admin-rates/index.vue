@@ -22,7 +22,18 @@
         <view style="height: 20rpx"></view>
 
         <text class="field-label">地区</text>
-        <input v-model="form.region" class="field-input" placeholder="NG / US / UK / EU" />
+        <picker
+          mode="selector"
+          :range="store.state.countries"
+          range-key="name"
+          :value="selectedRegionIndex"
+          @change="handleRegionChange"
+        >
+          <view class="field-input select-field">
+            <text>{{ selectedRegionLabel }}</text>
+            <text class="select-code">{{ form.region }}</text>
+          </view>
+        </picker>
         <view style="height: 20rpx"></view>
 
         <text class="field-label">汇率</text>
@@ -64,7 +75,7 @@
 
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useAppStore } from '@/store/app'
 import type { RateItem } from '@/types'
 
@@ -75,8 +86,17 @@ const editingId = ref('')
 
 const form = reactive({
   cardName: '',
-  region: '',
+  region: defaultRegionCode(),
   rate: ''
+})
+
+const selectedRegionIndex = computed(() => {
+  const index = store.state.countries.findIndex((country) => country.code === form.region)
+  return index >= 0 ? index : 0
+})
+
+const selectedRegionLabel = computed(() => {
+  return store.state.countries[selectedRegionIndex.value]?.name || '请选择地区'
 })
 
 async function submitRate() {
@@ -84,20 +104,20 @@ async function submitRate() {
     if (editingId.value) {
       await store.updateRate(editingId.value, {
         cardName: form.cardName,
-        region: form.region,
+        region: form.region || defaultRegionCode(),
         rate: form.rate
       })
       notice.value = '汇率已更新。'
     } else {
       await store.addRate({
         cardName: form.cardName,
-        region: form.region,
+        region: form.region || defaultRegionCode(),
         rate: form.rate
       })
       notice.value = '汇率已创建。'
     }
     form.cardName = ''
-    form.region = ''
+    form.region = defaultRegionCode()
     form.rate = ''
     editingId.value = ''
   } catch (error) {
@@ -108,9 +128,44 @@ async function submitRate() {
 function startEdit(rate: RateItem) {
   editingId.value = rate.id
   form.cardName = rate.cardName
-  form.region = rate.region
+  form.region = resolveRegionCode(rate.region)
   form.rate = rate.rate
   notice.value = `正在编辑 ${rate.cardName}。`
+}
+
+function handleRegionChange(event: { detail: { value: number | string } }) {
+  const index = Number(event.detail.value)
+  const country = store.state.countries[index]
+  if (country) {
+    form.region = country.code
+  }
+}
+
+function defaultRegionCode() {
+  return store.state.countries[0]?.code || 'NG'
+}
+
+function resolveRegionCode(region: string) {
+  const normalized = region.trim().replace(/^[+＋]/, '').replace(/[\s_-]+/g, '').toUpperCase()
+  const aliases: Record<string, string> = {
+    NG: 'NG',
+    NIGERIA: 'NG',
+    '234': 'NG',
+    尼日利亚: 'NG',
+    IN: 'IN',
+    INDIA: 'IN',
+    '91': 'IN',
+    印度: 'IN',
+    CM: 'CM',
+    CAMEROON: 'CM',
+    '237': 'CM',
+    喀麦隆: 'CM',
+    GH: 'GH',
+    GHANA: 'GH',
+    '233': 'GH',
+    加纳: 'GH'
+  }
+  return aliases[normalized] || defaultRegionCode()
 }
 
 async function toggleRate(rateId: string, status: RateItem['status']) {
@@ -187,6 +242,18 @@ onShow(() => {
   color: #ffffff;
   border-color: #002fa7;
   background: #002fa7;
+}
+
+.select-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.select-code {
+  color: #0088cc;
+  font-size: 24rpx;
+  font-weight: 800;
 }
 
 .rate-row {

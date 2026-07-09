@@ -627,7 +627,7 @@ const messageContextMenu = ref<{ message: ChatMessage; x: number; y: number } | 
 const lastContextMenuPoint = ref<{ clientX: number; clientY: number; time: number } | null>(null)
 
 const conversation = computed(() => store.state.supportMessages)
-const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT')
+const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT' || store.state.currentUser?.roleCode === 'ADMIN')
 const balanceSummary = computed(() => store.state.balanceSummary)
 const canSend = computed(() => draft.value.trim().length > 0 || hasAttachment.value)
 const replyTargetText = computed(() => previewMessageContent(replyTarget.value?.content || ''))

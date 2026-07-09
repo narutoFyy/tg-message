@@ -81,7 +81,9 @@ public class PersistentSupportService {
     @Transactional
     public List<SupportConversation> getConversations() {
         UserEntity currentUser = currentUserService.getCurrentUser();
-        ensureUserConversation(currentUser);
+        if (isCustomer(currentUser)) {
+            ensureUserConversation(currentUser);
+        }
 
         return conversationsFor(currentUser).stream()
             .filter(conversation -> shouldShowConversation(conversation, currentUser))
@@ -268,7 +270,7 @@ public class PersistentSupportService {
         SupportMessageEntity saved = appendMessageEntity(
             conversation,
             currentUser,
-            isAgent(currentUser) ? "SUPPORT" : "ME",
+            staffSenderRole(currentUser),
             request.messageType(),
             outgoingContent,
             clientMessageId,
@@ -282,7 +284,7 @@ public class PersistentSupportService {
             RealtimeChatService.supportChannel(conversationId),
             currentUser.getId(),
             "me",
-            isAgent(currentUser) ? "support" : "friend",
+            isStaff(currentUser) ? "support" : "friend",
             saved.getMessageType().toLowerCase(),
             saved.getContent(),
             saved.getId(),
@@ -298,7 +300,7 @@ public class PersistentSupportService {
     }
 
     private String normalizeOutgoingSupportContent(UserEntity currentUser, String messageType, String content) {
-        if (!isAgent(currentUser) || !"TEXT".equalsIgnoreCase(messageType == null ? "" : messageType.trim())) {
+        if (!isStaff(currentUser) || !"TEXT".equalsIgnoreCase(messageType == null ? "" : messageType.trim())) {
             return content;
         }
         return translationService.translateToEnglish(content).translatedText();
@@ -352,6 +354,9 @@ public class PersistentSupportService {
     }
 
     private List<SupportConversationEntity> conversationsFor(UserEntity user) {
+        if ("ADMIN".equalsIgnoreCase(user.getRoleCode())) {
+            return supportConversationRepository.findAllByOrderByUpdatedAtDesc();
+        }
         if (isAgent(user)) {
             return supportConversationRepository.findByAssignedAgent_IdOrderByUpdatedAtDesc(user.getId());
         }
@@ -372,7 +377,7 @@ public class PersistentSupportService {
 
     @Transactional
     public SupportConversationEntity ensureUserConversation(UserEntity user) {
-        if (isAgent(user)) {
+        if (!isCustomer(user)) {
             return null;
         }
         SupportConversationEntity existing = supportConversationRepository.findFirstByCustomerUser_IdOrderByUpdatedAtDesc(user.getId())
@@ -470,6 +475,24 @@ public class PersistentSupportService {
 
     private boolean isAgent(UserEntity user) {
         return "AGENT".equalsIgnoreCase(user.getRoleCode());
+    }
+
+    private boolean isStaff(UserEntity user) {
+        return isAgent(user) || "ADMIN".equalsIgnoreCase(user.getRoleCode());
+    }
+
+    private boolean isCustomer(UserEntity user) {
+        return "USER".equalsIgnoreCase(user.getRoleCode());
+    }
+
+    private String staffSenderRole(UserEntity user) {
+        if ("ADMIN".equalsIgnoreCase(user.getRoleCode())) {
+            return "ADMIN";
+        }
+        if (isAgent(user)) {
+            return "SUPPORT";
+        }
+        return "ME";
     }
 
     private java.util.Set<String> hiddenMessageIds(UserEntity currentUser, java.util.Collection<String> messageIds) {

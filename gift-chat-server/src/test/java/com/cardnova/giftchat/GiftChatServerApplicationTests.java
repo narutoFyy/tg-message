@@ -370,6 +370,7 @@ class GiftChatServerApplicationTests {
     void supportConversationsAreScopedByAuthenticatedUser() throws Exception {
         String user2Token = loginToken("gift_hunter");
         String user1Token = loginToken("cardnova_user");
+        String adminToken = loginToken("admin_mia");
 
         mockMvc.perform(get("/api/support/conversations")
                 .header("Authorization", bearer(user2Token)))
@@ -384,6 +385,45 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data", hasSize(1)))
             .andExpect(jsonPath("$.data[0].conversationId").value("support-1"));
+
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(greaterThanOrEqualTo(4)))
+            .andExpect(content().string(containsString("cardnova_user")))
+            .andExpect(content().string(containsString("john_smith")))
+            .andExpect(content().string(containsString("mary_jane")))
+            .andExpect(content().string(containsString("gift_hunter")))
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString("admin_mia"))));
+    }
+
+    @Test
+    void adminCanSendSupportMessagesAsStaff() throws Exception {
+        String adminToken = loginToken("admin_mia");
+        String customerToken = loginToken("john_smith");
+        String uniqueMessage = "Admin staff reply " + UUID.randomUUID();
+
+        MvcResult sentResult = mockMvc.perform(post("/api/support/conversations/support-2/messages")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "%s",
+                      "messageType": "text"
+                    }
+                    """.formatted(uniqueMessage)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.author").value("me"))
+            .andReturn();
+        String messageId = objectMapper.readTree(sentResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+
+        mockMvc.perform(get("/api/support/conversations/support-2/messages")
+                .header("Authorization", bearer(customerToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[?(@.id == '%s')].author".formatted(messageId)).value("support"))
+            .andExpect(content().string(containsString(uniqueMessage)));
     }
 
     @Test

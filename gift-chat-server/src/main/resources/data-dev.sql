@@ -92,5 +92,5 @@ VALUES
 
 INSERT INTO referral_reward (id, referrer_user_id, referred_user_id, trade_order_id, source_key, reward_type, amount, rate_percent, status_code, created_at, updated_at)
 VALUES
-('reward-1', 'user-1', 'user-2', NULL, 'user-2', 'REGISTRATION', 1.00, NULL, 'AVAILABLE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('reward-2', 'user-1', 'user-5', NULL, 'user-5', 'REGISTRATION', 1.00, NULL, 'AVAILABLE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('reward-1', 'user-1', 'user-2', NULL, 'user-2', 'REGISTRATION', 0.00, NULL, 'SKIPPED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('reward-2', 'user-1', 'user-5', NULL, 'user-5', 'REGISTRATION', 0.00, NULL, 'SKIPPED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

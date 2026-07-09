@@ -2120,11 +2120,12 @@ function previewImage(url: string) {
 
 <style scoped lang="scss">
 .chat-container {
+  --chat-doodle-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg fill='none' stroke='%23606C38' stroke-opacity='.18' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 28c10-12 27-6 27 8 0 13-17 21-27 7-4-6-4-10 0-15Z'/%3E%3Cpath d='M78 18h22v18H78zM85 18v-6M93 18v-6M82 44h14'/%3E%3Cpath d='M142 22c14 2 24 13 21 26-2 11-13 18-27 14-11-4-16-14-12-25 3-9 10-16 18-15Z'/%3E%3Cpath d='M35 92c18-5 35 4 42 21M24 110c18 12 38 15 60 8'/%3E%3Cpath d='M117 90l24 16-24 16zM151 94l12 8M151 118l12 8'/%3E%3Cpath d='M185 82c8 0 15 7 15 15s-7 15-15 15-15-7-15-15 7-15 15-15Z'/%3E%3Cpath d='M31 169c11-13 31-12 42 2M34 188c13 8 26 8 39 0'/%3E%3Cpath d='M106 162c11-9 29-7 36 5 7 13 0 27-14 29-14 2-25-6-25-18 0-7 1-12 3-16Z'/%3E%3Cpath d='M172 164h24v24h-24zM178 170h12M178 176h12M178 182h8'/%3E%3Cpath d='M62 57l11 11M73 57 62 68M198 30l8 8M206 30l-8 8M92 136l9 9M101 136l-9 9'/%3E%3C/g%3E%3C/svg%3E");
   display: flex;
   height: 100vh;
   width: 100%;
   overflow: hidden;
-  background: #e8eef2;
+  background: linear-gradient(145deg, #d8edbf 0%, #b9ddab 42%, #85bea9 100%);
 }
 
 /* ============ 左侧客户列表 ============ */
@@ -3126,7 +3127,7 @@ function previewImage(url: string) {
   min-width: 360px;
   display: flex;
   flex-direction: column;
-  background: #e8eef2;
+  background: linear-gradient(145deg, #d8edbf 0%, #b9ddab 42%, #85bea9 100%);
   transition: transform 0.3s;
   backdrop-filter: blur(10px);
 }
@@ -3455,9 +3456,10 @@ function previewImage(url: string) {
   flex: 1;
   min-height: 0;
   background-image:
-    linear-gradient(180deg, rgba(232, 238, 242, 0.76), rgba(232, 238, 242, 0.82)),
-    url('/static/chat-bg.png');
-  background-size: cover;
+    var(--chat-doodle-pattern),
+    radial-gradient(circle at 0% 8%, rgba(224, 239, 153, 0.62) 0, rgba(224, 239, 153, 0) 34%),
+    linear-gradient(145deg, rgba(216, 237, 191, 0.96) 0%, rgba(185, 221, 171, 0.96) 42%, rgba(133, 190, 169, 0.96) 100%);
+  background-size: 220px 220px, cover, cover;
   background-position: center;
   padding: 18px 24px;
   box-sizing: border-box;
@@ -4024,7 +4026,7 @@ function previewImage(url: string) {
 /* ============ 响应式设计 ============ */
 @media (max-width: 768px) {
   .chat-container {
-    background: #e4f3dc;
+    background: linear-gradient(145deg, #d8edbf 0%, #b9ddab 42%, #85bea9 100%);
     overflow: hidden;
   }
 

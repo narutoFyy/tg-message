@@ -1,34 +1,34 @@
 <template>
   <view class="page-shell soft-page">
     <view class="panel">
-      <text class="eyebrow">注册</text>
+      <text class="eyebrow">Sign up</text>
       <view style="height: 12rpx"></view>
-      <text class="title">创建 CardBrother 账号</text>
+      <text class="title">Create your CardBrother account</text>
     </view>
 
     <view class="panel">
-      <text class="field-label">用户名</text>
-      <input v-model.trim="form.username" class="field-input" placeholder="请输入唯一用户名" />
+      <text class="field-label">Username</text>
+      <input v-model.trim="form.username" class="field-input" placeholder="Enter a unique username" />
       <view style="height: 20rpx"></view>
-      <text class="field-label">邮箱</text>
-      <input v-model.trim="form.email" class="field-input" placeholder="可选，请输入邮箱" />
+      <text class="field-label">Email</text>
+      <input v-model.trim="form.email" class="field-input" placeholder="Optional email address" />
       <view style="height: 20rpx"></view>
-      <text class="field-label">手机号</text>
+      <text class="field-label">Phone number</text>
       <view class="phone-row">
         <picker :range="countryCodeLabels" :value="selectedCountryIndex" @change="handleCountryChange">
           <view class="country-picker">{{ selectedCountry.label }}</view>
         </picker>
-        <input v-model.trim="form.phone" class="field-input phone-input" placeholder="只填写本地手机号" />
+        <input v-model.trim="form.phone" class="field-input phone-input" placeholder="Enter local phone number only" />
       </view>
       <text class="phone-help">{{ phoneHelpText }}</text>
       <view style="height: 20rpx"></view>
-      <text class="field-label">密码</text>
-      <input v-model="form.password" class="field-input" password placeholder="至少 8 位密码" />
+      <text class="field-label">Password</text>
+      <input v-model="form.password" class="field-input" password placeholder="At least 8 characters" />
       <view style="height: 20rpx"></view>
-      <text class="field-label">邀请码</text>
-      <input v-model.trim="form.inviteCode" class="field-input" placeholder="可选邀请码" />
+      <text class="field-label">Invite code</text>
+      <input v-model.trim="form.inviteCode" class="field-input" placeholder="Optional invite code" />
       <view style="height: 24rpx"></view>
-      <button class="primary-button" @click="handleSubmit">创建账号</button>
+      <button class="primary-button" @click="handleSubmit">Create account</button>
       <view style="height: 16rpx"></view>
       <text v-if="notice" class="muted">{{ notice }}</text>
     </view>
@@ -86,9 +86,9 @@ const selectedCountry = computed(() => {
 const phoneHelpText = computed(() => {
   const rule = selectedCountry.value
   const lengthText = rule.minLocalLength === rule.maxLocalLength
-    ? `${rule.minLocalLength} 位数字`
-    : `${rule.minLocalLength}-${rule.maxLocalLength} 位数字`
-  return `${rule.countryName} 手机号需要填写 ${lengthText}，不需要输入 ${rule.countryCode}。`
+    ? `${rule.minLocalLength} digits`
+    : `${rule.minLocalLength}-${rule.maxLocalLength} digits`
+  return `${rule.countryName} phone numbers must use ${lengthText}. Do not enter ${rule.countryCode}.`
 })
 
 async function handleSubmit() {
@@ -100,23 +100,23 @@ async function handleSubmit() {
     const inviteCode = form.inviteCode.trim()
 
     if (!username) {
-      notice.value = '请输入用户名。'
+      notice.value = 'Please enter a username.'
       return
     }
     if (!phone) {
-      notice.value = '请输入手机号。'
+      notice.value = 'Please enter a phone number.'
       return
     }
     if (!password) {
-      notice.value = '请输入密码。'
+      notice.value = 'Please enter a password.'
       return
     }
     if (password.length < 8) {
-      notice.value = '密码至少需要 8 位。'
+      notice.value = 'Password must be at least 8 characters.'
       return
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      notice.value = '邮箱格式不正确。'
+      notice.value = 'Please enter a valid email address.'
       return
     }
     const validationMessage = validateLocalPhone(phone)
@@ -131,10 +131,10 @@ async function handleSubmit() {
       password,
       inviteCode: inviteCode || undefined
     })
-    notice.value = '注册成功。'
+    notice.value = 'Account created.'
     uni.redirectTo({ url: safeRouteForRole(session.nextRoute, session, '/pages/support/index') })
   } catch (error) {
-    notice.value = error instanceof Error ? error.message : '注册失败'
+    notice.value = error instanceof Error ? error.message : 'Registration failed'
   }
 }
 
@@ -172,9 +172,9 @@ function validateLocalPhone(phone: string) {
   const rule = selectedCountry.value
   if (phone.length < rule.minLocalLength || phone.length > rule.maxLocalLength) {
     const lengthText = rule.minLocalLength === rule.maxLocalLength
-      ? `${rule.minLocalLength} 位数字`
-      : `${rule.minLocalLength}-${rule.maxLocalLength} 位数字`
-    return `${rule.countryName} 手机号需要填写 ${lengthText}。`
+      ? `${rule.minLocalLength} digits`
+      : `${rule.minLocalLength}-${rule.maxLocalLength} digits`
+    return `${rule.countryName} phone numbers must use ${lengthText}.`
   }
   return ''
 }

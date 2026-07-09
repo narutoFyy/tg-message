@@ -362,11 +362,11 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void registerWithInviteCodeCreatesReferralReward() throws Exception {
+    void registerWithInviteCodeDoesNotCreateRegistrationRewardByDefault() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String username = "invite_user_" + suffix;
         String email = username + "@example.com";
-        String adminToken = loginToken("admin_mia");
+        disableReferralRegistrationCashback();
 
         mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -382,17 +382,17 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.username").value(username))
             .andExpect(jsonPath("$.data.inviteCode").isString());
 
-        mockMvc.perform(get("/api/admin/referral-rewards")
-                .header("Authorization", bearer(adminToken)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data[?(@.referrerUsername == 'cardnova_user' && @.referredUsername == '%s' && @.rewardType == 'registration')]".formatted(username)).exists());
+        UserEntity referredUser = userRepository.findByUsername(username)
+            .orElseThrow(() -> new AssertionError("Registered user missing"));
+        assertEquals(0, referralRewardRepository.countByRewardTypeAndSourceKey("REGISTRATION", referredUser.getId()));
     }
 
     @Test
-    void referralRegistrationRewardIsIdempotent() throws Exception {
+    void disabledReferralRegistrationRewardDoesNotCreateRecords() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String username = "repeat_invite_" + suffix;
         String email = username + "@example.com";
+        disableReferralRegistrationCashback();
 
         mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -412,10 +412,7 @@ class GiftChatServerApplicationTests {
         referralRewardService.rewardRegistration(referredUser);
         referralRewardService.rewardRegistration(referredUser);
 
-        org.junit.jupiter.api.Assertions.assertEquals(
-            1,
-            referralRewardRepository.countByRewardTypeAndSourceKey("REGISTRATION", referredUser.getId())
-        );
+        assertEquals(0, referralRewardRepository.countByRewardTypeAndSourceKey("REGISTRATION", referredUser.getId()));
     }
 
     @Test
@@ -1235,7 +1232,7 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void registrationBonusUsesPhoneCountryCodeAndIsIdempotent() throws Exception {
+    void registrationBonusUsesPhoneCountryCodeAndIsSkippedByDefault() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String username = "bonus_in_" + suffix;
         String token = registerPhoneToken(username, "+91 90000 " + randomDigits(5));
@@ -1245,8 +1242,8 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.username").value(username))
             .andExpect(jsonPath("$.data.countryCode").value("+91"))
-            .andExpect(jsonPath("$.data.bonusAmount").value("2.00"))
-            .andExpect(jsonPath("$.data.status").value("available"));
+            .andExpect(jsonPath("$.data.bonusAmount").value("0.00"))
+            .andExpect(jsonPath("$.data.status").value("skipped"));
 
         UserEntity user = userRepository.findByUsername(username)
             .orElseThrow(() -> new AssertionError("Registered bonus user missing"));
@@ -2148,6 +2145,22 @@ class GiftChatServerApplicationTests {
                   "accountNumber": "%s"
                 }
                 """.formatted(country, accountName, bankName, accountNumber)));
+    }
+
+    private void disableReferralRegistrationCashback() throws Exception {
+        String adminToken = loginToken("admin_mia");
+        mockMvc.perform(post("/api/admin/referral-rewards/config")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "registrationCashbackEnabled": false,
+                      "registrationCashbackAmount": 0,
+                      "tradeRebateEnabled": true,
+                      "tradeRebatePercent": 5
+                    }
+                    """))
+            .andExpect(status().isOk());
     }
 
     private String registerToken(String username) throws Exception {

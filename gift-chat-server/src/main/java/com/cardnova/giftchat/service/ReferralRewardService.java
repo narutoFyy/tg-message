@@ -218,8 +218,8 @@ public class ReferralRewardService {
         return configRepository.findById(CONFIG_ID).orElseGet(() -> {
             ReferralRewardConfigEntity config = new ReferralRewardConfigEntity();
             config.setId(CONFIG_ID);
-            config.setRegistrationCashbackEnabled(true);
-            config.setRegistrationCashbackAmount(BigDecimal.ONE.setScale(2, RoundingMode.HALF_UP));
+            config.setRegistrationCashbackEnabled(false);
+            config.setRegistrationCashbackAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             config.setTradeRebateEnabled(true);
             config.setTradeRebatePercent(BigDecimal.valueOf(5).setScale(4, RoundingMode.HALF_UP));
             config.setUpdatedAt(LocalDateTime.now());

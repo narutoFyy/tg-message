@@ -73,6 +73,12 @@
       }
     },
     {
+      "path": "pages/profile-info/index",
+      "style": {
+        "navigationBarTitleText": "Personal Information"
+      }
+    },
+    {
       "path": "pages/wallet/index",
       "style": {
         "navigationBarTitleText": "Wallet"

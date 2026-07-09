@@ -77,6 +77,17 @@
       <image class="quick-art lottery-art" src="/static/lottery/stone-technology.png" mode="aspectFit" />
     </view>
 
+    <view class="profile-info-entry" @click="goProfileInfo">
+      <view class="profile-info-icon">
+        <text>i</text>
+      </view>
+      <view class="profile-info-copy">
+        <text class="profile-info-title">Personal Information</text>
+        <text class="profile-info-subtitle">Account, phone, email and bank details</text>
+      </view>
+      <text class="profile-info-arrow">></text>
+    </view>
+
     <view class="rank-card" @click="goRanking">
       <text class="rank-title">Rank ( Month )</text>
       <view class="rank-row">
@@ -235,6 +246,10 @@ function goRanking() {
 
 function goLottery() {
   uni.navigateTo({ url: '/pages/lucky-wheel/index' })
+}
+
+function goProfileInfo() {
+  uni.navigateTo({ url: '/pages/profile-info/index' })
 }
 
 function goSettings() {
@@ -476,6 +491,65 @@ function shareInvite() {
 
 .lottery-art {
   border-radius: 16rpx;
+}
+
+.profile-info-entry {
+  position: relative;
+  z-index: 1;
+  margin-top: 18rpx;
+  min-height: 126rpx;
+  border-radius: 14rpx;
+  padding: 22rpx 24rpx;
+  background: #ffffff;
+  border: 1rpx solid rgba(136, 153, 166, 0.16);
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  box-sizing: border-box;
+}
+
+.profile-info-icon {
+  width: 70rpx;
+  height: 70rpx;
+  border-radius: 50%;
+  background: #d9ffe7;
+  color: #0088cc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38rpx;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.profile-info-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-info-title,
+.profile-info-subtitle {
+  display: block;
+}
+
+.profile-info-title {
+  font-size: 31rpx;
+  font-weight: 900;
+  color: #171717;
+}
+
+.profile-info-subtitle {
+  margin-top: 6rpx;
+  font-size: 23rpx;
+  color: #6f7a86;
+  line-height: 1.3;
+}
+
+.profile-info-arrow {
+  color: #9aa4ad;
+  font-size: 34rpx;
+  font-weight: 900;
+  flex: 0 0 auto;
 }
 
 .vip-card::before,

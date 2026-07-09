@@ -31,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -357,8 +358,8 @@ class GiftChatServerApplicationTests {
         mockMvc.perform(get("/api/support/conversations")
                 .header("Authorization", bearer(userToken)))
             .andExpect(status().isOk())
-            .andExpect(content().string(containsString("Lottery withdrawal request")))
-            .andExpect(content().string(containsString(recordId)));
+            .andExpect(content().string(not(containsString("Lottery withdrawal request"))))
+            .andExpect(content().string(not(containsString(recordId))));
     }
 
     @Test
@@ -1168,6 +1169,19 @@ class GiftChatServerApplicationTests {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.cardName").value("Test Card"));
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Nigeria Test Card",
+                      "region": "Nigeria",
+                      "rate": "NGN 1000 / $1"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.region").value("NG"));
     }
 
     @Test

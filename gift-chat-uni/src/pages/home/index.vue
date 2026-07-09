@@ -108,7 +108,9 @@ const cardCategories = computed(() => {
   return [ALL_CARD, ...Array.from(new Set(cardNames))]
 })
 
-const countryRates = computed(() => store.state.rates.filter((rate) => rate.region === store.state.selectedCountryCode))
+const countryRates = computed(() =>
+  store.state.rates.filter((rate) => normalizeRateRegion(rate.region) === store.state.selectedCountryCode)
+)
 
 const filteredRates = computed(() => {
   if (activeCardName.value === ALL_CARD) {
@@ -137,6 +139,29 @@ function pickCountry() {
 
 function selectCardCategory(cardName: string) {
   activeCardName.value = cardName
+}
+
+function normalizeRateRegion(region: string) {
+  const normalized = region.trim().replace(/^[+＋]/, '').replace(/[\s_-]+/g, '').toUpperCase()
+  const regionAliases: Record<string, string> = {
+    NG: 'NG',
+    NIGERIA: 'NG',
+    '234': 'NG',
+    尼日利亚: 'NG',
+    IN: 'IN',
+    INDIA: 'IN',
+    '91': 'IN',
+    印度: 'IN',
+    CM: 'CM',
+    CAMEROON: 'CM',
+    '237': 'CM',
+    喀麦隆: 'CM',
+    GH: 'GH',
+    GHANA: 'GH',
+    '233': 'GH',
+    加纳: 'GH'
+  }
+  return regionAliases[normalized] || normalized
 }
 
 function goSell(rate: { id: string }) {

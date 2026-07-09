@@ -24,7 +24,7 @@
             </view>
           </view>
           <view class="wheel-center">
-            <image src="/static/lottery/gsmz.jpg" mode="aspectFit" />
+            <image src="/static/lottery/stone-technology-icon.png" mode="aspectFill" />
           </view>
         </view>
 
@@ -40,7 +40,7 @@
             <text class="eyebrow">Draw status</text>
             <text class="side-title">{{ eligibilityText }}</text>
           </view>
-          <image class="brand-logo" src="/static/lottery/gsmz.jpg" mode="aspectFit" />
+          <image class="brand-logo" src="/static/lottery/stone-technology.png" mode="aspectFit" />
         </view>
 
         <view class="prize-panel">
@@ -367,17 +367,18 @@ function goBindBankAccount() {
   width: 142rpx;
   height: 142rpx;
   border-radius: 50%;
-  background: #fff;
+  background: #231612;
   border: 6rpx solid #e5b93f;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   z-index: 3;
 }
 
 .wheel-center image {
-  width: 110rpx;
-  height: 110rpx;
+  width: 100%;
+  height: 100%;
 }
 
 .spin-button {

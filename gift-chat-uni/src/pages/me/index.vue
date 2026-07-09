@@ -74,7 +74,7 @@
         <text class="quick-title">Lucky Wheel</text>
         <text class="quick-value">{{ lotteryHint }}</text>
       </view>
-      <image class="quick-art lottery-art" src="/static/lottery/gsmz.jpg" mode="aspectFit" />
+      <image class="quick-art lottery-art" src="/static/lottery/stone-technology.png" mode="aspectFit" />
     </view>
 
     <view class="rank-card" @click="goRanking">

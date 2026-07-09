@@ -141,7 +141,6 @@ public class WithdrawalService {
             currentUser.getPhone(),
             "Lottery prize withdrawal: " + record.getId()
         );
-        persistentSupportService.appendSystemMessage(conversation, withdrawalMessage(saved, true));
         notifyWithdrawal(currentUser, assignedAgent, saved);
         record.setFulfillmentStatus("PROCESSING");
         record.setProcessedAt(LocalDateTime.now());

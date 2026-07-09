@@ -161,7 +161,7 @@ async function submit() {
           bankName: bankAccount.value.bankName,
           accountNumber: bankAccount.value.accountNumber,
           contact: form.contact || undefined,
-          sendChatMessage: true
+          sendChatMessage: false
         })
     uni.setStorageSync('pending-support-draft', buildWithdrawalDraft(withdrawal.requestNo))
     await store.bootstrap().catch(() => undefined)

@@ -36,7 +36,7 @@ public class LotteryService {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter DAY_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final Set<String> FULFILLMENT_STATUSES = Set.of("PENDING", "PROCESSING", "FULFILLED", "CANCELED");
-    private static final Set<String> DRAWABLE_PRIZE_NAMES = Set.of("₦1000", "₦2000", "₦3000", "₦5000");
+    private static final Set<String> DRAWABLE_PRIZE_NAMES = Set.of("₦100", "₦200", "₦500", "₦1000");
 
     private final LotteryPrizeRepository lotteryPrizeRepository;
     private final LotteryDrawRecordRepository lotteryDrawRecordRepository;
@@ -317,9 +317,9 @@ public class LotteryService {
 
     private List<LotteryWinnerItem> demoWinners() {
         return List.of(
-            new LotteryWinnerItem("+234 *** *** 4551", "₦5000", ""),
-            new LotteryWinnerItem("+233 *** *** 7905", "₦3000", ""),
-            new LotteryWinnerItem("+234 *** *** 2866", "₦1000", ""),
+            new LotteryWinnerItem("+234 *** *** 4551", "₦1000", ""),
+            new LotteryWinnerItem("+233 *** *** 7905", "₦500", ""),
+            new LotteryWinnerItem("+234 *** *** 2866", "₦200", ""),
             new LotteryWinnerItem("+91 *** *** 1024", "iPad", "")
         );
     }

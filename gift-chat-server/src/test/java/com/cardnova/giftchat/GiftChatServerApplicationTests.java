@@ -1669,7 +1669,7 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦1000", "₦2000", "₦3000", "₦5000").contains(prizeName));
+        assertTrue(List.of("₦100", "₦200", "₦500", "₦1000").contains(prizeName));
 
         mockMvc.perform(post("/api/lottery/spin")
                 .header("Authorization", bearer(userToken)))
@@ -1682,7 +1682,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "prizeName": "₦15000"
+                      "prizeName": "₦5000"
                     }
                     """))
             .andExpect(status().isBadRequest())

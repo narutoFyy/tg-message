@@ -102,8 +102,7 @@ const featuredPrizes = [
   { name: 'iPad', note: 'Tablet prize', image: '/static/lottery/ipad.jpg' },
   { name: 'Computer', note: 'Laptop prize', image: '/static/lottery/diannao.jpg' }
 ]
-const wheelPrizes = ['₦1000', 'iPad', '₦2000', 'Computer', '₦3000', '₦5000', '₦8000', '₦10000', '₦15000', 'iPhone 17']
-const drawablePrizeNames = ['₦1000', '₦2000', '₦3000', '₦5000']
+const wheelPrizes = ['₦100', 'iPad', '₦200', 'Computer', '₦500', '₦1000', '₦2000', '₦3000', '₦5000', 'iPhone 17']
 const spinDurationMs = 4000
 
 onShow(() => {
@@ -138,10 +137,6 @@ function labelStyle(index: number, prize: string) {
   return `transform: rotate(${angle}deg) translateY(-${distance}rpx) rotate(-${angle}deg);`
 }
 
-function pickDrawablePrize() {
-  return drawablePrizeNames[Math.floor(Math.random() * drawablePrizeNames.length)]
-}
-
 function targetRotationForPrize(prizeName: string) {
   const targetIndex = wheelPrizes.findIndex((prize) => prize === prizeName)
   if (targetIndex < 0) return rotation.value + 1800
@@ -168,11 +163,10 @@ async function handleSpin() {
   spinning.value = true
   lastPrize.value = ''
   lastRecordId.value = ''
-  const targetPrize = pickDrawablePrize()
-  rotation.value = targetRotationForPrize(targetPrize)
   try {
+    const result = await store.spinLottery()
+    rotation.value = targetRotationForPrize(result.prize.name)
     await waitForSpin()
-    const result = await store.spinLottery(targetPrize)
     lastPrize.value = result.prize.name
     lastRecordId.value = result.recordId
     spinning.value = false

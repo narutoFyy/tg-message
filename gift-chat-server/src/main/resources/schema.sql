@@ -199,11 +199,32 @@ CREATE TABLE IF NOT EXISTS push_device (
     CONSTRAINT uq_push_device_token UNIQUE (provider, device_token)
 );
 
+CREATE TABLE IF NOT EXISTS user_bank_account (
+    id VARCHAR(36) PRIMARY KEY,
+    owner_user_id VARCHAR(36) NOT NULL,
+    country VARCHAR(64) NOT NULL,
+    account_name VARCHAR(128) NOT NULL,
+    bank_name VARCHAR(128) NOT NULL,
+    account_number VARCHAR(128) NOT NULL,
+    normalized_bank_name VARCHAR(128) NOT NULL,
+    normalized_account_number VARCHAR(128) NOT NULL,
+    account_fingerprint VARCHAR(64) NOT NULL,
+    masked_account_number VARCHAR(64) NOT NULL,
+    status_code VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_user_bank_account_user FOREIGN KEY (owner_user_id) REFERENCES app_user (id),
+    CONSTRAINT ux_user_bank_account_user UNIQUE (owner_user_id),
+    CONSTRAINT ux_user_bank_account_fingerprint UNIQUE (account_fingerprint)
+);
+
 CREATE TABLE IF NOT EXISTS withdrawal_request (
     id VARCHAR(36) PRIMARY KEY,
     request_no VARCHAR(32) NOT NULL UNIQUE,
     owner_user_id VARCHAR(36) NOT NULL,
     assigned_agent_id VARCHAR(36),
+    bank_account_id VARCHAR(36),
+    lottery_draw_record_id VARCHAR(36),
     amount VARCHAR(32) NOT NULL,
     country VARCHAR(64) NOT NULL,
     account_name VARCHAR(128) NOT NULL,
@@ -215,7 +236,8 @@ CREATE TABLE IF NOT EXISTS withdrawal_request (
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_withdrawal_owner FOREIGN KEY (owner_user_id) REFERENCES app_user (id),
-    CONSTRAINT fk_withdrawal_agent FOREIGN KEY (assigned_agent_id) REFERENCES app_user (id)
+    CONSTRAINT fk_withdrawal_agent FOREIGN KEY (assigned_agent_id) REFERENCES app_user (id),
+    CONSTRAINT fk_withdrawal_bank_account FOREIGN KEY (bank_account_id) REFERENCES user_bank_account (id)
 );
 
 CREATE TABLE IF NOT EXISTS broadcast_message (

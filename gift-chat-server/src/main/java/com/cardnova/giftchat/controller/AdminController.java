@@ -12,6 +12,7 @@ import com.cardnova.giftchat.dto.UpdateUserStatusRequest;
 import com.cardnova.giftchat.model.AdminDirectConversation;
 import com.cardnova.giftchat.model.AdminUserItem;
 import com.cardnova.giftchat.model.AgentItem;
+import com.cardnova.giftchat.model.BankAccountItem;
 import com.cardnova.giftchat.model.BankAccountRiskMatch;
 import com.cardnova.giftchat.model.LotteryRecordItem;
 import com.cardnova.giftchat.model.ReferralRewardConfigItem;
@@ -20,6 +21,7 @@ import com.cardnova.giftchat.model.RegistrationBonusConfigItem;
 import com.cardnova.giftchat.model.RegistrationBonusRecordItem;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.service.AdminService;
+import com.cardnova.giftchat.service.BankAccountService;
 import com.cardnova.giftchat.service.BankAccountRiskService;
 import com.cardnova.giftchat.service.CurrentUserService;
 import com.cardnova.giftchat.service.LotteryService;
@@ -43,6 +45,7 @@ public class AdminController {
     private final AdminService adminService;
     private final ReferralRewardService referralRewardService;
     private final RegistrationBonusService registrationBonusService;
+    private final BankAccountService bankAccountService;
     private final BankAccountRiskService bankAccountRiskService;
     private final CurrentUserService currentUserService;
     private final LotteryService lotteryService;
@@ -51,6 +54,7 @@ public class AdminController {
         AdminService adminService,
         ReferralRewardService referralRewardService,
         RegistrationBonusService registrationBonusService,
+        BankAccountService bankAccountService,
         BankAccountRiskService bankAccountRiskService,
         CurrentUserService currentUserService,
         LotteryService lotteryService
@@ -58,6 +62,7 @@ public class AdminController {
         this.adminService = adminService;
         this.referralRewardService = referralRewardService;
         this.registrationBonusService = registrationBonusService;
+        this.bankAccountService = bankAccountService;
         this.bankAccountRiskService = bankAccountRiskService;
         this.currentUserService = currentUserService;
         this.lotteryService = lotteryService;
@@ -151,6 +156,11 @@ public class AdminController {
         var currentUser = currentUserService.getCurrentUser();
         currentUserService.requireAdmin(currentUser);
         return ApiResponse.success(bankAccountRiskService.allPlatformMatches(currentUser));
+    }
+
+    @GetMapping("/bank-accounts")
+    public ApiResponse<List<BankAccountItem>> bankAccounts() {
+        return ApiResponse.success(bankAccountService.adminBankAccounts());
     }
 
     @GetMapping("/lottery/records")

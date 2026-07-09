@@ -187,6 +187,15 @@ export interface LotteryDrawResult {
   drawnAt: string
 }
 
+export interface CountryCodeRule {
+  countryCode: string
+  countryName: string
+  minLocalLength: number
+  maxLocalLength: number
+  enabled: boolean
+  sortOrder: number
+}
+
 export interface LotteryWinnerItem {
   displayName: string
   prizeName: string
@@ -247,6 +256,18 @@ export interface WithdrawalItem {
   assignedAgent: string
   createdAt: string
   updatedAt: string
+}
+
+export interface BankAccountItem {
+  id: string
+  ownerUsername: string
+  country: string
+  accountName: string
+  bankName: string
+  accountNumber: string
+  maskedAccountNumber: string
+  status: string
+  createdAt: string
 }
 
 export interface LoanApplicationItem {

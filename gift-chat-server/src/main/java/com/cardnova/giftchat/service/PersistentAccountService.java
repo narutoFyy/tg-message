@@ -30,6 +30,7 @@ public class PersistentAccountService {
     private final AccountProfileService accountProfileService;
     private final ReferralRewardService referralRewardService;
     private final RegistrationBonusService registrationBonusService;
+    private final CountryCodeService countryCodeService;
 
     public PersistentAccountService(
         UserRepository userRepository,
@@ -41,7 +42,8 @@ public class PersistentAccountService {
         ObjectProvider<HttpServletRequest> requestProvider,
         AccountProfileService accountProfileService,
         ReferralRewardService referralRewardService,
-        RegistrationBonusService registrationBonusService
+        RegistrationBonusService registrationBonusService,
+        CountryCodeService countryCodeService
     ) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
@@ -53,6 +55,7 @@ public class PersistentAccountService {
         this.accountProfileService = accountProfileService;
         this.referralRewardService = referralRewardService;
         this.registrationBonusService = registrationBonusService;
+        this.countryCodeService = countryCodeService;
     }
 
     public Optional<UserEntity> findByUsername(String username) {
@@ -98,7 +101,7 @@ public class PersistentAccountService {
         String username = requireTrimmed(request.username(), "Username is required");
         String password = requireTrimmed(request.password(), "Password is required");
         String email = normalizeNullable(request.email());
-        String phone = normalizeNullable(request.phone());
+        String phone = countryCodeService.normalizeRegistrationPhone(request.phone());
 
         if (!StringUtils.hasText(email) && !StringUtils.hasText(phone)) {
             throw new IllegalArgumentException("Email or phone is required");

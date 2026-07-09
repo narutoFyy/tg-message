@@ -3,10 +3,12 @@ import type {
   AdminUserItem,
   BalanceSummary,
   AgentItem,
+  BankAccountItem,
   BankAccountRiskMatch,
   BroadcastItem,
   ChatMessage,
   ChatMessageSync,
+  CountryCodeRule,
   FriendProfile,
   FriendRequest,
   HiddenRecordItem,
@@ -253,6 +255,27 @@ export function createWithdrawal(payload: {
   return request<WithdrawalItem>('/withdrawals', 'POST', payload)
 }
 
+export function fetchCountryCodeRules() {
+  return request<CountryCodeRule[]>('/country-codes')
+}
+
+export function fetchMyBankAccount() {
+  return request<BankAccountItem | null>('/bank-accounts/me')
+}
+
+export function bindBankAccount(payload: {
+  country: string
+  accountName: string
+  bankName: string
+  accountNumber: string
+}) {
+  return request<BankAccountItem>('/bank-accounts', 'POST', payload)
+}
+
+export function requestLotteryWithdrawal(recordId: string) {
+  return request<WithdrawalItem>(`/lottery/records/${recordId}/withdrawal-request`, 'POST')
+}
+
 export function updateWithdrawalStatus(withdrawalId: string, status: WithdrawalItem['status']) {
   return request<WithdrawalItem>(`/withdrawals/${withdrawalId}/status`, 'POST', { status })
 }
@@ -491,6 +514,10 @@ export function fetchRegistrationBonusRecords() {
 
 export function fetchAdminBankAccountRisks() {
   return request<BankAccountRiskMatch[]>('/admin/bank-account-risks')
+}
+
+export function fetchAdminBankAccounts() {
+  return request<BankAccountItem[]>('/admin/bank-accounts')
 }
 
 export function fetchMyRegistrationBonus() {

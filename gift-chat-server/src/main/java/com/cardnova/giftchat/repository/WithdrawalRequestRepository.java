@@ -16,5 +16,7 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
 
     List<WithdrawalRequestEntity> findAllByOrderByUpdatedAtDesc();
 
+    boolean existsByLotteryDrawRecord_Id(String lotteryDrawRecordId);
+
     long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 }

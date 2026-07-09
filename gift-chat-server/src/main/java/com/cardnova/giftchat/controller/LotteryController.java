@@ -6,8 +6,11 @@ import com.cardnova.giftchat.model.LotteryDrawResult;
 import com.cardnova.giftchat.model.LotteryEligibility;
 import com.cardnova.giftchat.model.LotteryPrizeItem;
 import com.cardnova.giftchat.model.LotteryWinnerItem;
+import com.cardnova.giftchat.model.WithdrawalItem;
 import com.cardnova.giftchat.service.LotteryService;
+import com.cardnova.giftchat.service.WithdrawalService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,9 +23,11 @@ import java.util.List;
 public class LotteryController {
 
     private final LotteryService lotteryService;
+    private final WithdrawalService withdrawalService;
 
-    public LotteryController(LotteryService lotteryService) {
+    public LotteryController(LotteryService lotteryService, WithdrawalService withdrawalService) {
         this.lotteryService = lotteryService;
+        this.withdrawalService = withdrawalService;
     }
 
     @GetMapping("/eligibility")
@@ -44,5 +49,10 @@ public class LotteryController {
     @GetMapping("/prizes")
     public ApiResponse<List<LotteryPrizeItem>> prizes() {
         return ApiResponse.success(lotteryService.prizes());
+    }
+
+    @PostMapping("/records/{recordId}/withdrawal-request")
+    public ApiResponse<WithdrawalItem> requestLotteryWithdrawal(@PathVariable String recordId) {
+        return ApiResponse.success("lottery_withdrawal_requested", withdrawalService.createLotteryWithdrawal(recordId));
     }
 }

@@ -398,7 +398,21 @@
       </view>
 
       <view v-if="activeTab === 'risks'" class="panel">
-        <text class="section-title">Duplicate bank account risk</text>
+        <text class="section-title">银行卡绑定记录</text>
+        <view style="height: 18rpx"></view>
+        <view v-for="account in bankAccounts" :key="account.id" class="list-row">
+          <view>
+            <text class="row-title">{{ account.ownerUsername }} / {{ account.status }}</text>
+            <text class="row-meta">{{ account.country }} / {{ account.bankName }} / {{ account.accountName }}</text>
+            <text class="row-meta">{{ account.maskedAccountNumber }} / {{ account.createdAt }}</text>
+          </view>
+          <text class="status-pill active">已绑定</text>
+        </view>
+        <text v-if="bankAccounts.length === 0" class="row-meta">暂无银行卡绑定记录。</text>
+      </view>
+
+      <view v-if="activeTab === 'risks'" class="panel">
+        <text class="section-title">重复银行卡风控</text>
         <view style="height: 18rpx"></view>
         <view v-for="risk in bankAccountRisks" :key="`${risk.username}-${risk.reason}-${risk.accountNumber}-${risk.submittedAt}`" class="list-row">
           <view>
@@ -409,7 +423,7 @@
           </view>
           <text :class="['status-pill', risk.riskLevel === 'high' ? 'danger' : 'warning']">{{ risk.riskLevel }}</text>
         </view>
-        <text v-if="bankAccountRisks.length === 0" class="row-meta">No duplicate bank account risk found.</text>
+        <text v-if="bankAccountRisks.length === 0" class="row-meta">暂无重复银行卡风险。</text>
       </view>
 
       <view v-if="activeTab === 'loans'" class="panel">
@@ -538,6 +552,7 @@ import type {
   AdminDirectConversationItem,
   AdminUserItem,
   AgentItem,
+  BankAccountItem,
   BankAccountRiskMatch,
   BroadcastItem,
   LoanApplicationItem,
@@ -558,6 +573,7 @@ import {
   createBroadcast,
   createAgent,
   fetchAdminDirectConversations,
+  fetchAdminBankAccounts,
   fetchAdminBankAccountRisks,
   fetchAdminLotteryRecords,
   fetchAdminSupportConversations,
@@ -596,6 +612,7 @@ const directConversations = ref<AdminDirectConversationItem[]>([])
 const broadcasts = ref<BroadcastItem[]>([])
 const transactions = ref<TransactionItem[]>([])
 const withdrawals = ref<WithdrawalItem[]>([])
+const bankAccounts = ref<BankAccountItem[]>([])
 const bankAccountRisks = ref<BankAccountRiskMatch[]>([])
 const loans = ref<LoanApplicationItem[]>([])
 const lotteryRecords = ref<LotteryRecordItem[]>([])
@@ -690,6 +707,7 @@ async function refreshAll() {
       nextBroadcasts,
       nextTransactions,
       nextWithdrawals,
+      nextBankAccounts,
       nextBankAccountRisks,
       nextLoans,
       nextLotteryRecords,
@@ -706,6 +724,7 @@ async function refreshAll() {
       fetchBroadcasts(),
       fetchTransactions(),
       fetchWithdrawals(),
+      fetchAdminBankAccounts(),
       fetchAdminBankAccountRisks(),
       fetchLoans(),
       fetchAdminLotteryRecords(),
@@ -722,6 +741,7 @@ async function refreshAll() {
     broadcasts.value = nextBroadcasts
     transactions.value = nextTransactions
     withdrawals.value = nextWithdrawals
+    bankAccounts.value = nextBankAccounts
     bankAccountRisks.value = nextBankAccountRisks
     loans.value = nextLoans
     lotteryRecords.value = nextLotteryRecords

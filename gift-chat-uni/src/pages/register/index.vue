@@ -1,33 +1,34 @@
 <template>
   <view class="page-shell soft-page">
     <view class="panel">
-      <text class="eyebrow">Sign up</text>
+      <text class="eyebrow">注册</text>
       <view style="height: 12rpx"></view>
-      <text class="title">Create account for CardBrother</text>
+      <text class="title">创建 CardBrother 账号</text>
     </view>
 
     <view class="panel">
-      <text class="field-label">Username</text>
-      <input v-model.trim="form.username" class="field-input" placeholder="Unique username" />
+      <text class="field-label">用户名</text>
+      <input v-model.trim="form.username" class="field-input" placeholder="请输入唯一用户名" />
       <view style="height: 20rpx"></view>
-      <text class="field-label">Email</text>
-      <input v-model.trim="form.email" class="field-input" placeholder="Email address" />
+      <text class="field-label">邮箱</text>
+      <input v-model.trim="form.email" class="field-input" placeholder="可选，请输入邮箱" />
       <view style="height: 20rpx"></view>
-      <text class="field-label">Phone</text>
+      <text class="field-label">手机号</text>
       <view class="phone-row">
         <picker :range="countryCodeLabels" :value="selectedCountryIndex" @change="handleCountryChange">
           <view class="country-picker">{{ selectedCountry.label }}</view>
         </picker>
-        <input v-model.trim="form.phone" class="field-input phone-input" placeholder="Local phone number" />
+        <input v-model.trim="form.phone" class="field-input phone-input" placeholder="只填写本地手机号" />
       </view>
+      <text class="phone-help">{{ phoneHelpText }}</text>
       <view style="height: 20rpx"></view>
-      <text class="field-label">Password</text>
-      <input v-model="form.password" class="field-input" password placeholder="Password" />
+      <text class="field-label">密码</text>
+      <input v-model="form.password" class="field-input" password placeholder="至少 8 位密码" />
       <view style="height: 20rpx"></view>
-      <text class="field-label">Invite code</text>
-      <input v-model.trim="form.inviteCode" class="field-input" placeholder="Optional invite code" />
+      <text class="field-label">邀请码</text>
+      <input v-model.trim="form.inviteCode" class="field-input" placeholder="可选邀请码" />
       <view style="height: 24rpx"></view>
-      <button class="primary-button" @click="handleSubmit">Create account</button>
+      <button class="primary-button" @click="handleSubmit">创建账号</button>
       <view style="height: 16rpx"></view>
       <text v-if="notice" class="muted">{{ notice }}</text>
     </view>
@@ -39,19 +40,22 @@ import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { safeRouteForRole } from '@/utils/routeGuard'
+import { fetchCountryCodeRules } from '@/utils/api'
+import type { CountryCodeRule } from '@/types'
 
 const store = useAppStore()
 const notice = ref('')
-const countryCodes = [
-  { code: '+234', label: '+234 Nigeria' },
-  { code: '+91', label: '+91 India' },
-  { code: '+233', label: '+233 Ghana' },
-  { code: '+86', label: '+86 China' },
-  { code: '+44', label: '+44 United Kingdom' },
-  { code: '+1', label: '+1 United States' }
+const fallbackCountryCodes: CountryCodeRule[] = [
+  { countryCode: '+234', countryName: 'Nigeria', minLocalLength: 10, maxLocalLength: 10, enabled: true, sortOrder: 10 },
+  { countryCode: '+91', countryName: 'India', minLocalLength: 10, maxLocalLength: 10, enabled: true, sortOrder: 20 },
+  { countryCode: '+233', countryName: 'Ghana', minLocalLength: 9, maxLocalLength: 9, enabled: true, sortOrder: 30 },
+  { countryCode: '+86', countryName: 'China', minLocalLength: 11, maxLocalLength: 11, enabled: true, sortOrder: 40 },
+  { countryCode: '+44', countryName: 'United Kingdom', minLocalLength: 10, maxLocalLength: 10, enabled: true, sortOrder: 50 },
+  { countryCode: '+1', countryName: 'United States', minLocalLength: 10, maxLocalLength: 10, enabled: true, sortOrder: 60 }
 ]
+const countryCodes = ref<CountryCodeRule[]>(fallbackCountryCodes)
 const selectedCountryIndex = ref(0)
-const countryCodeLabels = countryCodes.map((item) => item.label)
+const countryCodeLabels = computed(() => countryCodes.value.map((item) => `${item.countryCode} ${item.countryName}`))
 
 const form = reactive({
   username: '',
@@ -69,9 +73,23 @@ onShow(() => {
   form.inviteCode = ''
   notice.value = ''
   selectedCountryIndex.value = 0
+  loadCountryCodes()
 })
 
-const selectedCountry = computed(() => countryCodes[selectedCountryIndex.value] || countryCodes[0])
+const selectedCountry = computed(() => {
+  const rule = countryCodes.value[selectedCountryIndex.value] || countryCodes.value[0]
+  return {
+    ...rule,
+    label: `${rule.countryCode} ${rule.countryName}`
+  }
+})
+const phoneHelpText = computed(() => {
+  const rule = selectedCountry.value
+  const lengthText = rule.minLocalLength === rule.maxLocalLength
+    ? `${rule.minLocalLength} 位数字`
+    : `${rule.minLocalLength}-${rule.maxLocalLength} 位数字`
+  return `${rule.countryName} 手机号需要填写 ${lengthText}，不需要输入 ${rule.countryCode}。`
+})
 
 async function handleSubmit() {
   try {
@@ -82,32 +100,53 @@ async function handleSubmit() {
     const inviteCode = form.inviteCode.trim()
 
     if (!username) {
-      notice.value = 'Username is required.'
+      notice.value = '请输入用户名。'
       return
     }
     if (!phone) {
-      notice.value = 'Phone is required.'
+      notice.value = '请输入手机号。'
       return
     }
     if (!password) {
-      notice.value = 'Password is required.'
+      notice.value = '请输入密码。'
+      return
+    }
+    if (password.length < 8) {
+      notice.value = '密码至少需要 8 位。'
       return
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      notice.value = 'Email format is invalid.'
+      notice.value = '邮箱格式不正确。'
+      return
+    }
+    const validationMessage = validateLocalPhone(phone)
+    if (validationMessage) {
+      notice.value = validationMessage
       return
     }
     const session = await store.register({
       username,
       email: email || undefined,
-      phone: phone ? `${selectedCountry.value.code}${phone}` : undefined,
+      phone: `${selectedCountry.value.countryCode}${phone}`,
       password,
       inviteCode: inviteCode || undefined
     })
-    notice.value = 'Registration complete.'
+    notice.value = '注册成功。'
     uni.redirectTo({ url: safeRouteForRole(session.nextRoute, session, '/pages/support/index') })
   } catch (error) {
-    notice.value = error instanceof Error ? error.message : 'Registration failed'
+    notice.value = error instanceof Error ? error.message : '注册失败'
+  }
+}
+
+async function loadCountryCodes() {
+  try {
+    const rules = await fetchCountryCodeRules()
+    const enabled = rules.filter((rule) => rule.enabled)
+    if (enabled.length) {
+      countryCodes.value = enabled
+    }
+  } catch {
+    countryCodes.value = fallbackCountryCodes
   }
 }
 
@@ -117,8 +156,27 @@ function handleCountryChange(event: { detail: { value: number | string } }) {
 
 function normalizeLocalPhone(value: string) {
   const trimmed = value.trim()
-  const withoutCountry = trimmed.startsWith('+') ? trimmed.replace(/^\+\d{1,4}\s*/, '') : trimmed
+  const normalizedCountry = selectedCountry.value.countryCode.replace(/[^0-9]/g, '')
+  let withoutCountry = trimmed
+  if (withoutCountry.startsWith('+')) {
+    const digits = withoutCountry.replace(/[^0-9]/g, '')
+    withoutCountry = digits.startsWith(normalizedCountry) ? digits.slice(normalizedCountry.length) : digits
+  } else if (withoutCountry.startsWith('00')) {
+    const digits = withoutCountry.replace(/[^0-9]/g, '')
+    withoutCountry = digits.startsWith(`00${normalizedCountry}`) ? digits.slice(normalizedCountry.length + 2) : digits
+  }
   return withoutCountry.replace(/[^0-9]/g, '')
+}
+
+function validateLocalPhone(phone: string) {
+  const rule = selectedCountry.value
+  if (phone.length < rule.minLocalLength || phone.length > rule.maxLocalLength) {
+    const lengthText = rule.minLocalLength === rule.maxLocalLength
+      ? `${rule.minLocalLength} 位数字`
+      : `${rule.minLocalLength}-${rule.maxLocalLength} 位数字`
+    return `${rule.countryName} 手机号需要填写 ${lengthText}。`
+  }
+  return ''
 }
 </script>
 
@@ -147,5 +205,24 @@ function normalizeLocalPhone(value: string) {
 .phone-input {
   flex: 1;
   min-width: 0;
+}
+
+.phone-help {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #6f7a86;
+}
+
+@media (max-width: 420px) {
+  .phone-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .country-picker {
+    justify-content: flex-start;
+  }
 }
 </style>

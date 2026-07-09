@@ -1,10 +1,14 @@
 package com.cardnova.giftchat.service;
 
+import com.cardnova.giftchat.dto.BindBankAccountRequest;
 import com.cardnova.giftchat.dto.CreateWithdrawalRequest;
+import com.cardnova.giftchat.entity.LotteryDrawRecordEntity;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
+import com.cardnova.giftchat.entity.UserBankAccountEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.entity.WithdrawalRequestEntity;
 import com.cardnova.giftchat.model.WithdrawalItem;
+import com.cardnova.giftchat.repository.LotteryDrawRecordRepository;
 import com.cardnova.giftchat.repository.WithdrawalRequestRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,17 +32,23 @@ public class WithdrawalService {
     private final CurrentUserService currentUserService;
     private final PersistentSupportService persistentSupportService;
     private final NotificationService notificationService;
+    private final BankAccountService bankAccountService;
+    private final LotteryDrawRecordRepository lotteryDrawRecordRepository;
 
     public WithdrawalService(
         WithdrawalRequestRepository withdrawalRequestRepository,
         CurrentUserService currentUserService,
         PersistentSupportService persistentSupportService,
-        NotificationService notificationService
+        NotificationService notificationService,
+        BankAccountService bankAccountService,
+        LotteryDrawRecordRepository lotteryDrawRecordRepository
     ) {
         this.withdrawalRequestRepository = withdrawalRequestRepository;
         this.currentUserService = currentUserService;
         this.persistentSupportService = persistentSupportService;
         this.notificationService = notificationService;
+        this.bankAccountService = bankAccountService;
+        this.lotteryDrawRecordRepository = lotteryDrawRecordRepository;
     }
 
     public List<WithdrawalItem> getWithdrawals() {
@@ -65,41 +75,147 @@ public class WithdrawalService {
             throw new IllegalArgumentException("No active support agent available");
         }
 
+        BindBankAccountRequest bankRequest = new BindBankAccountRequest(
+            request.country(),
+            request.accountName(),
+            request.bankName(),
+            request.accountNumber()
+        );
+        UserBankAccountEntity bankAccount = bankAccountForWithdrawal(currentUser, bankRequest);
+
+        WithdrawalRequestEntity saved = createWithdrawalEntity(
+            currentUser,
+            assignedAgent,
+            bankAccount,
+            null,
+            request.amount().trim(),
+            bankAccount.getCountry(),
+            bankAccount.getAccountName(),
+            bankAccount.getBankName(),
+            bankAccount.getAccountNumber(),
+            normalizeNullable(request.contact()),
+            normalizeNullable(request.note())
+        );
+
+        String message = withdrawalMessage(saved, false);
+        if (request.sendChatMessage() == null || request.sendChatMessage()) {
+            persistentSupportService.appendSystemMessage(conversation, message);
+        }
+        notifyWithdrawal(currentUser, assignedAgent, saved);
+
+        return toItem(saved);
+    }
+
+    @Transactional
+    public WithdrawalItem createLotteryWithdrawal(String recordId) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        if (!"USER".equalsIgnoreCase(currentUser.getRoleCode())) {
+            throw new IllegalArgumentException("Only users can request lottery withdrawals");
+        }
+        LotteryDrawRecordEntity record = lotteryDrawRecordRepository.findById(recordId)
+            .orElseThrow(() -> new IllegalArgumentException("Lottery record not found"));
+        if (!record.getUser().getId().equals(currentUser.getId())) {
+            throw new IllegalArgumentException("Lottery record not accessible");
+        }
+        if (withdrawalRequestRepository.existsByLotteryDrawRecord_Id(record.getId())) {
+            throw new IllegalArgumentException("Lottery withdrawal request already exists");
+        }
+
+        UserBankAccountEntity bankAccount = bankAccountService.requireCurrentUserBankAccount(currentUser);
+        SupportConversationEntity conversation = persistentSupportService.ensureUserConversation(currentUser);
+        UserEntity assignedAgent = conversation == null ? null : conversation.getAssignedAgent();
+        if (assignedAgent == null) {
+            throw new IllegalArgumentException("No active support agent available");
+        }
+
+        WithdrawalRequestEntity saved = createWithdrawalEntity(
+            currentUser,
+            assignedAgent,
+            bankAccount,
+            record,
+            record.getPrize().getName(),
+            bankAccount.getCountry(),
+            bankAccount.getAccountName(),
+            bankAccount.getBankName(),
+            bankAccount.getAccountNumber(),
+            currentUser.getPhone(),
+            "Lottery prize withdrawal: " + record.getId()
+        );
+        persistentSupportService.appendSystemMessage(conversation, withdrawalMessage(saved, true));
+        notifyWithdrawal(currentUser, assignedAgent, saved);
+        record.setFulfillmentStatus("PROCESSING");
+        record.setProcessedAt(LocalDateTime.now());
+        lotteryDrawRecordRepository.save(record);
+
+        return toItem(saved);
+    }
+
+    private WithdrawalRequestEntity createWithdrawalEntity(
+        UserEntity owner,
+        UserEntity assignedAgent,
+        UserBankAccountEntity bankAccount,
+        LotteryDrawRecordEntity lotteryDrawRecord,
+        String amount,
+        String country,
+        String accountName,
+        String bankName,
+        String accountNumber,
+        String contact,
+        String note
+    ) {
         WithdrawalRequestEntity entity = new WithdrawalRequestEntity();
         entity.setId(UUID.randomUUID().toString());
         entity.setRequestNo(nextRequestNo());
-        entity.setOwnerUser(currentUser);
+        entity.setOwnerUser(owner);
         entity.setAssignedAgent(assignedAgent);
-        entity.setAmount(request.amount().trim());
-        entity.setCountry(request.country().trim());
-        entity.setAccountName(request.accountName().trim());
-        entity.setBankName(request.bankName().trim());
-        entity.setAccountNumber(request.accountNumber().trim());
-        entity.setContact(normalizeNullable(request.contact()));
-        entity.setNote(normalizeNullable(request.note()));
+        entity.setBankAccount(bankAccount);
+        entity.setLotteryDrawRecord(lotteryDrawRecord);
+        entity.setAmount(amount.trim());
+        entity.setCountry(country.trim());
+        entity.setAccountName(accountName.trim());
+        entity.setBankName(bankName.trim());
+        entity.setAccountNumber(accountNumber.trim());
+        entity.setContact(contact);
+        entity.setNote(note);
         entity.setStatusCode("PENDING");
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
-        WithdrawalRequestEntity saved = withdrawalRequestRepository.save(entity);
+        return withdrawalRequestRepository.save(entity);
+    }
 
-        String message = """
+    private UserBankAccountEntity bankAccountForWithdrawal(UserEntity currentUser, BindBankAccountRequest request) {
+        UserBankAccountEntity existing = bankAccountService.findForUser(currentUser).orElse(null);
+        if (existing == null) {
+            return bankAccountService.bindForUser(currentUser, request);
+        }
+        if (!bankAccountService.matches(existing, request)) {
+            throw new IllegalArgumentException("Each user can bind only one bank account");
+        }
+        return existing;
+    }
+
+    private String withdrawalMessage(WithdrawalRequestEntity saved, boolean lotteryWithdrawal) {
+        String title = lotteryWithdrawal ? "Lottery withdrawal request %s" : "Withdrawal request %s";
+        return """
             Withdrawal request %s
             Amount: %s
             Country: %s
             Account: %s
             Bank: %s
             Number: %s
+            %s
             """.formatted(
-            saved.getRequestNo(),
+            title.formatted(saved.getRequestNo()),
             saved.getAmount(),
             saved.getCountry(),
             saved.getAccountName(),
             saved.getBankName(),
-            saved.getAccountNumber()
+            saved.getAccountNumber(),
+            lotteryWithdrawal && saved.getLotteryDrawRecord() != null ? "Lottery record: " + saved.getLotteryDrawRecord().getId() : ""
         ).trim();
-        if (request.sendChatMessage() == null || request.sendChatMessage()) {
-            persistentSupportService.appendSystemMessage(conversation, message);
-        }
+    }
+
+    private void notifyWithdrawal(UserEntity currentUser, UserEntity assignedAgent, WithdrawalRequestEntity saved) {
         notificationService.notifyUser(
             assignedAgent,
             currentUser,
@@ -117,8 +233,6 @@ public class WithdrawalService {
             "WITHDRAWAL",
             saved.getId()
         );
-
-        return toItem(saved);
     }
 
     @Transactional

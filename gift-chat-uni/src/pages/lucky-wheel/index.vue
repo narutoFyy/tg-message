@@ -63,6 +63,9 @@
           <text class="section-title">Congratulations</text>
           <text class="result-prize">{{ lastPrize }}</text>
           <text class="muted">Your prize record has been saved.</text>
+          <button class="primary-button withdrawal-button" @click="goBindBankAccount">
+            {{ lotteryWithdrawalAction }}
+          </button>
         </view>
 
         <view class="winner-panel">
@@ -93,6 +96,7 @@ const store = useAppStore()
 const spinning = ref(false)
 const rotation = ref(0)
 const lastPrize = ref('')
+const lastRecordId = ref('')
 const featuredPrizes = [
   { name: 'iPhone 17', note: 'Phone prize', image: '/static/lottery/iphone.jpg' },
   { name: 'iPad', note: 'Tablet prize', image: '/static/lottery/ipad.jpg' },
@@ -118,6 +122,7 @@ const spinHint = computed(() => {
   if (eligibility.value.eligible) return 'Good luck!'
   return eligibility.value.nextAvailableAt ? `Next: ${eligibility.value.nextAvailableAt}` : 'Upgrade VIP or wait for reset.'
 })
+const lotteryWithdrawalAction = computed(() => '绑定银行账户')
 const tickerWinners = computed(() => {
   const winners = store.state.lotteryWinners
   return winners.length ? [...winners, ...winners] : []
@@ -162,17 +167,24 @@ async function handleSpin() {
   if (spinning.value || !eligibility.value?.eligible) return
   spinning.value = true
   lastPrize.value = ''
+  lastRecordId.value = ''
   const targetPrize = pickDrawablePrize()
   rotation.value = targetRotationForPrize(targetPrize)
   try {
     await waitForSpin()
     const result = await store.spinLottery(targetPrize)
     lastPrize.value = result.prize.name
+    lastRecordId.value = result.recordId
     spinning.value = false
   } catch (error) {
     spinning.value = false
     uni.showToast({ title: error instanceof Error ? error.message : 'Spin failed', icon: 'none' })
   }
+}
+
+function goBindBankAccount() {
+  if (!lastRecordId.value) return
+  uni.navigateTo({ url: `/pages/withdraw/index?lotteryRecordId=${encodeURIComponent(lastRecordId.value)}` })
 }
 </script>
 
@@ -458,6 +470,11 @@ async function handleSpin() {
   font-size: 48rpx;
   font-weight: 900;
   color: #d74848;
+}
+
+.withdrawal-button {
+  margin-top: 18rpx;
+  width: 100%;
 }
 
 .winner-window {

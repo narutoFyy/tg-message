@@ -20,6 +20,7 @@ import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -274,6 +275,90 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.email").value(email))
             .andExpect(jsonPath("$.data.roleCode").value("USER"))
             .andExpect(jsonPath("$.data.nextRoute").value("/pages/support/index"));
+    }
+
+    @Test
+    void registerPhoneMustMatchSelectedCountryLength() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "username": "india_phone_%s",
+                      "phone": "+919876543210",
+                      "password": "demo12345"
+                    }
+                    """.formatted(suffix)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.phone").value("+919876543210"));
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "username": "bad_india_%s",
+                      "phone": "+91987654321",
+                      "password": "demo12345"
+                    }
+                    """.formatted(suffix)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("India phone number must be 10 digits"));
+    }
+
+    @Test
+    void bankAccountBindingIsOnePerUserAndUniqueAcrossUsers() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String firstToken = registerToken("bank_one_" + suffix);
+        String secondToken = registerToken("bank_two_" + suffix);
+        String accountNumber = "88" + randomDigits(8);
+
+        bindBankAccount(firstToken, "Nigeria", "Ada One", "Demo Bank", accountNumber.substring(0, 3) + " " + accountNumber.substring(3, 6) + "-" + accountNumber.substring(6))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.maskedAccountNumber").value("****" + accountNumber.substring(accountNumber.length() - 4)));
+
+        bindBankAccount(firstToken, "Nigeria", "Ada One", "Second Bank", "99887766")
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Each user can bind only one bank account"));
+
+        bindBankAccount(secondToken, "Nigeria", "Other User", "Demo Bank", accountNumber)
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("This bank account is already bound"));
+    }
+
+    @Test
+    void lotteryWinnerCanRequestWithdrawalAfterBindingBankAccount() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String username = "lottery_bank_" + suffix;
+        String userToken = registerToken(username);
+
+        bindBankAccount(userToken, "Nigeria", "Lucky User", "Prize Bank", "7000 8888")
+            .andExpect(status().isOk());
+
+        MvcResult spinResult = mockMvc.perform(post("/api/lottery/spin")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String recordId = objectMapper.readTree(spinResult.getResponse().getContentAsString())
+            .at("/data/recordId")
+            .asText();
+
+        mockMvc.perform(post("/api/lottery/records/%s/withdrawal-request".formatted(recordId))
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.note").value("Lottery prize withdrawal: " + recordId))
+            .andExpect(jsonPath("$.data.bankName").value("Prize Bank"));
+
+        mockMvc.perform(post("/api/lottery/records/%s/withdrawal-request".formatted(recordId))
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Lottery withdrawal request already exists"));
+
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("Lottery withdrawal request")))
+            .andExpect(content().string(containsString(recordId)));
     }
 
     @Test
@@ -1153,7 +1238,7 @@ class GiftChatServerApplicationTests {
     void registrationBonusUsesPhoneCountryCodeAndIsIdempotent() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String username = "bonus_in_" + suffix;
-        String token = registerPhoneToken(username, "+91 90000 " + suffix.substring(0, 4));
+        String token = registerPhoneToken(username, "+91 90000 " + randomDigits(5));
 
         mockMvc.perform(get("/api/account/registration-bonus")
                 .header("Authorization", bearer(token)))
@@ -1175,7 +1260,7 @@ class GiftChatServerApplicationTests {
     void adminCanBroadcastByPhoneCountryCode() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String indiaUsername = "india_broadcast_" + suffix;
-        String indiaToken = registerPhoneToken(indiaUsername, "+91 91111 " + suffix.substring(0, 4));
+        String indiaToken = registerPhoneToken(indiaUsername, "+91 91111 " + randomDigits(5));
         String adminToken = loginToken("admin_mia");
         String giftHunterToken = loginToken("gift_hunter");
         String message = "India rate window " + suffix;
@@ -1207,25 +1292,31 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void duplicateBankAccountsAppearInAdminRiskList() throws Exception {
+    void duplicateBankAccountsAreRejectedBeforeWithdrawalCreation() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String firstUsername = "risk_a_" + suffix;
         String secondUsername = "risk_b_" + suffix;
-        String firstToken = registerPhoneToken(firstUsername, "+234 701 " + suffix.substring(0, 4));
-        String secondToken = registerPhoneToken(secondUsername, "+233 241 " + suffix.substring(0, 4));
-        String adminToken = loginToken("admin_mia");
+        String firstToken = registerPhoneToken(firstUsername, "+234 701 " + randomDigits(7));
+        String secondToken = registerPhoneToken(secondUsername, "+233 24 " + randomDigits(7));
         String accountNumber = "445566" + suffix.substring(0, 4);
 
         createWithdrawal(firstToken, "Risk Alpha", accountNumber);
-        createWithdrawal(secondToken, "Risk Beta", accountNumber);
-
-        mockMvc.perform(get("/api/admin/bank-account-risks")
-                .header("Authorization", bearer(adminToken)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data[?(@.username == '%s' && @.riskLevel == 'high')]".formatted(firstUsername)).exists())
-            .andExpect(jsonPath("$.data[?(@.username == '%s' && @.riskLevel == 'high')]".formatted(secondUsername)).exists())
-            .andExpect(content().string(containsString("Duplicate bank account number")))
-            .andExpect(content().string(containsString("****" + accountNumber.substring(accountNumber.length() - 4))));
+        mockMvc.perform(post("/api/withdrawals")
+                .header("Authorization", bearer(secondToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "amount": "₦10000",
+                      "country": "Nigeria",
+                      "accountName": "Risk Beta",
+                      "bankName": "Duplicate Risk Bank",
+                      "accountNumber": "%s",
+                      "contact": "risk-contact",
+                      "sendChatMessage": false
+                    }
+                    """.formatted(accountNumber)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("This bank account is already bound"));
     }
 
     @Test
@@ -2039,6 +2130,26 @@ class GiftChatServerApplicationTests {
         return count;
     }
 
+    private ResultActions bindBankAccount(
+        String token,
+        String country,
+        String accountName,
+        String bankName,
+        String accountNumber
+    ) throws Exception {
+        return mockMvc.perform(post("/api/bank-accounts")
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "country": "%s",
+                  "accountName": "%s",
+                  "bankName": "%s",
+                  "accountNumber": "%s"
+                }
+                """.formatted(country, accountName, bankName, accountNumber)));
+    }
+
     private String registerToken(String username) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -2071,6 +2182,14 @@ class GiftChatServerApplicationTests {
 
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
         return root.path("data").path("accessToken").asText();
+    }
+
+    private String randomDigits(int length) {
+        String digits = UUID.randomUUID().toString().replaceAll("[^0-9]", "");
+        while (digits.length() < length) {
+            digits += UUID.randomUUID().toString().replaceAll("[^0-9]", "");
+        }
+        return digits.substring(0, length);
     }
 
     private void createWithdrawal(String token, String accountName, String accountNumber) throws Exception {

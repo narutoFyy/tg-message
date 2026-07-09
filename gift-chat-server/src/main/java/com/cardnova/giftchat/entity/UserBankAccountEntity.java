@@ -11,33 +11,15 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "withdrawal_request")
-public class WithdrawalRequestEntity {
+@Table(name = "user_bank_account")
+public class UserBankAccountEntity {
 
     @Id
     private String id;
 
-    @Column(name = "request_no", nullable = false, unique = true, length = 32)
-    private String requestNo;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_user_id", nullable = false)
     private UserEntity ownerUser;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_agent_id")
-    private UserEntity assignedAgent;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "bank_account_id")
-    private UserBankAccountEntity bankAccount;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "lottery_draw_record_id")
-    private LotteryDrawRecordEntity lotteryDrawRecord;
-
-    @Column(nullable = false, length = 32)
-    private String amount;
 
     @Column(nullable = false, length = 64)
     private String country;
@@ -51,11 +33,17 @@ public class WithdrawalRequestEntity {
     @Column(name = "account_number", nullable = false, length = 128)
     private String accountNumber;
 
-    @Column(length = 64)
-    private String contact;
+    @Column(name = "normalized_bank_name", nullable = false, length = 128)
+    private String normalizedBankName;
 
-    @Column(length = 255)
-    private String note;
+    @Column(name = "normalized_account_number", nullable = false, length = 128)
+    private String normalizedAccountNumber;
+
+    @Column(name = "account_fingerprint", nullable = false, unique = true, length = 64)
+    private String accountFingerprint;
+
+    @Column(name = "masked_account_number", nullable = false, length = 64)
+    private String maskedAccountNumber;
 
     @Column(name = "status_code", nullable = false, length = 32)
     private String statusCode;
@@ -74,52 +62,12 @@ public class WithdrawalRequestEntity {
         this.id = id;
     }
 
-    public String getRequestNo() {
-        return requestNo;
-    }
-
-    public void setRequestNo(String requestNo) {
-        this.requestNo = requestNo;
-    }
-
     public UserEntity getOwnerUser() {
         return ownerUser;
     }
 
     public void setOwnerUser(UserEntity ownerUser) {
         this.ownerUser = ownerUser;
-    }
-
-    public UserEntity getAssignedAgent() {
-        return assignedAgent;
-    }
-
-    public void setAssignedAgent(UserEntity assignedAgent) {
-        this.assignedAgent = assignedAgent;
-    }
-
-    public UserBankAccountEntity getBankAccount() {
-        return bankAccount;
-    }
-
-    public void setBankAccount(UserBankAccountEntity bankAccount) {
-        this.bankAccount = bankAccount;
-    }
-
-    public LotteryDrawRecordEntity getLotteryDrawRecord() {
-        return lotteryDrawRecord;
-    }
-
-    public void setLotteryDrawRecord(LotteryDrawRecordEntity lotteryDrawRecord) {
-        this.lotteryDrawRecord = lotteryDrawRecord;
-    }
-
-    public String getAmount() {
-        return amount;
-    }
-
-    public void setAmount(String amount) {
-        this.amount = amount;
     }
 
     public String getCountry() {
@@ -154,20 +102,36 @@ public class WithdrawalRequestEntity {
         this.accountNumber = accountNumber;
     }
 
-    public String getContact() {
-        return contact;
+    public String getNormalizedBankName() {
+        return normalizedBankName;
     }
 
-    public void setContact(String contact) {
-        this.contact = contact;
+    public void setNormalizedBankName(String normalizedBankName) {
+        this.normalizedBankName = normalizedBankName;
     }
 
-    public String getNote() {
-        return note;
+    public String getNormalizedAccountNumber() {
+        return normalizedAccountNumber;
     }
 
-    public void setNote(String note) {
-        this.note = note;
+    public void setNormalizedAccountNumber(String normalizedAccountNumber) {
+        this.normalizedAccountNumber = normalizedAccountNumber;
+    }
+
+    public String getAccountFingerprint() {
+        return accountFingerprint;
+    }
+
+    public void setAccountFingerprint(String accountFingerprint) {
+        this.accountFingerprint = accountFingerprint;
+    }
+
+    public String getMaskedAccountNumber() {
+        return maskedAccountNumber;
+    }
+
+    public void setMaskedAccountNumber(String maskedAccountNumber) {
+        this.maskedAccountNumber = maskedAccountNumber;
     }
 
     public String getStatusCode() {

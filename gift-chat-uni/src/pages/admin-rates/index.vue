@@ -1,34 +1,41 @@
 <template>
   <view class="page-shell soft-page">
     <view v-if="isAdminReady" class="page-stack">
-      <view class="panel">
-        <text class="eyebrow">Admin Rates</text>
-        <view style="height: 12rpx"></view>
-        <text class="title">Maintain live gift card rates</text>
-        <view style="height: 10rpx"></view>
-        <text class="subtitle">Administrator accounts can publish, edit, pause, and remove rate records.</text>
+      <view class="admin-top-nav">
+        <button class="nav-button" @click="goAdminConsole">管理员总控台</button>
+        <button class="nav-button" @click="goSupportChat">客服聊天</button>
+        <button class="nav-button active" @click="store.refreshRates">汇率管理</button>
+        <button class="nav-button" @click="goUserHome">用户端首页</button>
       </view>
 
       <view class="panel">
-        <text class="field-label">Card Name</text>
+        <text class="eyebrow">汇率管理</text>
+        <view style="height: 12rpx"></view>
+        <text class="title">维护礼品卡实时汇率</text>
+        <view style="height: 10rpx"></view>
+        <text class="subtitle">管理员可以新增、编辑、暂停或删除礼品卡汇率记录。</text>
+      </view>
+
+      <view class="panel">
+        <text class="field-label">卡种名称</text>
         <input v-model="form.cardName" class="field-input" placeholder="Sephora, Apple(itunes), Steam..." />
         <view style="height: 20rpx"></view>
 
-        <text class="field-label">Region</text>
+        <text class="field-label">地区</text>
         <input v-model="form.region" class="field-input" placeholder="NG / US / UK / EU" />
         <view style="height: 20rpx"></view>
 
-        <text class="field-label">Rate</text>
+        <text class="field-label">汇率</text>
         <input v-model="form.rate" class="field-input" placeholder="NGN 99900 / $100" />
         <view style="height: 24rpx"></view>
 
-        <button class="primary-button" @click="submitRate">{{ editingId ? 'Update Rate' : 'Create Rate' }}</button>
+        <button class="primary-button" @click="submitRate">{{ editingId ? '更新汇率' : '创建汇率' }}</button>
         <view style="height: 16rpx"></view>
         <text v-if="notice" class="muted">{{ notice }}</text>
       </view>
 
       <view class="panel">
-        <text class="section-title">Rate feed</text>
+        <text class="section-title">汇率列表</text>
         <view style="height: 20rpx"></view>
         <view v-for="rate in store.state.rates" :key="rate.id" class="rate-row">
           <view>
@@ -38,14 +45,14 @@
           <view class="rate-side">
             <text class="rate-value">{{ rate.rate }}</text>
             <view class="rate-actions">
-              <button class="ghost-button toggle-button" @click="startEdit(rate)">Edit</button>
+              <button class="ghost-button toggle-button" @click="startEdit(rate)">编辑</button>
               <button
                 class="ghost-button toggle-button"
                 @click="toggleRate(rate.id, rate.status === 'active' ? 'paused' : 'active')"
               >
-                {{ rate.status === 'active' ? 'Pause' : 'Activate' }}
+                {{ rate.status === 'active' ? '暂停' : '启用' }}
               </button>
-              <button class="ghost-button toggle-button danger-action" @click="deleteRate(rate.id)">Delete</button>
+              <button class="ghost-button toggle-button danger-action" @click="deleteRate(rate.id)">删除</button>
             </view>
           </view>
         </view>
@@ -80,21 +87,21 @@ async function submitRate() {
         region: form.region,
         rate: form.rate
       })
-      notice.value = 'Rate updated.'
+      notice.value = '汇率已更新。'
     } else {
       await store.addRate({
         cardName: form.cardName,
         region: form.region,
         rate: form.rate
       })
-      notice.value = 'Rate created.'
+      notice.value = '汇率已创建。'
     }
     form.cardName = ''
     form.region = ''
     form.rate = ''
     editingId.value = ''
   } catch (error) {
-    notice.value = error instanceof Error ? error.message : 'Submit failed'
+    notice.value = error instanceof Error ? error.message : '提交失败'
   }
 }
 
@@ -103,24 +110,24 @@ function startEdit(rate: RateItem) {
   form.cardName = rate.cardName
   form.region = rate.region
   form.rate = rate.rate
-  notice.value = `Editing ${rate.cardName}.`
+  notice.value = `正在编辑 ${rate.cardName}。`
 }
 
 async function toggleRate(rateId: string, status: RateItem['status']) {
   try {
     await store.updateRateStatus(rateId, status)
-    notice.value = `Rate moved to ${status}.`
+    notice.value = status === 'active' ? '汇率已启用。' : '汇率已暂停。'
   } catch (error) {
-    notice.value = error instanceof Error ? error.message : 'Status update failed'
+    notice.value = error instanceof Error ? error.message : '状态更新失败'
   }
 }
 
 async function deleteRate(rateId: string) {
   try {
     await store.deleteRate(rateId)
-    notice.value = 'Rate deleted.'
+    notice.value = '汇率已删除。'
   } catch (error) {
-    notice.value = error instanceof Error ? error.message : 'Delete failed'
+    notice.value = error instanceof Error ? error.message : '删除失败'
   }
 }
 
@@ -130,21 +137,58 @@ function requireAdmin() {
     return true
   }
   isAdminReady.value = false
-  notice.value = 'Admin account required.'
+  notice.value = '需要管理员账号。'
   uni.redirectTo({ url: '/pages/admin-login/index' })
   return false
+}
+
+function goAdminConsole() {
+  uni.redirectTo({ url: '/pages/admin-console/index' })
+}
+
+function goSupportChat() {
+  uni.redirectTo({ url: '/pages/support-chat-v2/index' })
+}
+
+function goUserHome() {
+  uni.redirectTo({ url: '/pages/home/index' })
 }
 
 onShow(() => {
   if (requireAdmin()) {
     store.refreshRates().catch((error) => {
-      notice.value = error instanceof Error ? error.message : 'Rates failed'
+      notice.value = error instanceof Error ? error.message : '汇率加载失败'
     })
   }
 })
 </script>
 
 <style scoped lang="scss">
+.admin-top-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
+.nav-button {
+  margin: 0;
+  padding: 18rpx 12rpx;
+  border: 1rpx solid #d9dde3;
+  border-radius: 8rpx;
+  background: #ffffff;
+  color: #101820;
+  box-shadow: none;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.nav-button.active {
+  color: #ffffff;
+  border-color: #002fa7;
+  background: #002fa7;
+}
+
 .rate-row {
   padding: 18rpx 0;
   display: flex;
@@ -198,5 +242,11 @@ onShow(() => {
 .danger-action {
   color: #d65a4e;
   border-color: #f0b1ab;
+}
+
+@media (max-width: 760px) {
+  .admin-top-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

@@ -31,6 +31,13 @@ public class SupportConversationEntity {
     @Column(name = "agent_note", length = 255)
     private String agentNote;
 
+    @Column(name = "welcome_message_sent_at")
+    private LocalDateTime welcomeMessageSentAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "welcome_message_agent_id")
+    private UserEntity welcomeMessageAgent;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -75,6 +82,22 @@ public class SupportConversationEntity {
 
     public void setAgentNote(String agentNote) {
         this.agentNote = agentNote;
+    }
+
+    public LocalDateTime getWelcomeMessageSentAt() {
+        return welcomeMessageSentAt;
+    }
+
+    public void setWelcomeMessageSentAt(LocalDateTime welcomeMessageSentAt) {
+        this.welcomeMessageSentAt = welcomeMessageSentAt;
+    }
+
+    public UserEntity getWelcomeMessageAgent() {
+        return welcomeMessageAgent;
+    }
+
+    public void setWelcomeMessageAgent(UserEntity welcomeMessageAgent) {
+        this.welcomeMessageAgent = welcomeMessageAgent;
     }
 
     public LocalDateTime getCreatedAt() {

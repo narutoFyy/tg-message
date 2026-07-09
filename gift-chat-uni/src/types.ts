@@ -406,6 +406,10 @@ export interface AgentItem {
   phone: string
   status: string
   assignedConversationCount: number
+  welcomeMessage: string
+  welcomeMessageEnabled: boolean
+  welcomeMessageUpdatedAt: string
+  welcomeMessageUpdatedBy: string
 }
 
 export interface SupportConversationItem {

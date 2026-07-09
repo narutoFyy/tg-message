@@ -5,6 +5,7 @@ import com.cardnova.giftchat.dto.AssignSupportConversationRequest;
 import com.cardnova.giftchat.dto.CreateAgentRequest;
 import com.cardnova.giftchat.dto.ResetLotteryEligibilityRequest;
 import com.cardnova.giftchat.dto.UpdateLotteryRecordStatusRequest;
+import com.cardnova.giftchat.dto.UpdateAgentWelcomeMessageRequest;
 import com.cardnova.giftchat.dto.UpdateRegistrationBonusConfigRequest;
 import com.cardnova.giftchat.dto.UpdateReferralRewardConfigRequest;
 import com.cardnova.giftchat.dto.UpdateUserStatusRequest;
@@ -83,6 +84,14 @@ public class AdminController {
         @Valid @RequestBody UpdateUserStatusRequest request
     ) {
         return ApiResponse.success("agent_status_updated", adminService.updateAgentStatus(agentId, request.status()));
+    }
+
+    @PostMapping("/agents/{agentId}/welcome-message")
+    public ApiResponse<AgentItem> updateAgentWelcomeMessage(
+        @PathVariable String agentId,
+        @Valid @RequestBody UpdateAgentWelcomeMessageRequest request
+    ) {
+        return ApiResponse.success("agent_welcome_message_updated", adminService.updateAgentWelcomeMessage(agentId, request));
     }
 
     @GetMapping("/support/conversations")

@@ -4,22 +4,35 @@
     <view class="customer-sidebar" :class="{ 'sidebar-hidden': isMobile && showChat }">
       <!-- 顶部搜索栏 -->
       <view class="sidebar-header">
+        <view v-if="isAdmin" class="admin-sidebar-tools">
+          <button class="admin-console-button" @click="goAdminConsole">管理员总控台</button>
+          <view class="agent-filter-block">
+            <text class="filter-label">按客服筛选</text>
+            <picker mode="selector" :range="agentFilterLabels" :value="selectedAgentFilterIndex" @change="onAgentFilterChange">
+              <view class="agent-filter-picker">
+                <text>{{ selectedAgentFilterLabel }}</text>
+                <text class="picker-caret">⌄</text>
+              </view>
+            </picker>
+            <text class="filter-count">当前 {{ filteredSupportConversations.length }} 个会话</text>
+          </view>
+        </view>
         <view class="search-mode-row">
           <view
             :class="['search-mode-pill', searchMode === 'customers' && 'active']"
             @click="setSearchMode('customers')"
           >
-            Users
+            用户
           </view>
           <view
             :class="['search-mode-pill', searchMode === 'messages' && 'active']"
             @click="setSearchMode('messages')"
           >
-            Messages
+            聊天记录
           </view>
         </view>
         <view class="search-box">
-          <text class="search-icon">S</text>
+          <text class="search-icon">搜</text>
           <input v-model="searchKeyword" class="search-input" :placeholder="searchPlaceholder" />
         </view>
       </view>
@@ -27,9 +40,9 @@
       <!-- 客户列表 -->
       <scroll-view scroll-y class="customer-list-scroll">
         <view v-if="isSearching && searchMode === 'messages'" class="search-result-list">
-          <view v-if="supportSearchLoading" class="mini-search-state">Searching...</view>
+          <view v-if="supportSearchLoading" class="mini-search-state">正在搜索...</view>
           <view
-            v-for="item in store.state.supportMessageSearchResults"
+            v-for="item in filteredMessageSearchResults"
             :key="item.messageId"
             class="message-search-item"
             @click="selectMessageSearchResult(item.conversationId)"
@@ -39,17 +52,18 @@
               <text class="message-time">{{ formatTime(item.createdAt) }}</text>
             </view>
             <text class="customer-note">{{ countryLabel(item.phoneCountryCode) }} / {{ item.senderRole }}</text>
+            <text v-if="isAdmin" class="customer-note">客服：{{ assignedAgentForConversation(item.conversationId) }}</text>
             <text class="last-message search-snippet">{{ item.snippet }}</text>
           </view>
-          <view v-if="!supportSearchLoading && store.state.supportMessageSearchResults.length === 0" class="empty-list">
-            <text class="empty-text">No message records</text>
+          <view v-if="!supportSearchLoading && filteredMessageSearchResults.length === 0" class="empty-list">
+            <text class="empty-text">暂无聊天记录</text>
           </view>
         </view>
 
         <view v-else-if="isSearching" class="search-result-list">
-          <view v-if="supportSearchLoading" class="mini-search-state">Searching...</view>
+          <view v-if="supportSearchLoading" class="mini-search-state">正在搜索...</view>
           <view
-            v-for="item in store.state.supportCustomerSearchResults"
+            v-for="item in filteredCustomerSearchResults"
             :key="item.conversationId"
             :class="['customer-item', { 'active': item.conversationId === activeConversationId }]"
             @click="selectSearchCustomer(item.conversationId)"
@@ -64,14 +78,15 @@
                 <text class="message-time">{{ formatTime(item.lastMessageTime) }}</text>
               </view>
               <text class="customer-note">{{ countryLabel(item.phoneCountryCode) }} / {{ item.vipLevel }} / {{ item.vipPoints }} pts</text>
+              <text v-if="isAdmin" class="customer-note">客服：{{ assignedAgentForConversation(item.conversationId) }}</text>
               <view class="info-row">
                 <text class="last-message">{{ item.phone || '@' + item.customerUsername }}</text>
                 <view v-if="item.unreadCount > 0" class="unread-badge">{{ item.unreadCount }}</view>
               </view>
             </view>
           </view>
-          <view v-if="!supportSearchLoading && store.state.supportCustomerSearchResults.length === 0" class="empty-list">
-            <text class="empty-text">No users found</text>
+          <view v-if="!supportSearchLoading && filteredCustomerSearchResults.length === 0" class="empty-list">
+            <text class="empty-text">没有找到用户</text>
           </view>
         </view>
 
@@ -108,6 +123,7 @@
                   </view>
                   <text v-if="conv.agentNote" class="customer-note">{{ conv.customerUsername }}</text>
                   <text v-else class="customer-note">{{ conv.vipLevel || 'VIP1' }} / {{ conv.vipPoints || '0' }} pts</text>
+                  <text v-if="isAdmin" class="customer-note">客服：{{ assignedAgentLabel(conv) }}</text>
                   <view class="info-row">
                     <text class="last-message">{{ getLastMessage(conv) }}</text>
                     <view v-if="displayUnreadCount(conv) > 0" class="unread-badge">{{ displayUnreadCount(conv) }}</view>
@@ -154,16 +170,16 @@
         <view class="header-actions">
           <view
             :class="['icon-action', soundEnabled && 'is-on']"
-            :title="soundEnabled ? 'Mute notifications' : 'Unmute notifications'"
+            :title="soundEnabled ? '关闭声音提醒' : '开启声音提醒'"
             @click="toggleSound"
           >
             <text class="icon-bell"></text>
           </view>
-          <view class="icon-action primary" title="Video call" @click="startVideoCall">
+          <view class="icon-action primary" title="视频通话" @click="startVideoCall">
             <text class="icon-video"></text>
           </view>
           <view class="header-menu-wrap">
-            <view class="icon-action" title="More actions" @click="toggleMoreMenu">
+            <view class="icon-action" title="更多操作" @click="toggleMoreMenu">
               <text class="icon-more"></text>
             </view>
             <view v-if="showHeaderMenu" class="header-menu">
@@ -568,11 +584,11 @@ import { useAppStore } from '@/store/app'
 import ChatMessageBubble from '@/components/chat/ChatMessageBubble.vue'
 import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPreview.vue'
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
-import { translateToChinese, uploadImage } from '@/utils/api'
+import { fetchAgents, translateToChinese, uploadImage } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { uiIcons } from '@/utils/art'
-import type { ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
+import type { AgentItem, ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
 import type { TransactionItem, WithdrawalItem } from '@/types'
 
@@ -581,6 +597,8 @@ const draft = ref('')
 const searchKeyword = ref('')
 const searchMode = ref<'customers' | 'messages'>('customers')
 const supportSearchLoading = ref(false)
+const supportAgents = ref<AgentItem[]>([])
+const selectedAgentFilter = ref('all')
 const SUPPORT_GROUP_COLLAPSED_KEY = 'support-country-groups-collapsed'
 const collapsedCountryGroups = ref<Record<string, boolean>>({})
 let supportSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -628,6 +646,7 @@ const lastContextMenuPoint = ref<{ clientX: number; clientY: number; time: numbe
 
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT' || store.state.currentUser?.roleCode === 'ADMIN')
+const isAdmin = computed(() => store.state.currentUser?.roleCode === 'ADMIN')
 const balanceSummary = computed(() => store.state.balanceSummary)
 const canSend = computed(() => draft.value.trim().length > 0 || hasAttachment.value)
 const replyTargetText = computed(() => previewMessageContent(replyTarget.value?.content || ''))
@@ -639,13 +658,36 @@ const messageMenuStyle = computed(() => {
 
 const trimmedSearchKeyword = computed(() => searchKeyword.value.trim())
 const isSearching = computed(() => trimmedSearchKeyword.value.length > 0)
-const searchPlaceholder = computed(() => searchMode.value === 'messages' ? 'Search chat records' : 'Search users')
+const searchPlaceholder = computed(() => searchMode.value === 'messages' ? '搜索聊天记录' : '搜索用户')
+const agentFilterOptions = computed(() => [
+  { label: '全部客服', value: 'all' },
+  { label: '未分配客户', value: 'unassigned' },
+  ...supportAgents.value.map(agent => ({
+    label: `${agent.username}${agent.status === 'ACTIVE' ? '' : '（停用）'}`,
+    value: agent.username
+  }))
+])
+const agentFilterLabels = computed(() => agentFilterOptions.value.map(option => option.label))
+const selectedAgentFilterIndex = computed(() => {
+  const index = agentFilterOptions.value.findIndex(option => option.value === selectedAgentFilter.value)
+  return index >= 0 ? index : 0
+})
+const selectedAgentFilterLabel = computed(() => agentFilterOptions.value[selectedAgentFilterIndex.value]?.label || '全部客服')
+const filteredSupportConversations = computed(() =>
+  store.state.supportConversations.filter(conversationMatchesAgentFilter)
+)
 const sortedConversations = computed(() =>
-  [...store.state.supportConversations].sort((left, right) => {
+  [...filteredSupportConversations.value].sort((left, right) => {
     const unreadDiff = displayUnreadCount(right) - displayUnreadCount(left)
     if (unreadDiff !== 0) return unreadDiff
     return conversationTimestamp(right) - conversationTimestamp(left)
   })
+)
+const filteredCustomerSearchResults = computed(() =>
+  store.state.supportCustomerSearchResults.filter(item => conversationIdMatchesAgentFilter(item.conversationId))
+)
+const filteredMessageSearchResults = computed(() =>
+  store.state.supportMessageSearchResults.filter(item => conversationIdMatchesAgentFilter(item.conversationId))
 )
 const countryGroups = computed(() => {
   const groups = new Map<string, SupportConversationItem[]>()
@@ -814,6 +856,7 @@ onShow(() => {
       uni.redirectTo({ url: '/pages/support/index' })
       return
     }
+    loadAdminAgentFilters()
     applyPendingSupportDraft()
     if (store.state.supportConversations.length > 0) {
       const routeConversation = store.state.supportConversations.find(item => item.conversationId === pendingRouteConversationId.value)
@@ -893,6 +936,58 @@ function checkMobile() {
 
 function setSearchMode(mode: 'customers' | 'messages') {
   searchMode.value = mode
+}
+
+function onAgentFilterChange(event: Event) {
+  const index = Number((event as unknown as { detail?: { value?: number | string } }).detail?.value || 0)
+  selectedAgentFilter.value = agentFilterOptions.value[index]?.value || 'all'
+  nextTick(() => {
+    ensureActiveConversationVisible()
+  })
+}
+
+async function loadAdminAgentFilters() {
+  if (!isAdmin.value) return
+  try {
+    supportAgents.value = await fetchAgents()
+  } catch (error) {
+    console.warn('Failed to load admin agent filters', error)
+  }
+}
+
+function conversationMatchesAgentFilter(conv: SupportConversationItem) {
+  if (!isAdmin.value || selectedAgentFilter.value === 'all') return true
+  if (selectedAgentFilter.value === 'unassigned') {
+    return !conv.assignedAgent || conv.assignmentStatus?.toLowerCase() === 'unassigned'
+  }
+  return conv.assignedAgent === selectedAgentFilter.value
+}
+
+function conversationIdMatchesAgentFilter(conversationId: string) {
+  const conv = store.state.supportConversations.find(item => item.conversationId === conversationId)
+  return conv ? conversationMatchesAgentFilter(conv) : selectedAgentFilter.value === 'all'
+}
+
+function assignedAgentLabel(conv: SupportConversationItem) {
+  return conv.assignedAgent || '未分配'
+}
+
+function assignedAgentForConversation(conversationId: string) {
+  const conv = store.state.supportConversations.find(item => item.conversationId === conversationId)
+  return conv ? assignedAgentLabel(conv) : '未知'
+}
+
+function ensureActiveConversationVisible() {
+  if (!activeConversationId.value) return
+  const current = filteredSupportConversations.value.find(item => item.conversationId === activeConversationId.value)
+  if (current) return
+  const nextConversation = sortedConversations.value[0]
+  if (!nextConversation) {
+    activeConversationId.value = ''
+    store.setActiveSupportConversation('')
+    return
+  }
+  selectCustomer(nextConversation).catch(() => {})
 }
 
 function normalizeCountryCode(code?: string) {
@@ -1458,6 +1553,10 @@ function translateVisibleIncomingMessages() {
           translatingIds.delete(message.id)
         })
     })
+}
+
+function goAdminConsole() {
+  uni.redirectTo({ url: '/pages/admin-console/index' })
 }
 
 function connectSocket() {
@@ -2651,7 +2750,67 @@ function previewImage(url: string) {
 .sidebar-header {
   padding: 14px 12px;
   border-bottom: 1px solid rgba(136, 153, 166, 0.18);
-  background: #f9fbf8;
+  background: #f7f7f8;
+}
+
+.admin-sidebar-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.admin-console-button {
+  width: 100%;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid #002fa7;
+  border-radius: 7px;
+  background: #002fa7;
+  color: #ffffff;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.agent-filter-block {
+  padding: 10px;
+  border: 1px solid #d9dde3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.filter-label,
+.filter-count {
+  display: block;
+  font-size: 12px;
+  color: #68727d;
+  line-height: 1.3;
+}
+
+.agent-filter-picker {
+  margin-top: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #cfd5df;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #101820;
+  font-size: 13px;
+  font-weight: 800;
+  background: #ffffff;
+}
+
+.picker-caret {
+  color: #002fa7;
+  font-size: 14px;
+}
+
+.filter-count {
+  margin-top: 7px;
 }
 
 .search-mode-row {

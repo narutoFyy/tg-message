@@ -202,7 +202,56 @@ class GiftChatServerApplicationTests {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.roleCode").value("ADMIN"))
-            .andExpect(jsonPath("$.data.nextRoute").value("/pages/admin-rates/index"));
+            .andExpect(jsonPath("$.data.nextRoute").value("/pages/admin-console/index"));
+    }
+
+    @Test
+    void adminCanConfigureAgentWelcomeMessagesForNewRegistrations() throws Exception {
+        String adminToken = loginToken("admin_mia");
+        List<String> agentIds = adminAgentIds(adminToken);
+        String welcomeMessage = "Welcome test " + UUID.randomUUID();
+
+        for (String agentId : agentIds) {
+            mockMvc.perform(post("/api/admin/agents/%s/welcome-message".formatted(agentId))
+                    .header("Authorization", bearer(adminToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                        {
+                          "content": "%s",
+                          "enabled": true
+                        }
+                        """.formatted(welcomeMessage)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.welcomeMessage").value(welcomeMessage))
+                .andExpect(jsonPath("$.data.welcomeMessageEnabled").value(true))
+                .andExpect(jsonPath("$.data.welcomeMessageUpdatedBy").value("admin_mia"));
+        }
+
+        String enabledUserToken = registerToken("welcome_enabled_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
+        JsonNode enabledConversations = supportConversations(enabledUserToken);
+        assertEquals(1, countSupportMessagesWithContent(enabledConversations, welcomeMessage));
+
+        JsonNode repeatedConversations = supportConversations(enabledUserToken);
+        assertEquals(1, countSupportMessagesWithContent(repeatedConversations, welcomeMessage));
+
+        String disabledMessage = "Disabled welcome " + UUID.randomUUID();
+        for (String agentId : agentIds) {
+            mockMvc.perform(post("/api/admin/agents/%s/welcome-message".formatted(agentId))
+                    .header("Authorization", bearer(adminToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                        {
+                          "content": "%s",
+                          "enabled": false
+                        }
+                        """.formatted(disabledMessage)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.welcomeMessageEnabled").value(false));
+        }
+
+        String disabledUserToken = registerToken("welcome_disabled_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
+        JsonNode disabledConversations = supportConversations(disabledUserToken);
+        assertEquals(0, countSupportMessagesWithContent(disabledConversations, disabledMessage));
     }
 
     @Test
@@ -1955,6 +2004,39 @@ class GiftChatServerApplicationTests {
 
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
         return root.path("data").path("accessToken").asText();
+    }
+
+    private List<String> adminAgentIds(String adminToken) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/admin/agents")
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode data = objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+        List<String> agentIds = new ArrayList<>();
+        for (JsonNode agent : data) {
+            agentIds.add(agent.path("id").asText());
+        }
+        return agentIds;
+    }
+
+    private JsonNode supportConversations(String userToken) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+    }
+
+    private int countSupportMessagesWithContent(JsonNode conversations, String content) {
+        int count = 0;
+        for (JsonNode conversation : conversations) {
+            for (JsonNode message : conversation.path("messages")) {
+                if (content.equals(message.path("content").asText())) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
     private String registerToken(String username) throws Exception {

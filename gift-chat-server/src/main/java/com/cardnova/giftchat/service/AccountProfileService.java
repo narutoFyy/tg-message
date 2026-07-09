@@ -68,7 +68,7 @@ public class AccountProfileService {
 
     private String nextRoute(UserEntity user) {
         if ("ADMIN".equalsIgnoreCase(user.getRoleCode())) {
-            return "/pages/admin-rates/index";
+            return "/pages/admin-console/index";
         }
         if ("AGENT".equalsIgnoreCase(user.getRoleCode())) {
             return "/pages/support-chat-v2/index";

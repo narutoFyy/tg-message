@@ -1,108 +1,165 @@
 <template>
   <view class="page-shell soft-page admin-page">
     <view v-if="isAdminReady" class="page-stack">
+      <view class="admin-top-nav">
+        <button class="nav-button active" @click="activeTab = 'users'">管理员总控台</button>
+        <button class="nav-button" @click="goSupportChat">客服聊天</button>
+        <button class="nav-button" @click="goRateAdmin">汇率管理</button>
+        <button class="nav-button" @click="goUserHome">用户端首页</button>
+      </view>
+
       <view class="panel">
-        <text class="eyebrow">Admin Console</text>
+        <text class="eyebrow">管理员后台</text>
         <view style="height: 12rpx"></view>
-        <text class="title">Users, support agents, and conversations</text>
+        <text class="title">平台运营总控台</text>
         <view style="height: 10rpx"></view>
-        <text class="subtitle">Review platform users, create support accounts, and manually assign support sessions.</text>
+        <text class="subtitle">统一查看用户、客服、订单、聊天、抽奖、风控和运营通知。</text>
+      </view>
+
+      <view class="admin-home-grid">
+        <button class="quick-link" @click="activeTab = 'support'">
+          <text class="quick-title">客服记录</text>
+          <text class="quick-meta">{{ conversations.length }} 个会话</text>
+        </button>
+        <button class="quick-link" @click="goSupportChat">
+          <text class="quick-title">实时客服聊天</text>
+          <text class="quick-meta">以管理员身份查看和回复</text>
+        </button>
+        <button class="quick-link" @click="activeTab = 'orders'">
+          <text class="quick-title">全部订单</text>
+          <text class="quick-meta">{{ transactions.length }} 个订单</text>
+        </button>
+        <button class="quick-link" @click="activeTab = 'direct'">
+          <text class="quick-title">私聊记录</text>
+          <text class="quick-meta">{{ directConversations.length }} 条记录</text>
+        </button>
       </view>
 
       <view class="panel tab-row">
-        <button :class="['ghost-button', activeTab === 'users' && 'active-tab']" @click="activeTab = 'users'">Users</button>
-        <button :class="['ghost-button', activeTab === 'growth' && 'active-tab']" @click="activeTab = 'growth'">Growth</button>
-        <button :class="['ghost-button', activeTab === 'agents' && 'active-tab']" @click="activeTab = 'agents'">Agents</button>
-        <button :class="['ghost-button', activeTab === 'support' && 'active-tab']" @click="activeTab = 'support'">Support</button>
-        <button :class="['ghost-button', activeTab === 'direct' && 'active-tab']" @click="activeTab = 'direct'">Direct</button>
-        <button :class="['ghost-button', activeTab === 'broadcast' && 'active-tab']" @click="activeTab = 'broadcast'">Broadcast</button>
-        <button :class="['ghost-button', activeTab === 'orders' && 'active-tab']" @click="activeTab = 'orders'">Orders</button>
-        <button :class="['ghost-button', activeTab === 'withdrawals' && 'active-tab']" @click="activeTab = 'withdrawals'">Withdraw</button>
-        <button :class="['ghost-button', activeTab === 'risks' && 'active-tab']" @click="activeTab = 'risks'">Risk</button>
-        <button :class="['ghost-button', activeTab === 'loans' && 'active-tab']" @click="activeTab = 'loans'">Loans</button>
-        <button :class="['ghost-button', activeTab === 'rewards' && 'active-tab']" @click="activeTab = 'rewards'">Rewards</button>
-        <button :class="['ghost-button', activeTab === 'notifications' && 'active-tab']" @click="activeTab = 'notifications'">Alerts</button>
+        <button :class="['ghost-button', activeTab === 'users' && 'active-tab']" @click="activeTab = 'users'">用户管理</button>
+        <button :class="['ghost-button', activeTab === 'growth' && 'active-tab']" @click="activeTab = 'growth'">增长抽奖</button>
+        <button :class="['ghost-button', activeTab === 'agents' && 'active-tab']" @click="activeTab = 'agents'">客服账号</button>
+        <button :class="['ghost-button', activeTab === 'support' && 'active-tab']" @click="activeTab = 'support'">客服记录</button>
+        <button :class="['ghost-button', activeTab === 'direct' && 'active-tab']" @click="activeTab = 'direct'">私聊记录</button>
+        <button :class="['ghost-button', activeTab === 'broadcast' && 'active-tab']" @click="activeTab = 'broadcast'">群发通知</button>
+        <button :class="['ghost-button', activeTab === 'orders' && 'active-tab']" @click="activeTab = 'orders'">订单管理</button>
+        <button :class="['ghost-button', activeTab === 'withdrawals' && 'active-tab']" @click="activeTab = 'withdrawals'">提现管理</button>
+        <button :class="['ghost-button', activeTab === 'risks' && 'active-tab']" @click="activeTab = 'risks'">风控安全</button>
+        <button :class="['ghost-button', activeTab === 'loans' && 'active-tab']" @click="activeTab = 'loans'">贷款申请</button>
+        <button :class="['ghost-button', activeTab === 'rewards' && 'active-tab']" @click="activeTab = 'rewards'">奖励配置</button>
+        <button :class="['ghost-button', activeTab === 'notifications' && 'active-tab']" @click="activeTab = 'notifications'">系统通知</button>
       </view>
 
       <view class="panel admin-balance-panel">
         <view>
-          <text class="section-title">Platform balance</text>
-          <text class="row-meta">All active users: {{ store.state.balanceSummary?.userCount || 0 }}</text>
+          <text class="section-title">平台资金概览</text>
+          <text class="row-meta">活跃用户：{{ store.state.balanceSummary?.userCount || 0 }}</text>
         </view>
         <view class="balance-grid">
           <view>
-            <text class="row-meta">Available</text>
+            <text class="row-meta">可用余额</text>
             <text class="balance-number">{{ store.state.balanceSummary?.availableTotal || '0.00' }}</text>
           </view>
           <view>
-            <text class="row-meta">Pending</text>
+            <text class="row-meta">待结算</text>
             <text class="balance-number">{{ store.state.balanceSummary?.pendingTotal || '0.00' }}</text>
           </view>
           <view>
-            <text class="row-meta">Withdrawn</text>
+            <text class="row-meta">已提现</text>
             <text class="balance-number">{{ store.state.balanceSummary?.withdrawnTotal || '0.00' }}</text>
           </view>
         </view>
       </view>
 
       <view v-if="activeTab === 'users'" class="panel">
-        <text class="section-title">User management</text>
+        <text class="section-title">用户管理</text>
         <view style="height: 18rpx"></view>
         <view v-for="user in users" :key="user.id" class="list-row">
           <view>
             <text class="row-title">{{ user.username }}</text>
-            <text class="row-meta">{{ user.phone || 'No phone' }} / {{ user.email || 'No email' }}</text>
+            <text class="row-meta">{{ user.phone || '无手机号' }} / {{ user.email || '无邮箱' }}</text>
             <text class="row-meta">{{ user.role }} / {{ user.status }} / {{ user.vipLevel }} / {{ user.vipPoints }} pts / {{ user.createdAt }}</text>
           </view>
           <text :class="['status-pill', user.blacklisted ? 'paused' : 'active']">
-            {{ user.blacklisted ? 'Blacklisted' : 'Clear' }}
+            {{ user.blacklisted ? '已拉黑' : '正常' }}
           </text>
         </view>
       </view>
 
       <view v-if="activeTab === 'agents'" class="panel">
-        <text class="section-title">Create support agent</text>
+        <text class="section-title">创建客服账号</text>
         <view style="height: 18rpx"></view>
-        <input v-model="agentForm.username" class="field-input" placeholder="Agent username" />
+        <input v-model="agentForm.username" class="field-input" placeholder="客服用户名" />
         <view style="height: 14rpx"></view>
-        <input v-model="agentForm.email" class="field-input" placeholder="Email" />
+        <input v-model="agentForm.email" class="field-input" placeholder="邮箱" />
         <view style="height: 14rpx"></view>
-        <input v-model="agentForm.phone" class="field-input" placeholder="Phone" />
+        <input v-model="agentForm.phone" class="field-input" placeholder="手机号" />
         <view style="height: 14rpx"></view>
-        <input v-model="agentForm.password" class="field-input" password placeholder="Password" />
+        <input v-model="agentForm.password" class="field-input" password placeholder="密码" />
         <view style="height: 18rpx"></view>
-        <button class="primary-button" @click="submitAgent">Create Agent</button>
+        <button class="primary-button" @click="submitAgent">创建客服</button>
       </view>
 
       <view v-if="activeTab === 'agents'" class="panel">
-        <text class="section-title">Support agents</text>
+        <text class="section-title">客服账号</text>
         <view style="height: 18rpx"></view>
-        <view v-for="agent in agents" :key="agent.id" class="list-row">
+        <view v-for="agent in agents" :key="agent.id" class="list-row agent-list-row">
           <view>
             <text class="row-title">{{ agent.username }}</text>
-            <text class="row-meta">{{ agent.assignedConversationCount }} assigned conversations</text>
-            <text class="row-meta">{{ agent.phone || 'No phone' }} / {{ agent.email || 'No email' }}</text>
+            <text class="row-meta">负责 {{ agent.assignedConversationCount }} 个会话</text>
+            <text class="row-meta">{{ agent.phone || '无手机号' }} / {{ agent.email || '无邮箱' }}</text>
+            <text class="row-meta">欢迎语：{{ agent.welcomeMessageEnabled ? '已启用' : '未启用' }}{{ agent.welcomeMessageUpdatedAt ? ` / ${agent.welcomeMessageUpdatedAt}` : '' }}</text>
           </view>
-          <button class="ghost-button mini-button" @click="toggleAgent(agent.id, agent.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE')">
-            {{ agent.status === 'ACTIVE' ? 'Disable' : 'Enable' }}
-          </button>
+          <view class="agent-row-actions">
+            <button class="ghost-button mini-button" @click="editWelcomeMessage(agent)">
+              {{ editingWelcomeAgentId === agent.id ? '收起' : '编辑欢迎语' }}
+            </button>
+            <button class="ghost-button mini-button" @click="toggleAgent(agent.id, agent.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE')">
+              {{ agent.status === 'ACTIVE' ? '停用' : '启用' }}
+            </button>
+          </view>
+          <view v-if="editingWelcomeAgentId === agent.id" class="welcome-editor">
+            <view class="reward-setting-row">
+              <view>
+                <text class="row-title">注册自动欢迎语</text>
+                <text class="row-meta">新用户分配到 {{ agent.username }} 后自动收到这条消息。</text>
+              </view>
+              <switch
+                :checked="welcomeDrafts[agent.id]?.enabled"
+                @change="setWelcomeEnabled(agent.id, $event)"
+              />
+            </view>
+            <textarea
+              v-model="welcomeDrafts[agent.id].content"
+              class="field-input welcome-textarea"
+              maxlength="1000"
+              placeholder="请输入客服欢迎语"
+            />
+            <view class="welcome-editor-footer">
+              <text class="row-meta">{{ welcomeDrafts[agent.id]?.content.length || 0 }}/1000</text>
+              <button class="primary-button mini-button" @click="saveWelcomeMessage(agent)">保存欢迎语</button>
+            </view>
+          </view>
         </view>
       </view>
 
       <view v-if="activeTab === 'support'" class="panel">
-        <text class="section-title">Support conversations</text>
+        <text class="section-title">客服会话记录</text>
         <view style="height: 18rpx"></view>
         <view v-for="conversation in conversations" :key="conversation.conversationId" class="conversation-card">
           <view class="list-row compact-row">
             <view>
               <text class="row-title">{{ conversation.customerUsername }}</text>
-              <text class="row-meta">{{ conversation.assignmentStatus }} / {{ conversation.assignedAgent || 'Unassigned' }}</text>
+              <text class="row-meta">{{ conversation.assignmentStatus }} / {{ conversation.assignedAgent || '未分配' }}</text>
             </view>
-            <text class="status-pill active">{{ conversation.messages.length }} msgs</text>
+            <view class="support-row-actions">
+              <text class="status-pill active">{{ conversation.messages.length }} 条消息</text>
+              <button class="ghost-button mini-button" @click="goSupportConversation(conversation.conversationId)">查看聊天</button>
+            </view>
           </view>
           <view class="assign-row">
-            <input v-model="assignDrafts[conversation.conversationId]" class="field-input assign-input" placeholder="Agent username" />
-            <button class="primary-button mini-button" @click="assignConversation(conversation.conversationId)">Assign</button>
+            <input v-model="assignDrafts[conversation.conversationId]" class="field-input assign-input" placeholder="客服用户名" />
+            <button class="primary-button mini-button" @click="assignConversation(conversation.conversationId)">分配客服</button>
           </view>
           <view v-if="conversation.messages[0]" class="last-message">
             {{ conversation.messages[conversation.messages.length - 1].content }}
@@ -121,11 +178,11 @@
       </view>
 
       <view v-if="activeTab === 'direct'" class="panel">
-        <text class="section-title">Direct message records</text>
+        <text class="section-title">私聊记录</text>
         <view style="height: 18rpx"></view>
         <view class="assign-row">
-          <input v-model="directSearch" class="field-input assign-input" placeholder="Filter by username" />
-          <button class="primary-button mini-button" @click="refreshDirectConversations">Search</button>
+          <input v-model="directSearch" class="field-input assign-input" placeholder="按用户名筛选" />
+          <button class="primary-button mini-button" @click="refreshDirectConversations">搜索</button>
         </view>
         <view style="height: 18rpx"></view>
         <view v-for="conversation in directConversations" :key="conversation.friendshipId" class="conversation-card">
@@ -518,6 +575,7 @@ import {
   fetchWithdrawals,
   resetAdminLotteryEligibility,
   updateAgentStatus,
+  updateAgentWelcomeMessage,
   updateAdminLotteryRecordStatus,
   updateLoanStatus,
   updateReferralRewardConfig,
@@ -549,6 +607,8 @@ const registrationBonusRecords = ref<RegistrationBonusRecordItem[]>([])
 const notifications = ref<NotificationItem[]>([])
 const directSearch = ref('')
 const assignDrafts = reactive<Record<string, string>>({})
+const welcomeDrafts = reactive<Record<string, { content: string; enabled: boolean }>>({})
+const editingWelcomeAgentId = ref('')
 const loanReviewDrafts = reactive<Record<string, string>>({})
 const registrationBonusDrafts = reactive<Record<string, {
   countryName: string
@@ -605,6 +665,22 @@ function requireAdmin() {
   return false
 }
 
+function goSupportChat() {
+  uni.redirectTo({ url: '/pages/support-chat-v2/index' })
+}
+
+function goSupportConversation(conversationId: string) {
+  uni.redirectTo({ url: `/pages/support-chat-v2/index?conversationId=${encodeURIComponent(conversationId)}` })
+}
+
+function goRateAdmin() {
+  uni.redirectTo({ url: '/pages/admin-rates/index' })
+}
+
+function goUserHome() {
+  uni.redirectTo({ url: '/pages/home/index' })
+}
+
 async function refreshAll() {
   try {
     const [
@@ -657,6 +733,7 @@ async function refreshAll() {
     applyRewardConfig(nextRewardConfig)
     applyRegistrationBonusConfigs(nextRegistrationBonusConfigs)
     notifications.value = nextNotifications
+    applyWelcomeDrafts(nextAgents)
     await store.refreshBalanceSummary().catch(() => {})
     nextConversations.forEach((conversation) => {
       assignDrafts[conversation.conversationId] = conversation.assignedAgent || ''
@@ -691,12 +768,28 @@ function applyRegistrationBonusConfigs(configs: RegistrationBonusConfigItem[]) {
   })
 }
 
+function applyWelcomeDrafts(nextAgents: AgentItem[]) {
+  nextAgents.forEach((agent) => {
+    welcomeDrafts[agent.id] = {
+      content: agent.welcomeMessage || '',
+      enabled: agent.welcomeMessageEnabled
+    }
+  })
+}
+
 function setRegistrationRewardEnabled(event: Event) {
   rewardForm.registrationCashbackEnabled = switchValue(event)
 }
 
 function setTradeRewardEnabled(event: Event) {
   rewardForm.tradeRebateEnabled = switchValue(event)
+}
+
+function setWelcomeEnabled(agentId: string, event: Event) {
+  const draft = welcomeDrafts[agentId]
+  if (draft) {
+    draft.enabled = switchValue(event)
+  }
 }
 
 function setBonusEnabled(countryCode: string, event: Event) {
@@ -982,6 +1075,40 @@ async function toggleAgent(agentId: string, status: string) {
   }
 }
 
+function editWelcomeMessage(agent: AgentItem) {
+  if (!welcomeDrafts[agent.id]) {
+    welcomeDrafts[agent.id] = {
+      content: agent.welcomeMessage || '',
+      enabled: agent.welcomeMessageEnabled
+    }
+  }
+  editingWelcomeAgentId.value = editingWelcomeAgentId.value === agent.id ? '' : agent.id
+}
+
+async function saveWelcomeMessage(agent: AgentItem) {
+  try {
+    const draft = welcomeDrafts[agent.id]
+    if (!draft) return
+    if (draft.enabled && !draft.content.trim()) {
+      notice.value = '启用欢迎语时需要填写内容。'
+      return
+    }
+    const updated = await updateAgentWelcomeMessage(agent.id, {
+      content: draft.content.trim(),
+      enabled: draft.enabled
+    })
+    const index = agents.value.findIndex(item => item.id === updated.id)
+    if (index >= 0) {
+      agents.value.splice(index, 1, updated)
+    }
+    applyWelcomeDrafts(agents.value)
+    editingWelcomeAgentId.value = ''
+    notice.value = '客服欢迎语已保存。'
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : '保存欢迎语失败'
+  }
+}
+
 async function assignConversation(conversationId: string) {
   try {
     const agentUsername = assignDrafts[conversationId]?.trim()
@@ -1000,20 +1127,79 @@ async function assignConversation(conversationId: string) {
   padding-bottom: 80rpx;
 }
 
-.tab-row {
+.admin-top-nav {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12rpx;
 }
 
+.nav-button,
+.quick-link {
+  margin: 0;
+  border: 1rpx solid #d9dde3;
+  border-radius: 8rpx;
+  background: #ffffff;
+  color: #101820;
+  box-shadow: none;
+}
+
+.nav-button {
+  padding: 18rpx 12rpx;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.nav-button.active {
+  color: #ffffff;
+  border-color: #002fa7;
+  background: #002fa7;
+}
+
+.admin-home-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.quick-link {
+  padding: 22rpx;
+  text-align: left;
+}
+
+.quick-title {
+  display: block;
+  font-size: 27rpx;
+  font-weight: 900;
+  color: #101820;
+}
+
+.quick-meta {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #68727d;
+}
+
+.tab-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150rpx, 1fr));
+  gap: 12rpx;
+  align-items: stretch;
+}
+
 .tab-row button {
+  width: 100%;
+  margin: 0;
   padding: 18rpx 10rpx;
   font-size: 24rpx;
+  line-height: 1.2;
 }
 
 .active-tab {
   color: #ffffff;
-  background: #13d66f;
+  border-color: #002fa7;
+  background: #002fa7;
 }
 
 .active-soft {
@@ -1031,8 +1217,52 @@ async function assignConversation(conversationId: string) {
   border-bottom: 1rpx solid #eef1f3;
 }
 
+.agent-list-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.agent-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.welcome-editor {
+  width: 100%;
+  padding: 18rpx;
+  border: 1rpx solid #e3e8ef;
+  border-radius: 8rpx;
+  background: #f8fafc;
+}
+
+.welcome-textarea {
+  width: 100%;
+  min-height: 180rpx;
+  padding: 18rpx;
+  box-sizing: border-box;
+  line-height: 1.45;
+}
+
+.welcome-editor-footer {
+  margin-top: 12rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12rpx;
+}
+
 .compact-row {
   border-bottom: none;
+}
+
+.support-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12rpx;
+  flex-wrap: wrap;
 }
 
 .row-title {
@@ -1203,6 +1433,11 @@ async function assignConversation(conversationId: string) {
 }
 
 @media (max-width: 760px) {
+  .admin-top-nav,
+  .admin-home-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .growth-summary-panel,
   .rule-grid,
   .prize-grid {

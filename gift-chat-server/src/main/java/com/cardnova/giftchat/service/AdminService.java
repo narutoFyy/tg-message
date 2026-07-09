@@ -1,6 +1,8 @@
 package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.dto.CreateAgentRequest;
+import com.cardnova.giftchat.dto.UpdateAgentWelcomeMessageRequest;
+import com.cardnova.giftchat.entity.AgentWelcomeMessageEntity;
 import com.cardnova.giftchat.entity.DirectMessageEntity;
 import com.cardnova.giftchat.entity.FriendshipEntity;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
@@ -12,6 +14,7 @@ import com.cardnova.giftchat.model.ChatMessage;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.model.VipSummary;
 import com.cardnova.giftchat.repository.BlacklistEntryRepository;
+import com.cardnova.giftchat.repository.AgentWelcomeMessageRepository;
 import com.cardnova.giftchat.repository.DirectMessageRepository;
 import com.cardnova.giftchat.repository.FriendshipRepository;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
@@ -33,6 +36,7 @@ public class AdminService {
     private static final DateTimeFormatter MESSAGE_TIME_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm");
 
     private final UserRepository userRepository;
+    private final AgentWelcomeMessageRepository agentWelcomeMessageRepository;
     private final BlacklistEntryRepository blacklistEntryRepository;
     private final FriendshipRepository friendshipRepository;
     private final DirectMessageRepository directMessageRepository;
@@ -44,6 +48,7 @@ public class AdminService {
 
     public AdminService(
         UserRepository userRepository,
+        AgentWelcomeMessageRepository agentWelcomeMessageRepository,
         BlacklistEntryRepository blacklistEntryRepository,
         FriendshipRepository friendshipRepository,
         DirectMessageRepository directMessageRepository,
@@ -54,6 +59,7 @@ public class AdminService {
         VipService vipService
     ) {
         this.userRepository = userRepository;
+        this.agentWelcomeMessageRepository = agentWelcomeMessageRepository;
         this.blacklistEntryRepository = blacklistEntryRepository;
         this.friendshipRepository = friendshipRepository;
         this.directMessageRepository = directMessageRepository;
@@ -74,14 +80,7 @@ public class AdminService {
     public List<AgentItem> agents() {
         requireAdmin();
         return userRepository.findByRoleCodeOrderByCreatedAtDesc("AGENT").stream()
-            .map(agent -> new AgentItem(
-                agent.getId(),
-                agent.getUsername(),
-                agent.getEmail() == null ? "" : agent.getEmail(),
-                agent.getPhone() == null ? "" : agent.getPhone(),
-                agent.getStatusCode(),
-                supportConversationRepository.countByAssignedAgent_Id(agent.getId())
-            ))
+            .map(this::toAgentItem)
             .toList();
     }
 
@@ -115,7 +114,7 @@ public class AdminService {
         agent.setUpdatedAt(LocalDateTime.now());
         UserEntity saved = userRepository.save(agent);
 
-        return new AgentItem(saved.getId(), saved.getUsername(), value(saved.getEmail()), value(saved.getPhone()), saved.getStatusCode(), 0);
+        return toAgentItem(saved);
     }
 
     @Transactional
@@ -130,14 +129,39 @@ public class AdminService {
         agent.setStatusCode(normalizedStatus);
         agent.setUpdatedAt(LocalDateTime.now());
         UserEntity saved = userRepository.save(agent);
-        return new AgentItem(
-            saved.getId(),
-            saved.getUsername(),
-            value(saved.getEmail()),
-            value(saved.getPhone()),
-            saved.getStatusCode(),
-            supportConversationRepository.countByAssignedAgent_Id(saved.getId())
-        );
+        return toAgentItem(saved);
+    }
+
+    @Transactional
+    public AgentItem updateAgentWelcomeMessage(String agentId, UpdateAgentWelcomeMessageRequest request) {
+        UserEntity admin = requireAdmin();
+        UserEntity agent = userRepository.findById(agentId)
+            .orElseThrow(() -> new IllegalArgumentException("Agent not found"));
+        if (!"AGENT".equalsIgnoreCase(agent.getRoleCode())) {
+            throw new IllegalArgumentException("User is not an agent");
+        }
+
+        boolean enabled = Boolean.TRUE.equals(request.enabled());
+        String content = normalizeWelcomeContent(request.content());
+        if (enabled && !StringUtils.hasText(content)) {
+            throw new IllegalArgumentException("Welcome message content is required when enabled");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        AgentWelcomeMessageEntity welcome = agentWelcomeMessageRepository.findByAgent_Id(agent.getId())
+            .orElseGet(() -> {
+                AgentWelcomeMessageEntity created = new AgentWelcomeMessageEntity();
+                created.setId(UUID.randomUUID().toString());
+                created.setAgent(agent);
+                created.setCreatedAt(now);
+                return created;
+            });
+        welcome.setContent(content);
+        welcome.setEnabled(enabled);
+        welcome.setUpdatedBy(admin);
+        welcome.setUpdatedAt(now);
+        agentWelcomeMessageRepository.save(welcome);
+        return toAgentItem(agent);
     }
 
     public List<SupportConversation> supportConversations() {
@@ -175,8 +199,26 @@ public class AdminService {
         return persistentSupportService.toSupportConversation(supportConversationRepository.save(conversation));
     }
 
-    private void requireAdmin() {
-        currentUserService.requireAdmin(currentUserService.getCurrentUser());
+    private UserEntity requireAdmin() {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        currentUserService.requireAdmin(currentUser);
+        return currentUser;
+    }
+
+    private AgentItem toAgentItem(UserEntity agent) {
+        AgentWelcomeMessageEntity welcome = agentWelcomeMessageRepository.findByAgent_Id(agent.getId()).orElse(null);
+        return new AgentItem(
+            agent.getId(),
+            agent.getUsername(),
+            value(agent.getEmail()),
+            value(agent.getPhone()),
+            agent.getStatusCode(),
+            supportConversationRepository.countByAssignedAgent_Id(agent.getId()),
+            welcome == null ? "" : value(welcome.getContent()),
+            welcome != null && Boolean.TRUE.equals(welcome.getEnabled()),
+            welcome == null ? "" : USER_TIME_FORMATTER.format(welcome.getUpdatedAt()),
+            welcome == null || welcome.getUpdatedBy() == null ? "" : welcome.getUpdatedBy().getUsername()
+        );
     }
 
     private AdminDirectConversation toAdminDirectConversation(FriendshipEntity friendship) {
@@ -235,6 +277,14 @@ public class AdminService {
             throw new IllegalArgumentException(message);
         }
         return value.trim();
+    }
+
+    private String normalizeWelcomeContent(String value) {
+        String normalized = value == null ? "" : value.trim();
+        if (normalized.length() > 1000) {
+            throw new IllegalArgumentException("Welcome message must be 1000 characters or less");
+        }
+        return normalized;
     }
 
     private String value(String value) {

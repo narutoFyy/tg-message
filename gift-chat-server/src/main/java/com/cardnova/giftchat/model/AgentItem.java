@@ -6,6 +6,10 @@ public record AgentItem(
     String email,
     String phone,
     String status,
-    long assignedConversationCount
+    long assignedConversationCount,
+    String welcomeMessage,
+    boolean welcomeMessageEnabled,
+    String welcomeMessageUpdatedAt,
+    String welcomeMessageUpdatedBy
 ) {
 }

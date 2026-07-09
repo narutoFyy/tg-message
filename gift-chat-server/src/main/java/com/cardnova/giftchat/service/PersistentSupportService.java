@@ -1,6 +1,7 @@
 package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.dto.SendSupportMessageRequest;
+import com.cardnova.giftchat.entity.AgentWelcomeMessageEntity;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.SupportMessageEntity;
 import com.cardnova.giftchat.entity.UserEntity;
@@ -10,7 +11,9 @@ import com.cardnova.giftchat.model.ChatMessageSync;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
 import com.cardnova.giftchat.repository.SupportMessageRepository;
+import com.cardnova.giftchat.repository.AgentWelcomeMessageRepository;
 import com.cardnova.giftchat.repository.UserRepository;
+import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -30,6 +33,7 @@ public class PersistentSupportService {
 
     private final SupportConversationRepository supportConversationRepository;
     private final SupportMessageRepository supportMessageRepository;
+    private final AgentWelcomeMessageRepository agentWelcomeMessageRepository;
     private final CurrentUserService currentUserService;
     private final ConversationReadService conversationReadService;
     private final RealtimeChatService realtimeChatService;
@@ -47,6 +51,7 @@ public class PersistentSupportService {
     public PersistentSupportService(
         SupportConversationRepository supportConversationRepository,
         SupportMessageRepository supportMessageRepository,
+        AgentWelcomeMessageRepository agentWelcomeMessageRepository,
         CurrentUserService currentUserService,
         ConversationReadService conversationReadService,
         RealtimeChatService realtimeChatService,
@@ -63,6 +68,7 @@ public class PersistentSupportService {
     ) {
         this.supportConversationRepository = supportConversationRepository;
         this.supportMessageRepository = supportMessageRepository;
+        this.agentWelcomeMessageRepository = agentWelcomeMessageRepository;
         this.currentUserService = currentUserService;
         this.conversationReadService = conversationReadService;
         this.realtimeChatService = realtimeChatService;
@@ -387,7 +393,9 @@ public class PersistentSupportService {
                 existing.setAssignedAgent(selectBalancedAgent());
                 existing.setAssignmentStatus("AUTO_ASSIGNED");
                 existing.setUpdatedAt(LocalDateTime.now());
-                return supportConversationRepository.save(existing);
+                SupportConversationEntity saved = supportConversationRepository.save(existing);
+                sendAgentWelcomeMessageIfNeeded(saved);
+                return saved;
             }
             return existing;
         }
@@ -399,7 +407,9 @@ public class PersistentSupportService {
         conversation.setAssignmentStatus("AUTO_ASSIGNED");
         conversation.setCreatedAt(LocalDateTime.now());
         conversation.setUpdatedAt(LocalDateTime.now());
-        return supportConversationRepository.save(conversation);
+        SupportConversationEntity saved = supportConversationRepository.save(conversation);
+        sendAgentWelcomeMessageIfNeeded(saved);
+        return saved;
     }
 
     @Transactional
@@ -461,6 +471,22 @@ public class PersistentSupportService {
         conversation.setUpdatedAt(now);
         supportConversationRepository.save(conversation);
         return saved;
+    }
+
+    private void sendAgentWelcomeMessageIfNeeded(SupportConversationEntity conversation) {
+        if (conversation.getWelcomeMessageSentAt() != null || conversation.getAssignedAgent() == null) {
+            return;
+        }
+        UserEntity agent = conversation.getAssignedAgent();
+        AgentWelcomeMessageEntity welcome = agentWelcomeMessageRepository.findByAgent_Id(agent.getId()).orElse(null);
+        if (welcome == null || !Boolean.TRUE.equals(welcome.getEnabled()) || !StringUtils.hasText(welcome.getContent())) {
+            return;
+        }
+
+        appendStaffMessage(conversation, agent, "SUPPORT", "TEXT", welcome.getContent());
+        conversation.setWelcomeMessageSentAt(LocalDateTime.now());
+        conversation.setWelcomeMessageAgent(agent);
+        supportConversationRepository.save(conversation);
     }
 
     private boolean canAccessConversation(UserEntity user, SupportConversationEntity conversation) {

@@ -436,6 +436,10 @@ export function updateAgentStatus(agentId: string, status: string) {
   return request<AgentItem>(`/admin/agents/${agentId}/status`, 'POST', { status })
 }
 
+export function updateAgentWelcomeMessage(agentId: string, payload: { content: string; enabled: boolean }) {
+  return request<AgentItem>(`/admin/agents/${agentId}/welcome-message`, 'POST', payload)
+}
+
 export function fetchAdminSupportConversations() {
   return request<SupportConversationItem[]>('/admin/support/conversations')
 }

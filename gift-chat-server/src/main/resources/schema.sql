@@ -32,10 +32,13 @@ CREATE TABLE IF NOT EXISTS support_conversation (
     assigned_agent_id VARCHAR(36),
     assignment_status VARCHAR(32) NOT NULL,
     agent_note VARCHAR(255),
+    welcome_message_sent_at TIMESTAMP,
+    welcome_message_agent_id VARCHAR(36),
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_support_customer FOREIGN KEY (customer_user_id) REFERENCES app_user (id),
-    CONSTRAINT fk_support_agent FOREIGN KEY (assigned_agent_id) REFERENCES app_user (id)
+    CONSTRAINT fk_support_agent FOREIGN KEY (assigned_agent_id) REFERENCES app_user (id),
+    CONSTRAINT fk_support_welcome_agent FOREIGN KEY (welcome_message_agent_id) REFERENCES app_user (id)
 );
 
 CREATE TABLE IF NOT EXISTS support_message (
@@ -127,6 +130,19 @@ CREATE TABLE IF NOT EXISTS trade_order (
     CONSTRAINT fk_trade_counterparty FOREIGN KEY (counterparty_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_trade_friendship FOREIGN KEY (friendship_id) REFERENCES friendship (id),
     CONSTRAINT fk_trade_order_canceled_by FOREIGN KEY (canceled_by_user_id) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS agent_welcome_message (
+    id VARCHAR(36) PRIMARY KEY,
+    agent_user_id VARCHAR(36) NOT NULL,
+    content TEXT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_by VARCHAR(36),
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_agent_welcome_agent FOREIGN KEY (agent_user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_agent_welcome_updated_by FOREIGN KEY (updated_by) REFERENCES app_user (id),
+    CONSTRAINT ux_agent_welcome_agent UNIQUE (agent_user_id)
 );
 
 CREATE TABLE IF NOT EXISTS upload_asset (

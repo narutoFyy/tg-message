@@ -1,72 +1,93 @@
 <template>
-  <view class="page-shell soft-page">
+  <view class="page-shell soft-page withdraw-page">
     <view class="page-stack">
-      <view class="panel">
-        <text class="eyebrow">提现</text>
-        <view style="height: 12rpx"></view>
-        <text class="title">{{ lotteryRecordId ? '中奖提现申请' : '银行提现申请' }}</text>
-        <view style="height: 10rpx"></view>
-        <text class="subtitle">每个用户只能绑定一张银行卡，绑定后提现请求会发送给专属客服处理。</text>
+      <view class="page-header withdraw-hero tone-finance">
+        <view class="page-header-copy">
+          <text class="eyebrow">Wallet</text>
+          <text class="title">{{ lotteryRecordId ? 'Claim lottery prize' : 'Withdraw funds' }}</text>
+          <text class="subtitle">Withdrawals are reviewed by your support team using your bound bank account.</text>
+        </view>
       </view>
 
-      <view v-if="!lotteryRecordId" class="panel balance-panel">
-        <text class="balance-label">可提现余额</text>
+      <view v-if="!lotteryRecordId" class="balance-panel tone-finance">
+        <text class="balance-label">Available to withdraw</text>
         <text class="balance-value">{{ availableBalance }}</text>
       </view>
 
-      <view class="panel form-card">
+      <view v-if="!bankAccount" class="form-section bind-section">
         <view class="section-head">
           <view>
-            <text class="section-title">银行账户</text>
-            <text class="row-meta">{{ bankAccount ? '已绑定银行卡' : '请先绑定一张银行卡' }}</text>
+            <text class="section-title">Bind bank account</text>
+            <text class="row-meta">One bank account can be bound to each user.</text>
           </view>
-          <text v-if="bankAccount" class="status-pill active">已绑定</text>
+          <text class="step-label">Step 1</text>
         </view>
-
-        <view v-if="bankAccount" class="bound-bank">
-          <text class="row-title">{{ bankAccount.bankName }}</text>
-          <text class="row-meta">{{ bankAccount.accountName }} / {{ bankAccount.maskedAccountNumber }}</text>
-          <text class="row-meta">{{ bankAccount.country }} / {{ bankAccount.createdAt }}</text>
+        <view class="form-grid">
+          <view class="form-field">
+            <text class="field-label">Country or region</text>
+            <input v-model="form.country" class="field-input" placeholder="Nigeria, India or Ghana" />
+          </view>
+          <view class="form-field">
+            <text class="field-label">Account holder</text>
+            <input v-model="form.accountName" class="field-input" placeholder="Full account holder name" />
+          </view>
+          <view class="form-field">
+            <text class="field-label">Bank name</text>
+            <input v-model="form.bankName" class="field-input" placeholder="Enter bank name" />
+          </view>
+          <view class="form-field">
+            <text class="field-label">Account number</text>
+            <input v-model="form.accountNumber" class="field-input" type="number" placeholder="Enter bank account number" />
+          </view>
         </view>
-
-        <view v-else>
-          <text class="field-label">国家/地区</text>
-          <input v-model="form.country" class="field-input" placeholder="Nigeria / India / Ghana" />
-          <view style="height: 18rpx"></view>
-          <text class="field-label">持卡人姓名</text>
-          <input v-model="form.accountName" class="field-input" placeholder="请输入持卡人姓名" />
-          <view style="height: 18rpx"></view>
-          <text class="field-label">银行名称</text>
-          <input v-model="form.bankName" class="field-input" placeholder="请输入银行名称" />
-          <view style="height: 18rpx"></view>
-          <text class="field-label">银行卡号</text>
-          <input v-model="form.accountNumber" class="field-input" placeholder="请输入银行卡号" />
-          <view style="height: 24rpx"></view>
-          <button class="primary-button" @click="bindAccount">绑定银行账户</button>
-        </view>
+        <button class="primary-button submit-button" @click="bindAccount">Bind bank account</button>
       </view>
 
-      <view class="panel form-card">
-        <text class="section-title">{{ lotteryRecordId ? '申请中奖提现' : '提交提现请求' }}</text>
-        <view style="height: 18rpx"></view>
-        <view v-if="!lotteryRecordId">
-          <text class="field-label">提现金额</text>
-          <input v-model="form.amount" class="field-input" placeholder="请输入提现金额" />
-          <view style="height: 18rpx"></view>
+      <template v-else>
+        <view class="bank-section bound-section">
+          <view class="section-head">
+            <view>
+              <text class="section-title">Bank account</text>
+              <text class="row-meta">Used for this withdrawal</text>
+            </view>
+            <text class="status-pill active">Bound</text>
+          </view>
+          <view class="bound-bank">
+            <text class="row-title">{{ bankAccount.bankName }}</text>
+            <text class="row-meta">{{ bankAccount.accountName }} / {{ bankAccount.maskedAccountNumber }}</text>
+            <text class="row-meta">{{ bankAccount.country }} / Bound {{ bankAccount.createdAt }}</text>
+          </view>
         </view>
-        <text class="field-label">联系方式</text>
-        <input v-model="form.contact" class="field-input" placeholder="手机号或 WhatsApp" />
-        <view style="height: 24rpx"></view>
-        <button class="primary-button" :disabled="!bankAccount" @click="submit">
-          {{ lotteryRecordId ? '申请中奖提现' : '提交提现请求' }}
-        </button>
-        <text v-if="!bankAccount" class="form-hint">请先绑定银行账户，再提交提现请求。</text>
-      </view>
 
-      <view v-if="store.state.withdrawals.length" class="panel">
-        <text class="section-title">提现记录</text>
+        <view class="form-section request-section">
+          <view class="section-head">
+            <view>
+              <text class="section-title">{{ lotteryRecordId ? 'Prize withdrawal' : 'Withdrawal request' }}</text>
+              <text class="row-meta">Confirm the amount and your contact details.</text>
+            </view>
+            <text class="step-label">Final step</text>
+          </view>
+          <view v-if="!lotteryRecordId" class="form-field">
+            <text class="field-label">Amount</text>
+            <input v-model="form.amount" class="field-input" type="number" placeholder="Enter withdrawal amount" />
+          </view>
+          <view class="form-field contact-field">
+            <text class="field-label">Contact</text>
+            <input v-model="form.contact" class="field-input" placeholder="Phone number or WhatsApp" />
+          </view>
+          <button class="primary-button submit-button" @click="submit">
+            {{ lotteryRecordId ? 'Submit prize withdrawal' : 'Submit withdrawal' }}
+          </button>
+        </view>
+      </template>
+
+      <view v-if="store.state.withdrawals.length" class="history-section">
+        <view class="section-head">
+          <text class="section-title">Withdrawal history</text>
+          <text class="history-count">{{ store.state.withdrawals.length }}</text>
+        </view>
         <view v-for="item in store.state.withdrawals" :key="item.id" class="withdraw-row">
-          <view>
+          <view class="row-copy">
             <text class="row-title">{{ item.requestNo }}</text>
             <text class="row-meta">{{ item.bankName }} / {{ item.accountNumber }}</text>
             <text class="row-meta">{{ item.createdAt }}</text>
@@ -127,7 +148,7 @@ function parseMoney(value: string) {
 async function bindAccount() {
   try {
     if (!form.country.trim() || !form.accountName.trim() || !form.bankName.trim() || !form.accountNumber.trim()) {
-      notice.value = '请完整填写银行卡信息。'
+      notice.value = 'Complete all bank account fields.'
       return
     }
     bankAccount.value = await bindBankAccount({
@@ -136,20 +157,22 @@ async function bindAccount() {
       bankName: form.bankName.trim(),
       accountNumber: form.accountNumber.trim()
     })
-    notice.value = lotteryRecordId.value ? '银行卡已绑定，现在可以申请中奖提现。' : '银行卡已绑定。'
+    notice.value = lotteryRecordId.value
+      ? 'Bank account bound. You can now submit the prize withdrawal.'
+      : 'Bank account bound.'
   } catch (error) {
-    notice.value = error instanceof Error ? error.message : '绑定银行卡失败'
+    notice.value = error instanceof Error ? error.message : 'Failed to bind bank account'
   }
 }
 
 async function submit() {
   try {
     if (!bankAccount.value) {
-      notice.value = '请先绑定银行账户。'
+      notice.value = 'Bind a bank account first.'
       return
     }
     if (!lotteryRecordId.value && !form.amount.trim()) {
-      notice.value = '请输入提现金额。'
+      notice.value = 'Enter a withdrawal amount.'
       return
     }
     const withdrawal = lotteryRecordId.value
@@ -167,7 +190,7 @@ async function submit() {
     await store.bootstrap().catch(() => undefined)
     uni.redirectTo({ url: '/pages/support/index' })
   } catch (error) {
-    notice.value = error instanceof Error ? error.message : '提现申请失败'
+    notice.value = error instanceof Error ? error.message : 'Withdrawal request failed'
   }
 }
 
@@ -193,79 +216,186 @@ function buildWithdrawalDraft(requestNo: string) {
 </script>
 
 <style scoped lang="scss">
-.balance-panel {
+.withdraw-page {
+  padding-bottom: 48rpx;
+}
+
+.page-header-copy .eyebrow,
+.page-header-copy .title,
+.page-header-copy .subtitle {
+  display: block;
+}
+
+.page-header-copy .title {
+  margin-top: 7rpx;
+}
+
+.page-header-copy .subtitle {
+  margin-top: 8rpx;
+}
+
+.withdraw-hero {
+  padding: 28rpx;
+  align-items: center;
+  border-bottom: 0;
+}
+
+.balance-panel,
+.form-section,
+.bank-section,
+.history-section {
   background: #ffffff;
-  border: 1rpx solid rgba(136, 153, 166, 0.18);
+  border: 1rpx solid var(--cb-line);
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.balance-panel {
+  padding: 28rpx;
+  border-left: 5rpx solid var(--cb-mint-strong);
 }
 
 .balance-label,
+.balance-value,
+.row-title,
 .row-meta {
   display: block;
-  font-size: 23rpx;
-  color: #7b838c;
+}
+
+.balance-label {
+  color: #6f7178;
+  font-size: 22rpx;
 }
 
 .balance-value {
-  display: block;
   margin-top: 10rpx;
-  font-size: 52rpx;
-  font-weight: 900;
-  color: #0088cc;
+  color: #0f7f49;
+  font-size: 44rpx;
+  font-weight: 700;
 }
 
 .section-head {
+  min-height: 82rpx;
+  padding: 16rpx 24rpx;
+  box-sizing: border-box;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16rpx;
-  margin-bottom: 18rpx;
+  gap: 18rpx;
+  border-bottom: 1rpx solid #dedfe3;
+}
+
+.section-head .row-meta {
+  margin-top: 4rpx;
+}
+
+.step-label,
+.history-count {
+  flex: 0 0 auto;
+  color: #002fa7;
+  font-size: 21rpx;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.form-grid {
+  padding: 24rpx 24rpx 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20rpx;
+}
+
+.form-section > .form-field {
+  padding: 24rpx 24rpx 0;
+}
+
+.contact-field {
+  padding-top: 20rpx !important;
+}
+
+.submit-button {
+  width: calc(100% - 48rpx);
+  margin: 26rpx 24rpx 24rpx;
+  background: var(--cb-mint-strong);
+}
+
+.bind-section {
+  background: var(--cb-sky);
+  border-color: #cfe4fb;
+}
+
+.request-section,
+.bound-section {
+  background: var(--cb-mint);
+  border-color: #c6ead8;
 }
 
 .bound-bank {
-  padding: 18rpx;
-  border-radius: 8rpx;
-  background: #f7fafb;
-  border: 1rpx solid rgba(136, 153, 166, 0.16);
-}
-
-.withdraw-row {
-  padding: 18rpx 0;
-  border-bottom: 1rpx solid #eef1f3;
-  display: flex;
-  justify-content: space-between;
-  gap: 18rpx;
+  padding: 22rpx 24rpx;
+  border-left: 4rpx solid var(--cb-mint-strong);
 }
 
 .row-title {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 900;
+  color: #111111;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.row-meta {
+  margin-top: 6rpx;
+  color: #777980;
+  font-size: 21rpx;
+  line-height: 1.4;
+}
+
+.withdraw-row {
+  min-height: 98rpx;
+  padding: 18rpx 24rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  border-bottom: 1rpx solid #dedfe3;
+}
+
+.withdraw-row:last-child {
+  border-bottom: 0;
+}
+
+.row-copy {
+  min-width: 0;
 }
 
 .amount-side {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 10rpx;
+  gap: 8rpx;
 }
 
 .amount {
-  font-size: 28rpx;
-  font-weight: 900;
-  color: #0088cc;
+  color: #002fa7;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.status-pill.warning {
+  color: #9a5b00;
+  background: #fff4df;
 }
 
 .notice-text {
   display: block;
+  color: #b42318;
+  font-size: 23rpx;
   text-align: center;
-  font-size: 24rpx;
-  color: #5d646d;
 }
 
-.form-hint {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 23rpx;
-  color: #6f7a86;
+@media (min-width: 768px) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>

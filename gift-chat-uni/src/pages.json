@@ -75,25 +75,25 @@
     {
       "path": "pages/profile-info/index",
       "style": {
-        "navigationBarTitleText": "Personal Information"
+        "navigationStyle": "custom"
       }
     },
     {
       "path": "pages/wallet/index",
       "style": {
-        "navigationBarTitleText": "Wallet"
+        "navigationStyle": "custom"
       }
     },
     {
       "path": "pages/withdraw/index",
       "style": {
-        "navigationBarTitleText": "Withdraw"
+        "navigationStyle": "custom"
       }
     },
     {
       "path": "pages/loan/index",
       "style": {
-        "navigationBarTitleText": "Loan"
+        "navigationStyle": "custom"
       }
     },
     {
@@ -111,19 +111,19 @@
     {
       "path": "pages/performance/index",
       "style": {
-        "navigationBarTitleText": "Performance"
+        "navigationStyle": "custom"
       }
     },
     {
       "path": "pages/settings/index",
       "style": {
-        "navigationBarTitleText": "Settings"
+        "navigationStyle": "custom"
       }
     },
     {
       "path": "pages/blacklist/index",
       "style": {
-        "navigationBarTitleText": "Blacklist"
+        "navigationStyle": "custom"
       }
     },
     {
@@ -142,7 +142,7 @@
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "CardBrother",
-    "navigationBarBackgroundColor": "#d9ffe7",
-    "backgroundColor": "#ffffff"
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f7f7f8"
   }
 }

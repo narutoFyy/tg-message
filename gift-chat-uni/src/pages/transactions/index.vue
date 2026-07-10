@@ -1,92 +1,76 @@
 <template>
   <view class="page-shell soft-page transactions-page">
-    <view class="winner-card surface-card">
-      <view class="winner-head">
-        <view>
-          <text class="eyebrow">Lucky winners</text>
-          <text class="winner-title">Recent prize records</text>
+    <view class="transactions-content">
+      <view class="page-header orders-hero tone-risk">
+        <view class="page-header-copy">
+          <text class="eyebrow">Activity</text>
+          <text class="title">Orders</text>
+          <text class="subtitle">Track sell orders and settlement progress.</text>
         </view>
-        <text class="winner-link" @click="goLottery">Spin</text>
+        <text class="order-count">{{ filteredTransactions.length }}</text>
       </view>
-      <view class="winner-window">
-        <view v-if="tickerWinners.length" class="winner-track">
-          <view v-for="(winner, index) in tickerWinners" :key="`${winner.drawnAt}-${winner.prizeName}-${index}`" class="winner-row">
-            <view class="winner-main">
-              <text class="winner-prize">{{ winner.prizeName }}</text>
-              <text class="winner-time">{{ winner.drawnAt || 'Just now' }}</text>
+
+      <scroll-view scroll-x class="filter-scroll" :show-scrollbar="false">
+        <view class="filter-row">
+          <view
+            v-for="item in filters"
+            :key="item.value"
+            :class="['filter-tab', activeFilter === item.value && 'active-filter']"
+            @click="activeFilter = item.value"
+          >{{ item.label }}</view>
+        </view>
+      </scroll-view>
+
+      <view v-if="filteredTransactions.length" class="transaction-list">
+        <view v-for="item in filteredTransactions" :key="item.id" :class="['transaction-row', `order-${item.status}`]">
+          <view class="transaction-head">
+            <view class="order-heading">
+              <text class="order-no">{{ item.orderNo }}</text>
+              <text class="order-time">Updated {{ item.updatedAt }}</text>
             </view>
-            <text class="winner-name">{{ winner.displayName }}</text>
+            <text :class="['status-pill', statusClass(item.status)]">{{ statusLabel(item.status) }}</text>
           </view>
-        </view>
-        <view v-else class="winner-row static-row">
-          <view class="winner-main">
-            <text class="winner-prize">No winners yet</text>
-            <text class="winner-time">Open the wheel to start</text>
+
+          <view class="transaction-main">
+            <view class="trade-summary">
+              <text class="card-title">{{ item.cardName }}</text>
+              <text class="trade-line">Face value {{ item.faceValue }}</text>
+              <text class="payout-line">{{ item.payoutAmount }}</text>
+            </view>
+            <view class="counterparty">
+              <text class="meta-label">Counterparty</text>
+              <text class="counterparty-name">{{ item.counterpartyName }}</text>
+              <text class="counterparty-user">@{{ item.counterpartyUsername }}</text>
+            </view>
           </view>
-          <text class="winner-name">Be the first</text>
+
+          <text v-if="item.note" class="note-copy">{{ item.note }}</text>
+
+          <view class="action-row">
+            <view class="utility-actions">
+              <text class="text-action" @click="openSupportChat">Chat</text>
+              <text class="text-action danger-action" @click="hideTransaction(item)">Hide</text>
+            </view>
+            <view class="status-actions">
+              <button
+                v-for="action in nextActions(item.status)"
+                :key="`${item.id}-${action}`"
+                :class="[action === 'disputed' ? 'ghost-button' : 'primary-button', 'action-button']"
+                :disabled="loadingId === item.id"
+                @click="advanceStatus(item.id, action)"
+              >{{ actionLabel(action) }}</button>
+            </view>
+          </view>
         </view>
       </view>
-    </view>
 
-    <view class="filter-row surface-card">
-      <view
-        v-for="item in filters"
-        :key="item.value"
-        :class="['filter-pill', activeFilter === item.value && 'active-filter']"
-        @click="activeFilter = item.value"
-      >
-        {{ item.label }}
+      <view v-else class="empty-card">
+        <text class="section-title">No matching orders</text>
+        <text class="muted">Choose another status or create a sell order from the rate desk.</text>
       </view>
+
+      <text v-if="notice" class="notice-text">{{ notice }}</text>
     </view>
-
-    <view v-if="filteredTransactions.length" class="transaction-list">
-      <view v-for="item in filteredTransactions" :key="item.id" class="panel transaction-card">
-        <view class="transaction-head">
-          <view>
-            <text class="order-no">{{ item.orderNo }}</text>
-            <text class="order-time">Updated {{ item.updatedAt }}</text>
-          </view>
-          <text :class="['status-pill', statusClass(item.status)]">{{ statusLabel(item.status) }}</text>
-        </view>
-
-        <view class="transaction-main">
-          <view>
-            <text class="card-title">{{ item.cardName }}</text>
-            <text class="trade-line">Face value {{ item.faceValue }}</text>
-            <text class="trade-line payout-line">{{ item.payoutAmount }}</text>
-          </view>
-          <view class="counterparty-card">
-            <text class="counterparty-label">Counterparty</text>
-            <text class="counterparty-name">{{ item.counterpartyName }}</text>
-            <text class="counterparty-user">@{{ item.counterpartyUsername }}</text>
-          </view>
-        </view>
-
-        <text class="note-copy">{{ item.note }}</text>
-
-        <view class="action-row">
-          <button class="ghost-button action-button" @click="openSupportChat">Chat</button>
-          <button class="ghost-button action-button danger-action" @click="hideTransaction(item)">Hide</button>
-          <button
-            v-for="action in nextActions(item.status)"
-            :key="`${item.id}-${action}`"
-            class="primary-button action-button"
-            :disabled="loadingId === item.id"
-            @click="advanceStatus(item.id, action)"
-          >
-            {{ actionLabel(action) }}
-          </button>
-        </view>
-      </view>
-    </view>
-
-    <view v-else class="panel empty-card">
-      <text class="title" style="font-size: 34rpx;">No matching trades</text>
-      <view style="height: 10rpx"></view>
-      <text class="muted">Try another status filter or start with your active sell orders.</text>
-    </view>
-
-    <text v-if="notice" class="notice-text">{{ notice }}</text>
 
     <AppNav current="transactions" />
   </view>
@@ -114,20 +98,11 @@ const filters = [
 
 onShow(() => {
   store.bootstrap()
-  store.refreshLotteryWinners().catch(() => undefined)
 })
 
 const filteredTransactions = computed(() => {
-  if (activeFilter.value === 'all') {
-    return store.state.transactions
-  }
+  if (activeFilter.value === 'all') return store.state.transactions
   return store.state.transactions.filter((item) => item.status === activeFilter.value)
-})
-
-const tickerWinners = computed(() => {
-  const winners = store.state.lotteryWinners
-  if (!winners.length) return []
-  return winners.length > 3 ? [...winners, ...winners] : [...winners, ...winners, ...winners]
 })
 
 function statusLabel(status: TransactionItem['status']) {
@@ -158,10 +133,10 @@ function nextActions(status: TransactionItem['status']) {
 
 function actionLabel(status: TransactionItem['status']) {
   return {
-    processing: 'Mark Processing',
-    completed: 'Mark Complete',
-    disputed: 'Raise Dispute',
-    pending: 'Mark Pending',
+    processing: 'Mark processing',
+    completed: 'Mark complete',
+    disputed: 'Raise dispute',
+    pending: 'Mark pending',
     canceled: 'Canceled'
   }[status]
 }
@@ -170,7 +145,7 @@ async function advanceStatus(transactionId: string, status: TransactionItem['sta
   loadingId.value = transactionId
   try {
     await store.updateTransactionStatus(transactionId, status)
-    notice.value = `Trade moved to ${statusLabel(status)}.`
+    notice.value = `Order moved to ${statusLabel(status)}.`
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Update failed'
   } finally {
@@ -182,24 +157,16 @@ function openSupportChat() {
   uni.redirectTo({ url: '/pages/support/index' })
 }
 
-function goLottery() {
-  uni.navigateTo({ url: '/pages/lucky-wheel/index' })
-}
-
 function hideTransaction(item: TransactionItem) {
   uni.showModal({
     title: 'Hide order',
     content: 'This only hides the order from your list. The platform and support team still keep the full record.',
     confirmText: 'Hide',
-    confirmColor: '#d64242',
+    confirmColor: '#b42318',
     success: async (result) => {
       if (!result.confirm) return
       try {
-        await store.hideRecord({
-          targetType: 'ORDER',
-          targetId: item.id,
-          hiddenScope: 'ORDER'
-        })
+        await store.hideRecord({ targetType: 'ORDER', targetId: item.id, hiddenScope: 'ORDER' })
         notice.value = 'Order hidden from your list.'
       } catch (error) {
         notice.value = error instanceof Error ? error.message : 'Hide failed'
@@ -211,282 +178,333 @@ function hideTransaction(item: TransactionItem) {
 
 <style scoped lang="scss">
 .transactions-page {
-  padding-bottom: 184rpx;
+  padding-bottom: calc(154rpx + env(safe-area-inset-bottom));
+}
+
+.transactions-content {
+  width: 100%;
+  max-width: 1040rpx;
+  margin: 0 auto;
+}
+
+.page-header-copy .eyebrow,
+.page-header-copy .title,
+.page-header-copy .subtitle {
+  display: block;
+}
+
+.page-header-copy .title {
+  margin-top: 7rpx;
+}
+
+.page-header-copy .subtitle {
+  margin-top: 8rpx;
+}
+
+.orders-hero {
+  padding: 28rpx;
+  align-items: center;
+  border-bottom: 0;
+}
+
+.order-count {
+  min-width: 64rpx;
+  color: var(--cb-coral-strong);
+  font-size: 42rpx;
+  font-weight: 700;
+  text-align: right;
+}
+
+.filter-scroll {
+  width: 100%;
+  margin-top: 24rpx;
+  background: #ffffff;
+  border: 1rpx solid var(--cb-line);
+  border-radius: 12rpx;
+  white-space: nowrap;
 }
 
 .filter-row {
-  margin-top: 18rpx;
-  padding: 16rpx;
   display: flex;
-  gap: 12rpx;
-  overflow-x: auto;
-  white-space: nowrap;
+  width: max-content;
+  min-width: 100%;
 }
 
-.winner-card {
-  margin-top: 0;
-  padding: 24rpx;
-}
-
-.winner-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16rpx;
-}
-
-.winner-title {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 34rpx;
-  font-weight: 900;
-  color: #17212b;
-}
-
-.winner-link {
-  min-width: 108rpx;
-  height: 62rpx;
-  border-radius: 10rpx;
-  background: #0088cc;
-  color: #ffffff;
-  font-size: 26rpx;
-  font-weight: 800;
-  line-height: 62rpx;
-  text-align: center;
-}
-
-.winner-window {
+.filter-tab {
   position: relative;
-  height: 250rpx;
-  margin-top: 18rpx;
-  overflow: hidden;
-  border-radius: 10rpx;
-  background: #f6fafc;
-  border: 1rpx solid rgba(0, 136, 204, 0.1);
-}
-
-.winner-track {
-  animation: winnerScroll 12s linear infinite;
-}
-
-.winner-row {
-  min-height: 84rpx;
+  min-width: 140rpx;
+  height: 76rpx;
   padding: 0 22rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
   box-sizing: border-box;
-  border-bottom: 1rpx solid rgba(0, 136, 204, 0.08);
-}
-
-.static-row {
-  height: 250rpx;
-}
-
-.winner-main {
-  min-width: 0;
-  flex: 1;
-}
-
-.winner-prize {
-  display: block;
-  font-size: 30rpx;
-  font-weight: 900;
-  color: #17212b;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.winner-time {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  font-weight: 700;
-  color: #758391;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.winner-name {
-  max-width: 280rpx;
-  font-size: 24rpx;
-  font-weight: 800;
-  color: #53616e;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@keyframes winnerScroll {
-  0% {
-    transform: translateY(0);
-  }
-  100% {
-    transform: translateY(-50%);
-  }
-}
-
-.filter-pill {
-  min-width: 136rpx;
-  height: 70rpx;
-  padding: 0 20rpx;
-  border-radius: 10rpx;
-  background: #f2f5f7;
-  color: #6a717a;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
+  color: #6f7178;
   font-size: 24rpx;
   font-weight: 700;
 }
 
-.active-filter {
-  background: #0088cc;
-  color: #ffffff;
+.filter-tab.active-filter {
+  color: var(--cb-coral-strong);
+}
+
+.filter-tab.active-filter::after {
+  content: "";
+  position: absolute;
+  left: 20rpx;
+  right: 20rpx;
+  bottom: 0;
+  height: 4rpx;
+  background: var(--cb-coral-strong);
 }
 
 .transaction-list {
-  margin-top: 18rpx;
+  margin-top: 20rpx;
+  border: 1rpx solid var(--cb-line);
+  background: #ffffff;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.transaction-row {
+  position: relative;
+  padding: 24rpx;
+  border-bottom: 1rpx solid #dedfe3;
+}
+
+.transaction-row:last-child {
+  border-bottom: 0;
+}
+
+.transaction-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 24rpx;
+  bottom: 24rpx;
+  width: 4rpx;
+  background: var(--cb-coral-strong);
+}
+
+.transaction-row.order-processing::before { background: var(--cb-sky-strong); }
+.transaction-row.order-completed::before { background: var(--cb-mint-strong); }
+.transaction-row.order-disputed::before,
+.transaction-row.order-canceled::before { background: var(--cb-coral-strong); }
+
+.transaction-head,
+.transaction-main,
+.action-row,
+.utility-actions,
+.status-actions {
   display: flex;
-  flex-direction: column;
+}
+
+.transaction-head,
+.action-row {
+  justify-content: space-between;
   gap: 18rpx;
 }
 
-.transaction-card {
-  padding: 24rpx;
+.transaction-head {
+  align-items: flex-start;
 }
 
-.transaction-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16rpx;
+.order-heading {
+  min-width: 0;
+}
+
+.order-no,
+.order-time {
+  display: block;
 }
 
 .order-no {
-  display: block;
-  font-size: 30rpx;
-  font-weight: 900;
-  color: #171717;
+  color: #111111;
+  font-size: 27rpx;
+  font-weight: 700;
 }
 
 .order-time {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: #8a8a8a;
+  margin-top: 6rpx;
+  color: #777980;
+  font-size: 21rpx;
 }
 
 .status-pill.done {
-  color: #0a9c53;
-  background: rgba(20, 216, 111, 0.12);
+  color: #137a4e;
+  background: #eaf6f0;
 }
 
 .status-pill.warning {
-  color: #dd8a25;
-  background: rgba(255, 184, 76, 0.2);
+  color: #9a5b00;
+  background: #fff4df;
 }
 
 .status-pill.danger {
-  color: #d64242;
-  background: rgba(244, 91, 91, 0.14);
+  color: #b42318;
+  background: #fff0ee;
 }
 
 .transaction-main {
   margin-top: 22rpx;
   display: grid;
-  grid-template-columns: 1fr 220rpx;
-  gap: 18rpx;
+  grid-template-columns: minmax(0, 1fr) minmax(190rpx, 240rpx);
+  gap: 22rpx;
+}
+
+.card-title,
+.trade-line,
+.payout-line,
+.meta-label,
+.counterparty-name,
+.counterparty-user {
+  display: block;
 }
 
 .card-title {
-  display: block;
-  font-size: 34rpx;
-  font-weight: 900;
+  color: #111111;
+  font-size: 30rpx;
+  font-weight: 700;
 }
 
 .trade-line {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 25rpx;
-  color: #626a73;
+  margin-top: 10rpx;
+  color: #6f7178;
+  font-size: 23rpx;
 }
 
 .payout-line {
-  font-size: 30rpx;
-  color: #0f9b57;
-  font-weight: 800;
+  margin-top: 8rpx;
+  color: #137a4e;
+  font-size: 29rpx;
+  font-weight: 700;
 }
 
-.counterparty-card {
-  border-radius: 22rpx;
-  background: #f7fafb;
-  padding: 18rpx;
+.counterparty {
+  padding-left: 20rpx;
+  border-left: 1rpx solid #dedfe3;
 }
 
-.counterparty-label {
-  display: block;
-  font-size: 22rpx;
-  color: #8a8a8a;
+.meta-label {
+  color: #777980;
+  font-size: 20rpx;
+  text-transform: uppercase;
 }
 
 .counterparty-name {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 28rpx;
-  font-weight: 800;
-  color: #171717;
+  margin-top: 8rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #111111;
+  font-size: 25rpx;
+  font-weight: 700;
 }
 
 .counterparty-user {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: #6e7680;
+  margin-top: 5rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #6f7178;
+  font-size: 21rpx;
 }
 
 .note-copy {
   display: block;
-  margin-top: 18rpx;
-  font-size: 24rpx;
-  line-height: 1.5;
-  color: #626a73;
+  margin-top: 20rpx;
+  padding: 14rpx 16rpx;
+  background: #f7f7f8;
+  color: #6f7178;
+  font-size: 23rpx;
+  line-height: 1.45;
 }
 
 .action-row {
-  margin-top: 20rpx;
-  display: flex;
-  gap: 14rpx;
-  flex-wrap: wrap;
+  margin-top: 22rpx;
+  padding-top: 18rpx;
+  align-items: center;
+  border-top: 1rpx solid #dedfe3;
 }
 
-.action-button {
-  min-width: 200rpx;
-  padding-top: 20rpx;
-  padding-bottom: 20rpx;
-  font-size: 26rpx;
+.utility-actions,
+.status-actions {
+  align-items: center;
+  gap: 14rpx;
+}
+
+.text-action {
+  padding: 12rpx 4rpx;
+  color: var(--cb-sky-strong);
+  font-size: 23rpx;
+  font-weight: 700;
 }
 
 .danger-action {
-  color: #d64242;
-  border-color: rgba(214, 66, 66, 0.22);
+  color: #b42318;
+}
+
+.action-button {
+  min-height: 66rpx;
+  margin: 0;
+  padding: 14rpx 18rpx;
+  font-size: 23rpx;
+}
+
+.status-actions .primary-button {
+  background: var(--cb-coral-strong);
 }
 
 .empty-card {
-  margin-top: 18rpx;
+  margin-top: 20rpx;
+  padding: 58rpx 28rpx;
   text-align: center;
-  padding-top: 48rpx;
-  padding-bottom: 48rpx;
+  background: #ffffff;
+  border: 1rpx solid #dedfe3;
+}
+
+.empty-card .muted {
+  display: block;
+  margin-top: 10rpx;
 }
 
 .notice-text {
   display: block;
-  text-align: center;
   margin-top: 20rpx;
-  font-size: 24rpx;
-  color: #5d646d;
+  color: #6f7178;
+  font-size: 23rpx;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .transaction-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .counterparty {
+    padding: 16rpx 0 0;
+    border-left: 0;
+    border-top: 1rpx solid #dedfe3;
+  }
+
+  .action-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .status-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .action-button {
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .transactions-content {
+    max-width: 960px;
+  }
 }
 </style>

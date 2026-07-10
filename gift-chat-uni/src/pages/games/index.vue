@@ -1,203 +1,43 @@
 <template>
   <view class="page-shell soft-page games-page">
-    <view class="games-hero">
-      <view>
-        <text class="eyebrow">Games</text>
-        <text class="title">Mini game zone</text>
-        <text class="subtitle">Play, earn rewards, and check back for new events.</text>
+    <view class="games-content">
+      <view class="page-header games-hero tone-reward">
+        <view class="page-header-copy"><text class="eyebrow">Games</text><text class="title">Reward activities</text><text class="subtitle">Available activities linked to your CardBrother account.</text></view>
       </view>
-      <view class="hero-token">
-        <text>G</text>
+      <view class="activity-row" @click="handleGameCard(gameCard)">
+        <image class="activity-image" src="/static/lottery/stone-technology.png" mode="aspectFit" />
+        <view class="activity-copy"><text class="activity-title">Lucky Wheel</text><text class="activity-meta">Use an eligible draw chance to win a listed prize.</text><text class="activity-status">Available activity</text></view>
+        <button class="primary-button play-button">Play</button>
       </view>
+      <view class="activity-note"><text class="section-title">Activity availability</text><text class="muted">Eligibility and prize results are determined by your account and the server at draw time.</text></view>
     </view>
-
-    <view class="ad-slot">
-      <text class="ad-label">Sponsored</text>
-      <text class="ad-title">Campaign banner</text>
-      <text class="ad-copy">This space is ready for a game ad, event banner, or partner promotion.</text>
-    </view>
-
-    <view class="game-grid">
-      <view v-for="item in gameCards" :key="item.title" class="game-card">
-        <view :class="['game-mark', item.tone]">
-          <text>{{ item.initial }}</text>
-        </view>
-        <text class="game-title">{{ item.title }}</text>
-        <text class="game-meta">{{ item.meta }}</text>
-        <button class="ghost-button mini-button" disabled>{{ item.action }}</button>
-      </view>
-    </view>
-
     <AppNav current="games" />
   </view>
 </template>
 
 <script setup lang="ts">
 import AppNav from '@/components/AppNav.vue'
-
-const gameCards = [
-  { title: 'Lucky Spin', meta: 'Reward draw', action: 'Soon', initial: 'S', tone: 'mint' },
-  { title: 'Rate Quiz', meta: 'Daily challenge', action: 'Soon', initial: 'Q', tone: 'blue' },
-  { title: 'Gift Rush', meta: 'Event game', action: 'Soon', initial: 'R', tone: 'gold' }
-]
+const gameCard = { route: '/pages/lucky-wheel/index' }
+function handleGameCard(item: typeof gameCard) { if (item.route) uni.navigateTo({ url: item.route }) }
 </script>
 
 <style scoped lang="scss">
-.games-page {
-  padding-bottom: 190rpx;
-}
-
-.games-hero {
-  min-height: 210rpx;
-  border-radius: 14rpx;
-  padding: 30rpx;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.28)),
-    linear-gradient(135deg, #dff6ff 0%, #ddffe9 58%, #fff2c7 100%);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
-  overflow: hidden;
-}
-
-.games-hero .title,
-.games-hero .subtitle {
-  display: block;
-}
-
-.hero-token {
-  width: 122rpx;
-  height: 122rpx;
-  border-radius: 50%;
-  background: #15d66f;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  font-size: 58rpx;
-  font-weight: 900;
-  box-shadow: 0 18rpx 34rpx rgba(21, 214, 111, 0.24);
-}
-
-.ad-slot {
-  margin-top: 24rpx;
-  min-height: 180rpx;
-  border-radius: 12rpx;
-  padding: 28rpx;
-  background: #101820;
-  color: #ffffff;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.ad-label {
-  width: fit-content;
-  padding: 8rpx 16rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.14);
-  font-size: 22rpx;
-  font-weight: 800;
-}
-
-.ad-title {
-  margin-top: 18rpx;
-  font-size: 38rpx;
-  font-weight: 900;
-}
-
-.ad-copy {
-  margin-top: 8rpx;
-  font-size: 25rpx;
-  color: rgba(255, 255, 255, 0.72);
-  line-height: 1.45;
-}
-
-.game-grid {
-  margin-top: 24rpx;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16rpx;
-}
-
-.game-card {
-  min-width: 0;
-  border-radius: 12rpx;
-  padding: 20rpx;
-  background: #ffffff;
-  border: 1rpx solid rgba(136, 153, 166, 0.16);
-  box-shadow: 0 10rpx 26rpx rgba(25, 42, 62, 0.06);
-}
-
-.game-mark {
-  width: 62rpx;
-  height: 62rpx;
-  border-radius: 12rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 30rpx;
-  font-weight: 900;
-}
-
-.game-mark.mint {
-  color: #0b8c4d;
-  background: #e9fff2;
-}
-
-.game-mark.blue {
-  color: #0875b8;
-  background: #e7f6ff;
-}
-
-.game-mark.gold {
-  color: #9b6500;
-  background: #fff5d8;
-}
-
-.game-title {
-  display: block;
-  margin-top: 16rpx;
-  font-size: 28rpx;
-  font-weight: 900;
-  color: #171717;
-  line-height: 1.18;
-}
-
-.game-meta {
-  display: block;
-  margin-top: 8rpx;
-  min-height: 42rpx;
-  font-size: 22rpx;
-  color: #7d8b97;
-}
-
-.mini-button {
-  margin-top: 16rpx;
-  min-width: 0;
-  width: 100%;
-  padding: 12rpx 8rpx;
-  font-size: 22rpx;
-}
-
-@media (max-width: 420px) {
-  .game-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .game-card {
-    display: grid;
-    grid-template-columns: 72rpx 1fr 128rpx;
-    align-items: center;
-    column-gap: 16rpx;
-  }
-
-  .game-title,
-  .game-meta,
-  .mini-button {
-    margin-top: 0;
-  }
-}
+.games-page { padding-bottom: calc(154rpx + env(safe-area-inset-bottom)); }
+.games-content { width: 100%; max-width: 1040rpx; margin: 0 auto; }
+.page-header-copy .eyebrow, .page-header-copy .title, .page-header-copy .subtitle { display: block; }
+.page-header-copy .title { margin-top: 7rpx; }
+.page-header-copy .subtitle { margin-top: 8rpx; }
+.games-hero { padding: 28rpx; align-items: center; border-bottom: 0; }
+.activity-row { min-height: 168rpx; margin-top: 28rpx; padding: 22rpx 24rpx; box-sizing: border-box; display: flex; align-items: center; gap: 22rpx; background: var(--cb-amber); border: 1rpx solid #f0daa4; border-left: 5rpx solid var(--cb-amber-strong); border-radius: 12rpx; }
+.activity-image { width: 112rpx; height: 112rpx; flex: 0 0 auto; background: #f7f7f8; }
+.activity-copy { min-width: 0; flex: 1; }
+.activity-title, .activity-meta, .activity-status { display: block; }
+.activity-title { color: #111111; font-size: 31rpx; font-weight: 700; }
+.activity-meta { margin-top: 8rpx; color: #6f7178; font-size: 23rpx; line-height: 1.4; }
+.activity-status { margin-top: 9rpx; color: #137a4e; font-size: 21rpx; font-weight: 700; }
+.play-button { min-width: 138rpx; margin: 0; background: var(--cb-amber-strong); color: #382600; }
+.activity-note { margin-top: 24rpx; padding: 22rpx 24rpx; background: var(--cb-lilac); border: 1rpx solid #ddd5fb; border-left: 5rpx solid var(--cb-lilac-strong); border-radius: 12rpx; }
+.activity-note .muted { display: block; margin-top: 8rpx; }
+@media (max-width: 420px) { .activity-row { align-items: flex-start; flex-wrap: wrap; } .activity-copy { width: calc(100% - 138rpx); } .play-button { width: 100%; } }
+@media (min-width: 768px) { .games-content { max-width: 960px; } }
 </style>

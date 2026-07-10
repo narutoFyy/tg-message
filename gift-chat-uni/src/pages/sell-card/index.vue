@@ -1,97 +1,120 @@
 <template>
   <view class="page-shell sell-page">
-    <view class="sell-head">
-      <text class="back" @click="goBack">‹</text>
-      <text class="page-title">Sell card</text>
-      <view style="width: 48rpx"></view>
-    </view>
-
-    <view class="card-picker surface-card">
-      <image class="card-icon" :src="cardLogoFor(activeRate?.cardName || 'Razer Gold')" mode="aspectFit" />
-      <text class="card-name">{{ form.cardName }}</text>
-      <button class="change-button" @click="chooseCard">Change</button>
-    </view>
-
-    <view class="form-panel">
-      <view class="form-row">
-        <text class="form-label">Country</text>
-        <view class="select-field" @click="chooseCardCountry">
-          <text>{{ form.cardCountry }}</text>
-          <text class="chevron">⌄</text>
+    <view class="sell-content">
+      <view class="page-header sell-head">
+        <view class="head-title">
+          <image class="back-icon" :src="uiIcons.back" mode="aspectFit" @click="goBack" />
+          <view>
+            <text class="eyebrow">New order</text>
+            <text class="title">Sell gift card</text>
+          </view>
         </view>
+        <text class="rate-reference">{{ activeRate?.rate || 'Rate unavailable' }}</text>
       </view>
 
-      <view class="form-row">
-        <text class="form-label">Balance</text>
-        <input v-model="balanceText" class="text-field" type="number" placeholder="100" />
-      </view>
-
-      <view class="amount-row">
-        <button v-for="amount in quickAmounts" :key="amount" class="amount-chip" @click="setAmount(amount)">
-          {{ amount }}
-        </button>
-      </view>
-
-      <view class="form-row">
-        <text class="form-label">Quantity</text>
-        <view class="stepper">
-          <button class="step-button" @click="changeQuantity(-1)">-</button>
-          <text class="quantity">{{ form.quantity }}</text>
-          <button class="step-button plus" @click="changeQuantity(1)">+</button>
+      <view class="card-picker tone-market">
+        <image class="card-icon" :src="cardLogoFor(activeRate?.cardName || 'Razer Gold')" mode="aspectFit" />
+        <view class="card-copy">
+          <text class="card-name">{{ form.cardName }}</text>
+          <text class="muted">Settles in {{ form.settlementCountry }}</text>
         </view>
+        <button class="change-button" @click="chooseCard">Change</button>
       </view>
 
-      <view class="form-row">
-        <text class="form-label">Type</text>
-        <view class="segment-row">
+      <view class="form-section value-section">
+        <view class="section-heading">
+          <text class="section-index">01</text>
+          <text class="section-title">Card value</text>
+        </view>
+        <view class="form-grid">
+          <view class="form-field">
+            <text class="field-label">Card currency</text>
+            <view class="field-input select-field" @click="chooseCardCountry">
+              <text>{{ form.cardCountry }}</text>
+              <text class="field-action">Change</text>
+            </view>
+          </view>
+          <view class="form-field">
+            <text class="field-label">Face value</text>
+            <input v-model="balanceText" class="field-input" type="number" placeholder="100" />
+          </view>
+        </view>
+        <view class="amount-row">
           <button
-            v-for="type in cardTypes"
-            :key="type"
-            :class="['segment-button', form.cardType === type && 'active-segment']"
-            @click="form.cardType = type"
-          >
-            {{ type }}
-          </button>
+            v-for="amount in quickAmounts"
+            :key="amount"
+            :class="['amount-chip', Number(balanceText) === amount && 'active-chip']"
+            @click="setAmount(amount)"
+          >{{ amount }}</button>
+        </view>
+        <view class="quantity-row">
+          <text class="field-label quantity-label">Quantity</text>
+          <view class="stepper">
+            <button class="step-button" @click="changeQuantity(-1)">-</button>
+            <text class="quantity">{{ form.quantity }}</text>
+            <button class="step-button" @click="changeQuantity(1)">+</button>
+          </view>
         </view>
       </view>
 
-      <view class="form-row">
-        <text class="form-label">Speed</text>
-        <view class="segment-row">
-          <button
-            v-for="speed in speeds"
-            :key="speed"
-            :class="['segment-button', form.speed === speed && 'active-segment']"
-            @click="form.speed = speed"
-          >
-            {{ speed }}
-          </button>
+      <view class="form-section details-section">
+        <view class="section-heading">
+          <text class="section-index">02</text>
+          <text class="section-title">Card details</text>
+        </view>
+        <view class="form-field">
+          <text class="field-label">Card type</text>
+          <view class="segment-row">
+            <button
+              v-for="type in cardTypes"
+              :key="type"
+              :class="['segment-button', form.cardType === type && 'active-segment']"
+              @click="form.cardType = type"
+            >{{ type }}</button>
+          </view>
+        </view>
+        <view class="form-field form-gap">
+          <text class="field-label">Processing speed</text>
+          <view class="segment-row compact-segments">
+            <button
+              v-for="speed in speeds"
+              :key="speed"
+              :class="['segment-button', form.speed === speed && 'active-segment']"
+              @click="form.speed = speed"
+            >{{ speed }}</button>
+          </view>
+        </view>
+        <view class="form-field form-gap">
+          <text class="field-label">Card code</text>
+          <input v-model="form.cardData" class="field-input" placeholder="Optional card code" />
         </view>
       </view>
 
-      <view>
-        <text class="block-label">Card Data</text>
-        <input v-model="form.cardData" class="full-input" placeholder="Code Optional" />
-      </view>
-
-      <view>
-        <text class="block-label">Upload Photo</text>
-        <view class="upload-box" @click="uploadVoucher">
-          <text class="camera">▣</text>
-          <text class="upload-copy">{{ form.voucherImageUrl ? 'Photo ready' : 'Upload card image' }}</text>
+      <view class="form-section upload-section proof-section">
+        <view class="section-heading">
+          <text class="section-index">03</text>
+          <text class="section-title">Proof of card</text>
+        </view>
+        <view :class="['upload-row', form.voucherImageUrl && 'upload-ready']" @click="uploadVoucher">
+          <view class="upload-mark"></view>
+          <view class="upload-copy-wrap">
+            <text class="upload-title">{{ form.voucherImageUrl ? 'Image attached' : 'Attach card image' }}</text>
+            <text class="muted">{{ form.voucherImageUrl ? 'Tap to replace the image' : 'Choose one clear image from your device' }}</text>
+          </view>
+          <text class="field-action">{{ form.voucherImageUrl ? 'Replace' : 'Choose' }}</text>
         </view>
       </view>
+
+      <text v-if="notice" class="notice-text">{{ notice }}</text>
     </view>
 
     <view class="settlement-bar">
       <view>
-        <text class="settlement-label">Settlement Amount:</text>
+        <text class="settlement-label">Estimated settlement</text>
         <text class="settlement-value">{{ settlementAmount }}</text>
       </view>
-      <button class="confirm-button" @click="confirmSell">Confirm</button>
+      <button class="confirm-button" @click="confirmSell">Create order</button>
     </view>
-
-    <text v-if="notice" class="notice-text">{{ notice }}</text>
   </view>
 </template>
 
@@ -100,7 +123,7 @@ import { computed, reactive, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { uploadImage } from '@/utils/api'
-import { cardLogoFor } from '@/utils/art'
+import { cardLogoFor, uiIcons } from '@/utils/art'
 
 const store = useAppStore()
 const notice = ref('')
@@ -144,14 +167,14 @@ const numericRate = computed(() => {
 
 const settlementAmount = computed(() => {
   const total = Number(balanceText.value || '0') * form.quantity * numericRate.value
-  return currencyPrefix(form.settlementCountry) + total.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  return `${currencyCode(form.settlementCountry)} ${total.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
 })
 
-function currencyPrefix(country: string) {
-  if (country === 'IN') return '₹'
-  if (country === 'CM') return 'XAF '
-  if (country === 'GH') return 'GH₵'
-  return '₦'
+function currencyCode(country: string) {
+  if (country === 'IN') return 'INR'
+  if (country === 'CM') return 'XAF'
+  if (country === 'GH') return 'GHS'
+  return 'NGN'
 }
 
 function setAmount(amount: number) {
@@ -173,6 +196,10 @@ function chooseCardCountry() {
 
 function chooseCard() {
   const rates = store.state.rates.filter((rate) => rate.region === store.state.selectedCountryCode)
+  if (!rates.length) {
+    notice.value = 'No rates are available for this country.'
+    return
+  }
   uni.showActionSheet({
     itemList: rates.map((rate) => rate.cardName),
     success(result) {
@@ -198,7 +225,10 @@ async function uploadVoucher() {
 }
 
 async function confirmSell() {
-  if (!activeRate.value) return
+  if (!activeRate.value) {
+    notice.value = 'Choose an available card rate first.'
+    return
+  }
   try {
     const transaction = await store.createSellOrder({
       cardName: form.cardName,
@@ -264,252 +294,388 @@ function goBack() {
 <style scoped lang="scss">
 .sell-page {
   min-height: 100vh;
-  padding-bottom: 180rpx;
-  background: linear-gradient(180deg, #edf4f8 0%, #f7f9fb 30%, #ffffff 100%);
-  box-sizing: border-box;
+  padding-bottom: 190rpx;
+  background: #f7f7f8;
+}
+
+.sell-content {
+  width: 100%;
+  max-width: 1040rpx;
+  margin: 0 auto;
 }
 
 .sell-head {
+  align-items: center;
+}
+
+.head-title {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-top: 34rpx;
+  gap: 18rpx;
 }
 
-.back {
-  width: 48rpx;
-  font-size: 66rpx;
-  line-height: 1;
-  color: #1b1b1b;
+.head-title .eyebrow,
+.head-title .title {
+  display: block;
 }
 
-.page-title {
-  font-size: 38rpx;
-  font-weight: 900;
+.head-title .title {
+  margin-top: 4rpx;
+  font-size: 34rpx;
+}
+
+.back-icon {
+  width: 42rpx;
+  height: 42rpx;
+  flex: 0 0 auto;
+}
+
+.rate-reference {
+  max-width: 270rpx;
+  color: #002fa7;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: right;
 }
 
 .card-picker {
-  margin-top: 34rpx;
-  min-height: 132rpx;
-  padding: 22rpx 26rpx;
+  min-height: 112rpx;
+  margin-top: 28rpx;
+  padding: 18rpx 22rpx;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 24rpx;
-  border-radius: 10rpx;
+  gap: 18rpx;
+  border-left: 5rpx solid var(--cb-sky-strong);
 }
 
 .card-icon {
-  width: 76rpx;
-  height: 76rpx;
+  width: 64rpx;
+  height: 64rpx;
+  flex: 0 0 auto;
+}
+
+.card-copy {
+  min-width: 0;
+  flex: 1;
 }
 
 .card-name {
-  flex: 1;
-  font-size: 36rpx;
-  font-weight: 900;
-}
-
-.change-button,
-.confirm-button {
-  min-width: 210rpx;
-  height: 78rpx;
-  border-radius: 10rpx;
-  background: #0088cc;
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 900;
-  line-height: 78rpx;
-}
-
-.form-panel {
-  margin-top: 48rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 36rpx;
-  padding: 28rpx;
-  border-radius: 16rpx;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1rpx solid rgba(136, 153, 166, 0.18);
-  box-shadow: 0 12rpx 34rpx rgba(25, 42, 62, 0.08);
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 180rpx 1fr;
-  align-items: center;
-  gap: 24rpx;
-}
-
-.form-label,
-.block-label {
-  font-size: 30rpx;
-  font-weight: 900;
-  color: #202020;
-}
-
-.block-label {
   display: block;
-  margin-bottom: 18rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #111111;
+  font-size: 29rpx;
+  font-weight: 700;
 }
 
-.select-field,
-.text-field,
-.full-input {
-  min-height: 86rpx;
-  padding: 0 28rpx;
-  border-radius: 8rpx;
-  background: #f7f7f7;
-  font-size: 30rpx;
-  font-weight: 800;
+.change-button {
+  min-width: 112rpx;
+  height: 58rpx;
+  padding: 0 16rpx;
+  border: 1rpx solid #c8c9cf;
+  border-radius: 5rpx;
+  background: #ffffff;
+  color: #002fa7;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 56rpx;
+}
+
+.change-button::after,
+.amount-chip::after,
+.step-button::after,
+.segment-button::after,
+.confirm-button::after {
+  border: 0;
+}
+
+.form-section {
+  margin-top: 26rpx;
+  padding: 26rpx 26rpx 28rpx;
+  background: #ffffff;
+  border: 1rpx solid var(--cb-line);
+  border-radius: 12rpx;
+  box-shadow: 0 8rpx 24rpx rgba(34, 54, 74, 0.04);
+}
+
+.value-section {
+  background: var(--cb-sky);
+  border-color: #cfe4fb;
+}
+
+.details-section {
+  background: var(--cb-lilac);
+  border-color: #ddd5fb;
+}
+
+.proof-section {
+  background: var(--cb-mint);
+  border-color: #c6ead8;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin-bottom: 24rpx;
+}
+
+.section-index {
+  color: var(--cb-accent);
+  font-size: 21rpx;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
+}
+
+.form-field {
+  min-width: 0;
+}
+
+.form-gap {
+  margin-top: 24rpx;
+}
+
+.select-field {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12rpx;
 }
 
-.chevron {
-  font-size: 36rpx;
+.field-action {
+  color: #002fa7;
+  font-size: 22rpx;
+  font-weight: 700;
 }
 
 .amount-row {
-  margin-left: 204rpx;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 22rpx;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10rpx;
+  margin-top: 14rpx;
 }
 
 .amount-chip,
 .step-button,
 .segment-button {
-  height: 66rpx;
-  border-radius: 8rpx;
-  background: #f5f5f5;
-  color: #222;
-  font-size: 28rpx;
-  font-weight: 800;
-  line-height: 66rpx;
+  height: 62rpx;
+  padding: 0 14rpx;
+  border: 1rpx solid #dedfe3;
+  border-radius: 5rpx;
+  background: #f7f7f8;
+  color: #111111;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 60rpx;
 }
 
-.stepper,
-.segment-row {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  flex-wrap: wrap;
-}
-
-.step-button {
-  width: 68rpx;
-  min-width: 68rpx;
-}
-
-.plus,
+.active-chip,
 .active-segment {
-  background: #0088cc;
-  color: #ffffff;
+  border-color: var(--cb-accent);
+  background: #ffffff;
+  color: var(--cb-accent);
 }
 
-.quantity {
-  min-width: 82rpx;
-  height: 66rpx;
-  border-radius: 8rpx;
-  background: #f4f2f7;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 30rpx;
-  font-weight: 900;
-}
-
-.segment-button {
-  min-width: 190rpx;
-  padding: 0 22rpx;
-}
-
-.upload-box {
-  width: 230rpx;
-  min-height: 180rpx;
-  border-radius: 18rpx;
-  border: 2rpx dashed rgba(0, 136, 204, 0.26);
-  background: #f7f9fb;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-}
-
-.camera {
-  width: 70rpx;
-  height: 70rpx;
-  border-radius: 18rpx;
-  background: #0088cc;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 36rpx;
-}
-
-.upload-copy {
-  font-size: 22rpx;
-  color: #6b747c;
-}
-
-.settlement-bar {
-  position: fixed;
-  left: 50%;
-  right: auto;
-  bottom: 0;
-  width: 100%;
-  max-width: 980px;
-  transform: translateX(-50%);
-  min-height: 122rpx;
-  padding: 20rpx 34rpx 30rpx;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 -8rpx 24rpx rgba(16, 24, 40, 0.08);
+.quantity-row {
+  margin-top: 24rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 22rpx;
+  gap: 20rpx;
 }
 
-@media (min-width: 900px) {
-  .sell-page {
-    max-width: 980px;
-    margin: 0 auto;
-    border-left: 1px solid rgba(136, 153, 166, 0.14);
-    border-right: 1px solid rgba(136, 153, 166, 0.14);
-  }
-
-  .card-picker {
-    margin-top: 24rpx;
-  }
-
-  .form-panel {
-    margin-top: 28rpx;
-  }
+.quantity-label {
+  margin-bottom: 0;
 }
 
-.settlement-label {
+.stepper {
+  display: grid;
+  grid-template-columns: 62rpx 72rpx 62rpx;
+  align-items: center;
+}
+
+.stepper > * {
+  border-radius: 0;
+}
+
+.quantity {
+  height: 62rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1rpx solid #dedfe3;
+  border-bottom: 1rpx solid #dedfe3;
+  background: #ffffff;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.segment-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10rpx;
+}
+
+.compact-segments {
+  grid-template-columns: repeat(2, minmax(0, 180rpx));
+}
+
+.segment-button {
+  width: 100%;
+  height: auto;
+  min-height: 66rpx;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.upload-row {
+  min-height: 94rpx;
+  padding: 16rpx 18rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  border: 1rpx dashed #9a9ca3;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.upload-ready {
+  border-style: solid;
+  border-color: #137a4e;
+  background: #eaf6f0;
+}
+
+.upload-mark {
+  width: 34rpx;
+  height: 34rpx;
+  border: 2rpx solid #002fa7;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.upload-mark::before,
+.upload-mark::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: #002fa7;
+  transform: translate(-50%, -50%);
+}
+
+.upload-mark::before {
+  width: 18rpx;
+  height: 2rpx;
+}
+
+.upload-mark::after {
+  width: 2rpx;
+  height: 18rpx;
+}
+
+.upload-copy-wrap {
+  min-width: 0;
+  flex: 1;
+}
+
+.upload-title {
   display: block;
+  margin-bottom: 3rpx;
+  color: #111111;
   font-size: 24rpx;
-  color: #8a8a8a;
-  font-weight: 800;
-}
-
-.settlement-value {
-  display: block;
-  margin-top: 6rpx;
-  font-size: 42rpx;
-  color: #0088cc;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .notice-text {
   display: block;
-  margin-top: 24rpx;
-  text-align: center;
-  color: #606872;
+  margin-top: 22rpx;
+  color: #b42318;
   font-size: 24rpx;
+  text-align: center;
+}
+
+.settlement-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: calc(126rpx + env(safe-area-inset-bottom));
+  padding: 18rpx max(28rpx, calc((100vw - 960px) / 2)) calc(18rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22rpx;
+  background: #ffffff;
+  border-top: 1rpx solid #c8c9cf;
+  z-index: 20;
+}
+
+.settlement-label,
+.settlement-value {
+  display: block;
+}
+
+.settlement-label {
+  color: #6f7178;
+  font-size: 21rpx;
+}
+
+.settlement-value {
+  margin-top: 5rpx;
+  color: #002fa7;
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.confirm-button {
+  min-width: 220rpx;
+  height: 78rpx;
+  padding: 0 22rpx;
+  border: 0;
+  border-radius: 5rpx;
+  background: #002fa7;
+  color: #ffffff;
+  font-size: 27rpx;
+  font-weight: 700;
+  line-height: 78rpx;
+}
+
+@media (max-width: 420px) {
+  .rate-reference {
+    display: none;
+  }
+
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settlement-value {
+    font-size: 30rpx;
+  }
+
+  .confirm-button {
+    min-width: 190rpx;
+  }
+}
+
+@media (min-width: 768px) {
+  .sell-content {
+    max-width: 960px;
+  }
+
+  .segment-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .compact-segments {
+    grid-template-columns: repeat(2, minmax(0, 180rpx));
+  }
 }
 </style>

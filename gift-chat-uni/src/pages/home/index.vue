@@ -1,88 +1,104 @@
 <template>
   <view class="page-shell home-page">
-    <view class="status-row">
-      <text class="clock">05:47</text>
-      <text class="battery">30%</text>
-    </view>
-
-    <view class="top-head">
-      <view class="brand-inline">
-        <image class="brand-logo" src="/static/cardbrother-logo.png" mode="aspectFit" />
-        <text class="brand-title">CardBrother</text>
-      </view>
-      <view class="country" @click="pickCountry">
-        <text>{{ store.selectedCountry().name }}</text>
-        <image class="country-arrow" :src="uiIcons.chevronDown" mode="aspectFit" />
-      </view>
-    </view>
-
-    <view class="banner-card" @click="openTaskModal">
-      <view class="banner-glow banner-glow-left"></view>
-      <view class="banner-copy">
-        <text class="banner-tag">Rate desk</text>
-        <text class="banner-title">Live Rate Desk</text>
-        <text class="banner-sub">Track active cards, settlement country, and current selling rates.</text>
-      </view>
-      <image class="banner-art" :src="pageArt.homeBanner" mode="aspectFill" />
-      <view class="banner-indicator"></view>
-    </view>
-
-    <view class="tab-card surface-card">
-      <scroll-view scroll-x class="card-tabs-scroll" :show-scrollbar="false">
-        <view class="card-tabs">
-          <view
-            v-for="cardName in cardCategories"
-            :key="cardName"
-            :class="['card-tab', activeCardName === cardName && 'active-tab']"
-            @click="selectCardCategory(cardName)"
-          >
-            <text>{{ cardName }}</text>
-            <view v-if="activeCardName === cardName" class="tab-active-line"></view>
+    <view class="home-content">
+      <view class="top-head">
+        <view class="brand-inline">
+          <image class="brand-logo" src="/static/cardbrother-logo.png" mode="aspectFit" />
+          <view>
+            <text class="brand-title">CardBrother</text>
+            <text class="brand-caption">Rate desk</text>
           </view>
         </view>
-      </scroll-view>
-    </view>
+        <view class="country" @click="pickCountry">
+          <text>{{ store.selectedCountry().name }}</text>
+          <image class="country-arrow" :src="uiIcons.chevronDown" mode="aspectFit" />
+        </view>
+      </view>
 
-    <view class="rate-list surface-card">
-      <view v-for="rate in filteredRates" :key="rate.id" class="rate-row">
-        <view class="rate-left">
-          <image class="rate-icon" :src="cardLogoFor(rate.cardName)" mode="aspectFit" />
-          <view class="rate-copy">
-            <view class="rate-name-line">
-              <text class="rate-name">{{ rate.cardName }}</text>
-              <text :class="['rate-status', rate.status === 'active' ? 'active' : 'paused']">
-                {{ rate.status === 'active' ? 'Active' : 'Paused' }}
-              </text>
+      <view class="desk-intro tone-market">
+        <view class="intro-copy">
+          <text class="eyebrow">Current market</text>
+          <text class="title">Live gift card rates</text>
+          <text class="subtitle">Compare active rates for {{ store.selectedCountry().name }} and start a sale.</text>
+        </view>
+        <view class="intro-meta">
+          <text class="rate-count">{{ countryRates.length }}</text>
+          <text class="rate-count-label">listed rates</text>
+        </view>
+      </view>
+
+      <view class="rate-tools">
+        <view class="search-field">
+          <text class="search-mark"></text>
+          <input v-model.trim="searchQuery" class="search-input" placeholder="Search card rates" />
+          <text v-if="searchQuery" class="clear-search" @click="searchQuery = ''">Clear</text>
+        </view>
+
+        <scroll-view scroll-x class="card-tabs-scroll" :show-scrollbar="false">
+          <view class="card-tabs">
+            <view
+              v-for="cardName in cardCategories"
+              :key="cardName"
+              :class="['card-tab', activeCardName === cardName && 'active-tab']"
+              @click="selectCardCategory(cardName)"
+            >
+              <text>{{ cardName }}</text>
             </view>
-            <text class="rate-updated">Updated {{ rate.updatedAt }}</text>
+          </view>
+        </scroll-view>
+      </view>
+
+      <view class="rate-list">
+        <view v-for="rate in filteredRates" :key="rate.id" class="rate-row">
+          <view class="rate-left">
+            <image class="rate-icon" :src="cardLogoFor(rate.cardName)" mode="aspectFit" />
+            <view class="rate-copy">
+              <view class="rate-name-line">
+                <text class="rate-name">{{ rate.cardName }}</text>
+                <text :class="['rate-status', rate.status === 'active' ? 'active' : 'paused']">
+                  {{ rate.status === 'active' ? 'Active' : 'Paused' }}
+                </text>
+              </view>
+              <text class="rate-updated">Updated {{ rate.updatedAt }}</text>
+            </view>
+          </view>
+          <view class="rate-side">
+            <view class="rate-price">
+              <text class="rate-value">{{ rate.rate }}</text>
+              <text class="rate-label">rate</text>
+            </view>
+            <button class="sell-link" :disabled="rate.status !== 'active'" @click="goSell(rate)">Sell</button>
           </view>
         </view>
-        <view class="rate-side">
-          <text class="rate-value">{{ rate.rate }}</text>
-          <button class="sell-link" @click="goSell(rate)">Sell</button>
+
+        <view v-if="!filteredRates.length" class="empty-state">
+          <text class="section-title">No matching rates</text>
+          <text class="muted">Try another card name or choose a different country.</text>
         </view>
+      </view>
+
+      <view class="task-row" @click="openTaskModal">
+        <view>
+          <text class="task-title">Daily selling task</text>
+          <text class="muted">View your current reward target</text>
+        </view>
+        <text class="task-action">View</text>
       </view>
     </view>
 
     <view v-if="showTaskModal" class="modal-mask">
       <view class="reward-modal surface-card">
-        <view class="reward-top">
-          <view class="reward-top-tag">
-            <image class="reward-mini-logo" src="/static/cardbrother-logo.png" mode="aspectFit" />
-            <text>CardBrother</text>
-          </view>
-          <view class="reward-gift"></view>
+        <view class="reward-heading">
+          <text class="eyebrow">Daily task</text>
+          <text class="section-title">Selling reward</text>
         </view>
         <view class="reward-core">
-          <view class="coin-badge">
-            <view class="coin-core"></view>
-            <text>₦300</text>
-          </view>
-          <text class="reward-text">Daily Task: Sell at least 20000 worth of cards to claim the reward</text>
-          <button class="primary-button reward-button" @click="dismissTaskModal">Go</button>
+          <text class="reward-value">NGN 500</text>
+          <text class="reward-text">Sell at least NGN 20,000 worth of cards to claim the daily reward.</text>
+          <button class="primary-button reward-button" @click="dismissTaskModal">Got it</button>
         </view>
       </view>
-      <view class="close-ring" @click="dismissTaskModal">x</view>
+      <text class="close-action" @click="dismissTaskModal">Close</text>
     </view>
 
     <AppNav current="home" />
@@ -94,29 +110,32 @@ import { onHide, onShow } from '@dcloudio/uni-app'
 import { computed, ref, watch } from 'vue'
 import AppNav from '@/components/AppNav.vue'
 import { useAppStore } from '@/store/app'
-import { cardLogoFor, pageArt, uiIcons } from '@/utils/art'
+import { cardLogoFor, uiIcons } from '@/utils/art'
 
 const store = useAppStore()
 const TASK_MODAL_DISMISSED_KEY = 'cardbrother-task-modal-dismissed'
 const showTaskModal = ref(false)
-const ALL_CARD = 'All Card'
+const ALL_CARD = 'All cards'
 const activeCardName = ref(ALL_CARD)
+const searchQuery = ref('')
 let taskModalTimer: ReturnType<typeof setTimeout> | null = null
+
+const countryRates = computed(() =>
+  store.state.rates.filter((rate) => normalizeRateRegion(rate.region) === store.state.selectedCountryCode)
+)
 
 const cardCategories = computed(() => {
   const cardNames = countryRates.value.map((rate) => rate.cardName).filter(Boolean)
   return [ALL_CARD, ...Array.from(new Set(cardNames))]
 })
 
-const countryRates = computed(() =>
-  store.state.rates.filter((rate) => normalizeRateRegion(rate.region) === store.state.selectedCountryCode)
-)
-
 const filteredRates = computed(() => {
-  if (activeCardName.value === ALL_CARD) {
-    return countryRates.value
-  }
-  return countryRates.value.filter((rate) => rate.cardName === activeCardName.value)
+  const query = searchQuery.value.trim().toLowerCase()
+  return countryRates.value.filter((rate) => {
+    const matchesCategory = activeCardName.value === ALL_CARD || rate.cardName === activeCardName.value
+    const matchesQuery = !query || rate.cardName.toLowerCase().includes(query)
+    return matchesCategory && matchesQuery
+  })
 })
 
 watch(cardCategories, (categories) => {
@@ -142,24 +161,24 @@ function selectCardCategory(cardName: string) {
 }
 
 function normalizeRateRegion(region: string) {
-  const normalized = region.trim().replace(/^[+＋]/, '').replace(/[\s_-]+/g, '').toUpperCase()
+  const normalized = region.trim().replace(/^[+\uFF0B]/, '').replace(/[\s_-]+/g, '').toUpperCase()
   const regionAliases: Record<string, string> = {
     NG: 'NG',
     NIGERIA: 'NG',
     '234': 'NG',
-    尼日利亚: 'NG',
+    '\u5c3c\u65e5\u5229\u4e9a': 'NG',
     IN: 'IN',
     INDIA: 'IN',
     '91': 'IN',
-    印度: 'IN',
+    '\u5370\u5ea6': 'IN',
     CM: 'CM',
     CAMEROON: 'CM',
     '237': 'CM',
-    喀麦隆: 'CM',
+    '\u5580\u9ea6\u9686': 'CM',
     GH: 'GH',
     GHANA: 'GH',
     '233': 'GH',
-    加纳: 'GH'
+    '\u52a0\u7eb3': 'GH'
   }
   return regionAliases[normalized] || normalized
 }
@@ -195,156 +214,183 @@ function clearTaskModalTimer() {
 .home-page {
   position: relative;
   min-height: 100vh;
-  background-image:
-    linear-gradient(180deg, rgba(2, 10, 16, 0.16), rgba(2, 10, 16, 0.58)),
-    url('/static/home-bg.png');
-  background-size: cover;
-  background-position: center;
   overflow-x: hidden;
+  background: #f7f7f8;
 }
 
-.status-row,
+.home-content {
+  width: 100%;
+  max-width: 1040rpx;
+  margin: 0 auto;
+}
+
 .top-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.status-row {
-  font-size: 28rpx;
-  font-weight: 900;
-  margin-bottom: 16rpx;
-}
-
-.battery {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.top-head {
-  margin-bottom: 26rpx;
+  gap: 22rpx;
+  padding-bottom: 24rpx;
+  border-bottom: 1rpx solid #dedfe3;
 }
 
 .brand-inline {
   display: flex;
   align-items: center;
-  gap: 18rpx;
+  gap: 16rpx;
+  min-width: 0;
 }
 
 .brand-logo {
-  width: 80rpx;
-  height: 80rpx;
+  width: 64rpx;
+  height: 64rpx;
+  flex: 0 0 auto;
 }
 
 .brand-title,
-.country {
-  font-size: 38rpx;
-  font-weight: 900;
-  color: #ffffff;
-  text-shadow: 0 4rpx 18rpx rgba(0, 0, 0, 0.26);
+.brand-caption {
+  display: block;
+}
+
+.brand-title {
+  color: #111111;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.brand-caption {
+  margin-top: 2rpx;
+  color: #6f7178;
+  font-size: 21rpx;
 }
 
 .country {
+  min-width: 0;
+  max-width: 48%;
   display: flex;
   align-items: center;
-  gap: 10rpx;
-  padding: 10rpx 16rpx;
-  border-radius: 12rpx;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1rpx solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(14rpx);
+  gap: 8rpx;
+  padding: 14rpx 16rpx;
+  border: 1rpx solid #c8c9cf;
+  border-radius: 6rpx;
+  background: #ffffff;
+  color: #111111;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.country text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .country-arrow {
-  width: 28rpx;
-  height: 28rpx;
+  width: 24rpx;
+  height: 24rpx;
+  flex: 0 0 auto;
 }
 
-.banner-card {
-  position: relative;
-  min-height: 190rpx;
-  border-radius: 16rpx;
-  padding: 26rpx 28rpx 32rpx;
-  background: rgba(10, 25, 34, 0.58);
-  overflow: hidden;
-  color: #ffffff;
-  border: 1rpx solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 22rpx 52rpx rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(18rpx);
+.desk-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24rpx;
+  padding: 34rpx 30rpx;
 }
 
-.banner-copy {
-  position: relative;
-  z-index: 2;
-  width: 58%;
+.intro-copy {
+  min-width: 0;
 }
 
-.banner-glow {
-  display: none;
-}
-
-.banner-glow-left {
-  width: 140rpx;
-  height: 40rpx;
-  left: -12rpx;
-  top: 26rpx;
-}
-
-.banner-art {
-  position: absolute;
-  right: -10rpx;
-  bottom: -2rpx;
-  width: 360rpx;
-  height: 168rpx;
-  z-index: 1;
-}
-
-.banner-tag {
-  display: inline-flex;
-  padding: 10rpx 18rpx;
-  border-radius: 8rpx;
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-  font-size: 22rpx;
-  font-weight: 800;
-  border: 1rpx solid rgba(255, 255, 255, 0.18);
-}
-
-.banner-title {
+.intro-copy .title,
+.intro-copy .subtitle {
   display: block;
-  margin-top: 20rpx;
-  font-size: 44rpx;
-  font-weight: 900;
-  line-height: 1;
 }
 
-.banner-sub {
-  display: block;
+.intro-copy .title {
   margin-top: 10rpx;
-  font-size: 24rpx;
+}
+
+.intro-copy .subtitle {
+  max-width: 620rpx;
+  margin-top: 12rpx;
+}
+
+.intro-meta {
+  flex: 0 0 auto;
+  min-width: 142rpx;
+  padding-left: 24rpx;
+  border-left: 5rpx solid var(--cb-sky-strong);
+}
+
+.rate-count,
+.rate-count-label {
+  display: block;
+}
+
+.rate-count {
+  color: var(--cb-sky-strong);
+  font-size: 42rpx;
+  line-height: 1;
   font-weight: 700;
-  line-height: 1.35;
-  color: rgba(255, 255, 255, 0.82);
 }
 
-.banner-indicator {
+.rate-count-label {
+  margin-top: 8rpx;
+  color: #6f7178;
+  font-size: 21rpx;
+}
+
+.rate-tools {
+  background: #ffffff;
+  border: 1rpx solid var(--cb-line);
+  border-bottom: 0;
+  border-radius: 12rpx 12rpx 0 0;
+  box-shadow: 0 10rpx 30rpx rgba(34, 54, 74, 0.05);
+}
+
+.search-field {
+  height: 86rpx;
+  padding: 0 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  border-bottom: 1rpx solid #dedfe3;
+}
+
+.search-mark {
+  width: 24rpx;
+  height: 24rpx;
+  border: 3rpx solid #777980;
+  border-radius: 50%;
+  box-sizing: border-box;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.search-mark::after {
+  content: "";
   position: absolute;
-  left: 50%;
-  bottom: 16rpx;
-  transform: translateX(-50%);
-  width: 34rpx;
-  height: 12rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.95);
-  z-index: 2;
+  width: 10rpx;
+  height: 3rpx;
+  right: -8rpx;
+  bottom: -4rpx;
+  background: #777980;
+  transform: rotate(45deg);
 }
 
-.tab-card {
-  margin-top: 18rpx;
-  padding: 18rpx 20rpx 10rpx;
-  border-radius: 16rpx 16rpx 8rpx 8rpx;
-  background: rgba(255, 255, 255, 0.88);
-  border-color: rgba(255, 255, 255, 0.36);
-  backdrop-filter: blur(18rpx);
+.search-input {
+  min-width: 0;
+  flex: 1;
+  height: 86rpx;
+  color: #111111;
+  font-size: 27rpx;
+}
+
+.clear-search {
+  color: #002fa7;
+  font-size: 23rpx;
+  font-weight: 700;
 }
 
 .card-tabs-scroll {
@@ -354,77 +400,83 @@ function clearTaskModalTimer() {
 
 .card-tabs {
   display: flex;
-  align-items: flex-end;
-  gap: 34rpx;
   width: max-content;
   min-width: 100%;
-  font-size: 28rpx;
-  font-weight: 800;
 }
 
 .card-tab {
-  min-height: 58rpx;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 12rpx;
-  color: #161616;
+  position: relative;
   flex: 0 0 auto;
+  min-height: 76rpx;
+  padding: 0 24rpx;
+  display: flex;
+  align-items: center;
+  color: #6f7178;
+  font-size: 25rpx;
+  font-weight: 700;
 }
 
-.active-tab {
-  color: #0088cc;
+.card-tab.active-tab {
+  color: var(--cb-sky-strong);
+}
+
+.card-tab.active-tab::after {
+  content: "";
+  position: absolute;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: 0;
+  height: 4rpx;
+  background: var(--cb-sky-strong);
 }
 
 .rate-list {
-  margin-top: 8rpx;
-  padding: 8rpx 0;
-  border-radius: 8rpx 8rpx 16rpx 16rpx;
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(255, 255, 255, 0.36);
-  backdrop-filter: blur(18rpx);
+  border: 1rpx solid var(--cb-line);
+  border-radius: 0 0 12rpx 12rpx;
+  background: #ffffff;
 }
 
 .rate-row {
-  min-height: 126rpx;
-  padding: 0 24rpx;
+  position: relative;
+  min-height: 122rpx;
+  padding: 18rpx 24rpx;
+  box-sizing: border-box;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1rpx solid #eef0f2;
+  gap: 20rpx;
+  border-bottom: 1rpx solid #dedfe3;
 }
 
-@media (min-width: 900px) {
-  .home-page {
-    max-width: 980px;
-    margin: 0 auto;
-    border-left: 1px solid rgba(255, 255, 255, 0.12);
-    border-right: 1px solid rgba(255, 255, 255, 0.12);
-  }
+.rate-row:last-child {
+  border-bottom: 0;
+}
 
-  .banner-card {
-    min-height: 156rpx;
-  }
+.rate-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 18rpx;
+  bottom: 18rpx;
+  width: 4rpx;
+  background: var(--cb-sky-strong);
+  opacity: 0;
+}
 
-  .banner-art {
-    opacity: 0.72;
-  }
-
-  .rate-row {
-    min-height: 104rpx;
-  }
+.rate-row:active::before {
+  opacity: 1;
 }
 
 .rate-left {
   display: flex;
   align-items: center;
-  gap: 20rpx;
+  gap: 18rpx;
   min-width: 0;
 }
 
 .rate-icon {
-  width: 62rpx;
-  height: 62rpx;
+  width: 58rpx;
+  height: 58rpx;
   flex: 0 0 auto;
 }
 
@@ -435,14 +487,8 @@ function clearTaskModalTimer() {
 .rate-name-line {
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 10rpx;
   min-width: 0;
-}
-
-.rate-name,
-.rate-value {
-  font-size: 28rpx;
-  font-weight: 700;
 }
 
 .rate-name {
@@ -450,205 +496,223 @@ function clearTaskModalTimer() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.rate-value {
-  color: #23262a;
-  flex: 0 0 auto;
-}
-
-.rate-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10rpx;
-  flex: 0 0 auto;
-}
-
-.sell-link {
-  min-width: 112rpx;
-  height: 50rpx;
-  padding: 0 18rpx;
-  border-radius: 10rpx;
-  background: #0088cc;
-  color: #ffffff;
-  font-size: 22rpx;
-  font-weight: 900;
-  line-height: 50rpx;
+  color: #111111;
+  font-size: 27rpx;
+  font-weight: 700;
 }
 
 .rate-status {
   flex: 0 0 auto;
-  padding: 4rpx 10rpx;
-  border-radius: 999rpx;
-  font-size: 18rpx;
-  font-weight: 900;
+  padding: 4rpx 8rpx;
+  border-radius: 4rpx;
+  font-size: 17rpx;
+  font-weight: 700;
 }
 
 .rate-status.active {
-  color: #008b5c;
-  background: rgba(0, 139, 92, 0.1);
+  color: #137a4e;
+  background: #eaf6f0;
 }
 
 .rate-status.paused {
-  color: #dd8a25;
-  background: rgba(255, 184, 76, 0.2);
+  color: #9a5b00;
+  background: #fff4df;
 }
 
 .rate-updated {
   display: block;
   margin-top: 8rpx;
+  color: #777980;
   font-size: 20rpx;
-  color: #8a949e;
+}
+
+.rate-side {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  flex: 0 0 auto;
+}
+
+.rate-price {
+  text-align: right;
+}
+
+.rate-value,
+.rate-label {
+  display: block;
+}
+
+.rate-value {
+  color: #111111;
+  font-size: 29rpx;
+  font-weight: 700;
+}
+
+.rate-label {
+  margin-top: 4rpx;
+  color: #777980;
+  font-size: 18rpx;
+  text-transform: uppercase;
+}
+
+.sell-link {
+  min-width: 98rpx;
+  height: 58rpx;
+  padding: 0 16rpx;
+  border-radius: 5rpx;
+  border: 0;
+  background: var(--cb-sky-strong);
+  color: #ffffff;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 58rpx;
+}
+
+.sell-link::after {
+  border: 0;
+}
+
+.sell-link[disabled] {
+  background: #efeff1;
+  color: #9a9ca3;
+}
+
+.empty-state {
+  padding: 58rpx 28rpx;
+  text-align: center;
+}
+
+.empty-state .muted {
+  display: block;
+  margin-top: 10rpx;
+}
+
+.task-row {
+  margin-top: 24rpx;
+  min-height: 94rpx;
+  padding: 18rpx 22rpx 18rpx 26rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  border: 1rpx solid #f0daa4;
+  border-left: 5rpx solid var(--cb-amber-strong);
+  border-radius: 12rpx;
+  background: var(--cb-amber);
+}
+
+.task-title {
+  display: block;
+  margin-bottom: 3rpx;
+  color: #111111;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.task-action {
+  color: #8a5b00;
+  font-size: 24rpx;
+  font-weight: 700;
 }
 
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.52);
+  padding: 28rpx;
+  box-sizing: border-box;
+  background: rgba(17, 17, 17, 0.62);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 24rpx;
   z-index: 40;
 }
 
 .reward-modal {
-  width: 540rpx;
-  padding: 0;
-  overflow: visible;
-  background: #ffffff;
-  box-shadow: 0 28rpx 70rpx rgba(0, 0, 0, 0.2);
+  width: min(100%, 560rpx);
+  overflow: hidden;
 }
 
-.reward-top {
-  position: relative;
-  width: 460rpx;
-  height: 118rpx;
-  margin: -38rpx auto 0;
-  border-radius: 16rpx;
-  background: #0088cc;
-  box-shadow: 0 18rpx 38rpx rgba(0, 136, 204, 0.22);
+.reward-heading {
+  padding: 26rpx 28rpx;
+  border-bottom: 1rpx solid #dedfe3;
 }
 
-.reward-top-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 10rpx;
-  padding: 24rpx 28rpx;
-  color: #ffffff;
-  font-size: 24rpx;
-  font-weight: 800;
+.reward-heading .eyebrow,
+.reward-heading .section-title {
+  display: block;
 }
 
-.reward-mini-logo {
-  width: 26rpx;
-  height: 26rpx;
-}
-
-.reward-gift {
-  position: absolute;
-  right: 24rpx;
-  top: -26rpx;
-  width: 112rpx;
-  height: 112rpx;
-  border-radius: 26rpx;
-  background: linear-gradient(180deg, #ffe384, #ffbf3b);
-  transform: rotate(13deg);
-  box-shadow: 0 12rpx 28rpx rgba(255, 185, 61, 0.45);
-}
-
-.reward-gift::before,
-.reward-gift::after {
-  content: '';
-  position: absolute;
-  background: #fff7d0;
-}
-
-.reward-gift::before {
-  left: 43rpx;
-  top: 0;
-  width: 18rpx;
-  height: 112rpx;
-}
-
-.reward-gift::after {
-  left: 0;
-  top: 40rpx;
-  width: 112rpx;
-  height: 18rpx;
+.reward-heading .section-title {
+  margin-top: 8rpx;
 }
 
 .reward-core {
-  padding: 34rpx 40rpx 36rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 28rpx;
+  padding: 34rpx 28rpx 28rpx;
 }
 
-.coin-badge {
-  width: 230rpx;
-  height: 230rpx;
-  border-radius: 16rpx;
-  background: #f3f6f8;
-  border: 1rpx solid rgba(136, 153, 166, 0.2);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16rpx;
-}
-
-.coin-core {
-  width: 82rpx;
-  height: 82rpx;
-  border-radius: 41rpx;
-  background: radial-gradient(circle at 38% 32%, #fff5b9 0%, #f5b72a 65%, #dc8a00 100%);
-  position: relative;
-}
-
-.coin-core::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 24rpx;
-  height: 24rpx;
-  background: #fff8ea;
-  transform: translate(-50%, -50%) rotate(45deg);
-}
-
-.coin-badge text {
+.reward-value {
+  display: block;
+  color: #002fa7;
   font-size: 52rpx;
-  font-weight: 900;
-  color: #17212b;
+  font-weight: 700;
 }
 
 .reward-text {
-  text-align: center;
-  font-size: 28rpx;
-  color: #51606d;
+  display: block;
+  margin-top: 16rpx;
+  color: #6f7178;
+  font-size: 26rpx;
   line-height: 1.5;
 }
 
 .reward-button {
   width: 100%;
-  border-radius: 999rpx;
-  font-size: 42rpx;
+  margin-top: 28rpx;
 }
 
-.close-ring {
-  position: absolute;
-  bottom: 132rpx;
-  width: 92rpx;
-  height: 92rpx;
-  border-radius: 46rpx;
-  border: 4rpx solid rgba(255, 255, 255, 0.9);
+.close-action {
   color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 62rpx;
-  line-height: 1;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+@media (max-width: 420px) {
+  .desk-intro {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .intro-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 10rpx;
+  }
+
+  .rate-row {
+    align-items: flex-start;
+  }
+
+  .rate-side {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10rpx;
+  }
+}
+
+@media (min-width: 768px) {
+  .home-content {
+    max-width: 960px;
+  }
+
+  .rate-row {
+    min-height: 104rpx;
+  }
+
+  .rate-name {
+    max-width: 440rpx;
+  }
 }
 </style>

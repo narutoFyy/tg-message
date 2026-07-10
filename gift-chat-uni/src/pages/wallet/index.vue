@@ -1,55 +1,60 @@
 <template>
-  <view class="page-shell soft-page">
+  <view class="page-shell soft-page wallet-page">
     <view class="page-stack">
-      <view class="panel">
-        <text class="eyebrow">Wallet</text>
-        <view style="height: 12rpx"></view>
-        <text class="title">Your payout overview</text>
-        <view style="height: 10rpx"></view>
-        <text class="subtitle">A lightweight balance view built from completed and in-flight trades.</text>
+      <view class="page-header wallet-hero tone-finance">
+        <view class="page-header-copy">
+          <text class="eyebrow">Wallet</text>
+          <text class="title">Payout balance</text>
+          <text class="subtitle">Completed and in-flight order settlements.</text>
+        </view>
+        <text class="orders-link" @click="goTransactions">Orders</text>
       </view>
 
-      <view class="panel balance-panel">
-        <view>
+      <view class="balance-section tone-finance">
+        <view class="balance-primary">
           <text class="balance-label">Available balance</text>
           <text class="balance-value">{{ availableBalance }}</text>
         </view>
-        <view>
+        <view class="balance-secondary">
           <text class="balance-label">Pending settlement</text>
-          <text class="balance-value small">{{ pendingBalance }}</text>
+          <text class="pending-value">{{ pendingBalance }}</text>
         </view>
       </view>
 
-      <view v-if="registrationBonus" class="panel">
-        <text class="section-title">Registration bonus</text>
-        <view style="height: 18rpx"></view>
+      <view v-if="registrationBonus" class="content-section bonus-section">
+        <view class="section-head">
+          <text class="section-title">Registration bonus</text>
+          <text :class="['status-chip', registrationBonus.status]">{{ registrationBonus.status }}</text>
+        </view>
         <view class="bonus-row">
           <view>
             <text class="trade-name">{{ registrationBonus.bonusAmount }} {{ registrationBonus.currencyCode || '' }}</text>
-            <text class="trade-meta">{{ registrationBonus.countryCode || 'Unknown country code' }} · {{ registrationBonus.status }} · {{ registrationBonus.createdAt }}</text>
+            <text class="trade-meta">{{ registrationBonus.countryCode || 'Unknown country' }} / {{ registrationBonus.createdAt }}</text>
             <text class="trade-meta">{{ registrationBonus.reason }}</text>
           </view>
-          <text :class="['status-chip', registrationBonus.status]">{{ registrationBonus.status }}</text>
         </view>
       </view>
 
-      <view class="panel">
-        <text class="section-title">Recent completed payouts</text>
-        <view style="height: 18rpx"></view>
-        <view v-for="item in completedTrades" :key="item.id" class="trade-row">
-          <view>
-            <text class="trade-name">{{ item.cardName }}</text>
-            <text class="trade-meta">{{ item.counterpartyName }} · {{ item.updatedAt }}</text>
+      <view class="content-section">
+        <view class="section-head">
+          <text class="section-title">Recent payouts</text>
+          <text class="section-count">{{ completedTrades.length }}</text>
+        </view>
+        <view v-if="completedTrades.length" class="trade-list">
+          <view v-for="item in completedTrades" :key="item.id" class="trade-row">
+            <view class="trade-copy">
+              <text class="trade-name">{{ item.cardName }}</text>
+              <text class="trade-meta">{{ item.counterpartyName }} / {{ item.updatedAt }}</text>
+            </view>
+            <text class="trade-value">{{ item.payoutAmount }}</text>
           </view>
-          <text class="trade-value">{{ item.payoutAmount }}</text>
+        </view>
+        <view v-else class="empty-row">
+          <text class="muted">Completed payouts will appear here.</text>
         </view>
       </view>
 
-      <view class="panel">
-        <button class="primary-button" @click="goTransactions">Open transaction records</button>
-        <view style="height: 16rpx"></view>
-        <button class="ghost-button" @click="goWithdraw">Withdraw</button>
-      </view>
+      <button class="primary-button withdraw-button" @click="goWithdraw">Withdraw funds</button>
     </view>
   </view>
 </template>
@@ -74,7 +79,7 @@ function parseNgn(value: string) {
 }
 
 function formatNaira(value: number) {
-  return `₦${value.toLocaleString('en-US')}`
+  return `NGN ${value.toLocaleString('en-US')}`
 }
 
 const availableBalance = computed(() =>
@@ -95,80 +100,186 @@ function goWithdraw() {
 </script>
 
 <style scoped lang="scss">
-.balance-panel {
-  display: flex;
-  justify-content: space-between;
-  gap: 18rpx;
+.wallet-page {
+  padding-bottom: 48rpx;
+}
+
+.page-header-copy .eyebrow,
+.page-header-copy .title,
+.page-header-copy .subtitle {
+  display: block;
+}
+
+.page-header-copy .title {
+  margin-top: 7rpx;
+}
+
+.page-header-copy .subtitle {
+  margin-top: 8rpx;
+}
+
+.wallet-hero {
+  padding: 28rpx;
+  align-items: center;
+  border-bottom: 0;
+}
+
+.orders-link {
+  padding: 14rpx 0;
+  color: #002fa7;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.balance-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  border-left: 5rpx solid var(--cb-mint-strong);
+}
+
+.balance-primary,
+.balance-secondary {
+  padding: 28rpx;
+}
+
+.balance-secondary {
+  border-left: 1rpx solid #dedfe3;
+}
+
+.balance-label,
+.balance-value,
+.pending-value {
+  display: block;
 }
 
 .balance-label {
-  display: block;
-  font-size: 24rpx;
-  color: #6f7780;
+  color: #6f7178;
+  font-size: 22rpx;
 }
 
 .balance-value {
-  display: block;
-  margin-top: 10rpx;
-  font-size: 48rpx;
-  font-weight: 900;
-  color: #171717;
+  margin-top: 12rpx;
+  color: #0f7f49;
+  font-size: 44rpx;
+  font-weight: 700;
 }
 
-.balance-value.small {
-  font-size: 34rpx;
+.pending-value {
+  margin-top: 15rpx;
+  color: #111111;
+  font-size: 30rpx;
+  font-weight: 700;
 }
 
-.trade-row {
-  padding: 18rpx 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 18rpx;
-  border-bottom: 1rpx solid #eef1f3;
+.content-section {
+  background: #ffffff;
+  border: 1rpx solid var(--cb-line);
+  border-radius: 12rpx;
+  overflow: hidden;
 }
 
-.trade-name {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 800;
+.bonus-section {
+  background: var(--cb-amber);
+  border-color: #f0daa4;
 }
 
-.trade-meta {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: #8b8b8b;
-}
-
-.trade-value {
-  font-size: 28rpx;
-  font-weight: 800;
-  color: #0f9b57;
-}
-
-.bonus-row {
+.section-head {
+  min-height: 78rpx;
+  padding: 0 24rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18rpx;
+  border-bottom: 1rpx solid #dedfe3;
+}
+
+.section-count {
+  color: #6f7178;
+  font-size: 23rpx;
+}
+
+.bonus-row,
+.trade-row,
+.empty-row {
+  padding: 20rpx 24rpx;
+}
+
+.trade-row {
+  min-height: 82rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  border-bottom: 1rpx solid #dedfe3;
+}
+
+.trade-row:last-child {
+  border-bottom: 0;
+}
+
+.trade-copy {
+  min-width: 0;
+}
+
+.trade-name,
+.trade-meta {
+  display: block;
+}
+
+.trade-name {
+  color: #111111;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.trade-meta {
+  margin-top: 6rpx;
+  color: #777980;
+  font-size: 21rpx;
+  line-height: 1.4;
+}
+
+.trade-value {
+  flex: 0 0 auto;
+  color: #137a4e;
+  font-size: 26rpx;
+  font-weight: 700;
 }
 
 .status-chip {
-  padding: 8rpx 14rpx;
-  border-radius: 8rpx;
-  font-size: 22rpx;
-  font-weight: 800;
-  color: #3d3d3d;
-  background: #eef1f3;
+  padding: 7rpx 12rpx;
+  border-radius: 4rpx;
+  background: #efeff1;
+  color: #6f7178;
+  font-size: 20rpx;
+  font-weight: 700;
+  text-transform: capitalize;
 }
 
 .status-chip.available {
-  color: #0f7d45;
-  background: #dff7ea;
+  color: #137a4e;
+  background: #eaf6f0;
 }
 
 .status-chip.skipped {
-  color: #8a5b00;
-  background: #fff1cc;
+  color: #9a5b00;
+  background: #fff4df;
+}
+
+.withdraw-button {
+  width: 100%;
+  background: var(--cb-mint-strong);
+}
+
+@media (max-width: 420px) {
+  .balance-section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .balance-secondary {
+    border-top: 1rpx solid #dedfe3;
+    border-left: 0;
+  }
 }
 </style>

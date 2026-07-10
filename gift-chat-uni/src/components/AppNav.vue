@@ -1,24 +1,22 @@
 <template>
-  <view class="tabbar surface-card">
-    <view class="tab-item" @click="go('/pages/home/index')">
+  <view class="tabbar">
+    <view :class="['tab-item', 'nav-home', current === 'home' && 'active']" @click="go('/pages/home/index')">
       <image class="tab-icon-image" :src="current === 'home' ? navIcons.home.active : navIcons.home.inactive" mode="aspectFit" />
       <text :class="['tab-label', current === 'home' && 'active']">Home</text>
     </view>
-    <view class="tab-item" @click="go('/pages/support/index')">
+    <view :class="['tab-item', 'nav-chat', current === 'chat' && 'active']" @click="go('/pages/support/index')">
       <image class="tab-icon-image" :src="current === 'chat' ? navIcons.chat.active : navIcons.chat.inactive" mode="aspectFit" />
       <text :class="['tab-label', current === 'chat' && 'active']">Chat</text>
     </view>
-    <view :class="['tab-item', 'game-tab', current === 'games' && 'active-game']" @click="go('/pages/games/index')">
-      <view class="game-button">
-        <image class="game-icon-image" :src="current === 'games' ? navIcons.games.active : navIcons.games.inactive" mode="aspectFit" />
-      </view>
+    <view :class="['tab-item', 'nav-games', current === 'games' && 'active']" @click="go('/pages/games/index')">
+      <image class="tab-icon-image" :src="current === 'games' ? navIcons.games.active : navIcons.games.inactive" mode="aspectFit" />
       <text :class="['tab-label', current === 'games' && 'active']">Games</text>
     </view>
-    <view class="tab-item" @click="go('/pages/transactions/index')">
+    <view :class="['tab-item', 'nav-orders', current === 'transactions' && 'active']" @click="go('/pages/transactions/index')">
       <image class="tab-icon-image" :src="current === 'transactions' ? navIcons.swap.active : navIcons.swap.inactive" mode="aspectFit" />
       <text :class="['tab-label', current === 'transactions' && 'active']">Orders</text>
     </view>
-    <view class="tab-item" @click="go('/pages/me/index')">
+    <view :class="['tab-item', 'nav-me', current === 'me' && 'active']" @click="go('/pages/me/index')">
       <image class="tab-icon-image" :src="current === 'me' ? navIcons.me.active : navIcons.me.inactive" mode="aspectFit" />
       <text :class="['tab-label', current === 'me' && 'active']">Me</text>
     </view>
@@ -45,26 +43,44 @@ function go(url: string) {
   left: 0;
   right: 0;
   bottom: 0;
-  height: calc(112rpx + env(safe-area-inset-bottom));
-  padding: 12rpx 34rpx calc(14rpx + env(safe-area-inset-bottom));
+  height: calc(118rpx + env(safe-area-inset-bottom));
+  padding: 0 0 env(safe-area-inset-bottom);
   box-sizing: border-box;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-around;
+  align-items: stretch;
   z-index: 30;
-  backdrop-filter: blur(18rpx);
-  border-radius: 16rpx 16rpx 0 0;
+  background: #ffffff;
+  border-top: 1rpx solid #dedfe3;
 }
 
 .tab-item {
+  position: relative;
+  flex: 1 1 20%;
   width: 20%;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6rpx;
+  gap: 7rpx;
+  padding-top: 15rpx;
+  box-sizing: border-box;
 }
+
+.tab-item.active::before {
+  content: "";
+  position: absolute;
+  top: -1rpx;
+  left: 18%;
+  right: 18%;
+  height: 4rpx;
+  background: #2f80ed;
+}
+
+.nav-chat.active::before { background: #20b86a; }
+.nav-games.active::before { background: #e3a72f; }
+.nav-orders.active::before { background: #df6658; }
+.nav-me.active::before { background: #6f5bd3; }
 
 .tab-icon-image {
   width: 42rpx;
@@ -73,60 +89,26 @@ function go(url: string) {
 
 .tab-label {
   font-size: 24rpx;
-  color: #7d8b97;
-  font-weight: 700;
+  color: #777980;
+  font-weight: 600;
 }
 
-.tab-label.active,
-.tab-item:active .tab-label {
-  color: #0088cc;
-}
+.nav-home .tab-label.active { color: #2f80ed; }
+.nav-chat .tab-label.active { color: #168653; }
+.nav-games .tab-label.active { color: #9a6500; }
+.nav-orders .tab-label.active { color: #bd3f35; }
+.nav-me .tab-label.active { color: #6f5bd3; }
 
-.game-tab {
-  transform: translateY(-14rpx);
-}
-
-.game-button {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 50%;
-  background: #ffffff;
-  border: 2rpx solid rgba(21, 214, 111, 0.34);
-  box-shadow: 0 10rpx 24rpx rgba(21, 214, 111, 0.22);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.active-game .game-button {
-  background: #ecfff4;
-}
-
-.game-icon-image {
-  width: 48rpx;
-  height: 48rpx;
-}
+.tab-item:active .tab-label { color: #17212b; }
 
 @media (max-width: 380px) {
   .tabbar {
-    height: calc(106rpx + env(safe-area-inset-bottom));
-    padding-left: 24rpx;
-    padding-right: 24rpx;
+    height: calc(112rpx + env(safe-area-inset-bottom));
   }
 
   .tab-icon-image {
     width: 38rpx;
     height: 38rpx;
-  }
-
-  .game-button {
-    width: 66rpx;
-    height: 66rpx;
-  }
-
-  .game-icon-image {
-    width: 44rpx;
-    height: 44rpx;
   }
 
   .tab-label {

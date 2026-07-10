@@ -1,13 +1,10 @@
 <template>
   <view class="page-shell soft-page redirect-page">
-    <view class="panel redirect-panel">
+    <view class="redirect-panel tone-market">
       <text class="eyebrow">Support Only</text>
-      <view style="height: 12rpx"></view>
-      <text class="title">Users only talk to their dedicated support agent</text>
-      <view style="height: 12rpx"></view>
-      <text class="subtitle">This project no longer uses user-to-user friend chat. Redirecting you to support.</text>
-      <view style="height: 24rpx"></view>
-      <button class="primary-button" @click="goSupport">Open Support</button>
+      <text class="title">Opening support</text>
+      <text class="subtitle">User conversations are handled by your dedicated support agent.</text>
+      <button class="primary-button support-button" @click="goSupport">Open support</button>
     </view>
   </view>
 </template>
@@ -34,6 +31,22 @@ function goSupport() {
 }
 
 .redirect-panel {
+  width: 100%;
+  max-width: 620rpx;
+  margin: 0 auto;
+  padding: 28rpx;
+  border-left: 5rpx solid var(--cb-sky-strong);
   text-align: center;
 }
+
+.redirect-panel .eyebrow,
+.redirect-panel .title,
+.redirect-panel .subtitle {
+  display: block;
+  text-align: left;
+}
+
+.redirect-panel .title { margin-top: 8rpx; }
+.redirect-panel .subtitle { margin-top: 12rpx; }
+.support-button { width: 100%; margin-top: 26rpx; }
 </style>

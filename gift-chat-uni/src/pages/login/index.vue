@@ -1,61 +1,50 @@
 <template>
   <view class="page-shell login-page">
-    <view class="login-top">
-      <view class="status-row">
-        <text class="clock">05:47</text>
-        <text class="battery">30%</text>
+    <view class="login-layout">
+      <view class="brand-panel tone-market">
+        <view class="brand-mark">
+          <image class="brand-logo" src="/static/cardbrother-logo.png" mode="aspectFit" />
+          <text class="brand-name">CardBrother</text>
+        </view>
+        <view class="brand-copy">
+          <text class="eyebrow">Gift card exchange</text>
+          <text class="brand-title">Your rates, orders and support in one place.</text>
+          <text class="subtitle">Sign in to continue to your account.</text>
+        </view>
       </view>
 
-      <view class="hero">
-        <view class="brand-row">
-          <image class="brand-logo" src="/static/cardbrother-logo.png" mode="aspectFit" />
-          <view>
-            <text class="hello">Hello!</text>
-            <text class="brand-name">CardBrother</text>
+      <view class="auth-card surface-card">
+        <view class="tab-strip">
+          <view class="tab active">
+            <text>Sign in</text>
+          </view>
+          <view class="tab muted-tab" @click="goRegister">
+            <text>Sign up</text>
           </view>
         </view>
-        <view class="hero-visual"></view>
-      </view>
-    </view>
 
-    <view class="auth-card surface-card">
-      <view class="tab-strip">
-        <view class="tab active">
-          <text>Sign in</text>
-          <view class="tab-active-line"></view>
-        </view>
-        <view class="tab muted-tab" @click="goRegister">
-          <text>Sign up</text>
-        </view>
-      </view>
+        <view class="form-body">
+          <view class="form-field">
+            <text class="field-label">Country</text>
+            <view class="field-input picker-field" @click="pickCountry">
+              <text>{{ store.selectedCountry().name }}</text>
+              <text class="picker-arrow">Change</text>
+            </view>
+          </view>
 
-      <view class="form-body">
-        <text class="field-label">Country</text>
-        <view class="field-input picker-field" @click="pickCountry">
-          <text>{{ store.selectedCountry().name }}</text>
-          <text class="picker-arrow">v</text>
-        </view>
-        <view style="height: 24rpx"></view>
+          <view class="form-field">
+            <text class="field-label">Email or phone</text>
+            <input v-model.trim="form.identifier" class="field-input" placeholder="Enter your email or phone" />
+          </view>
 
-        <text class="field-label">Email or Phone</text>
-        <input v-model.trim="form.identifier" class="field-input" placeholder="Email or Phone" />
-        <view style="height: 24rpx"></view>
+          <view class="form-field">
+            <text class="field-label">Password</text>
+            <input v-model="form.password" class="field-input" password placeholder="Enter your password" />
+          </view>
 
-        <text class="field-label">Password</text>
-        <input v-model="form.password" class="field-input" password placeholder="Password" />
-
-        <view class="helper-row">
-          <text class="helper-link">Verification Code Login</text>
-          <text class="helper-link">Forgot password?</text>
-        </view>
-
-        <button class="primary-button" @click="handleSubmit">Sign In</button>
-        <text class="or-text">or</text>
-        <text v-if="notice" class="muted">{{ notice }}</text>
-
-        <view class="policy">
-          <view class="policy-box">OK</view>
-          <text class="muted">By continuing, you agree to CardBrother Term of Use and confirm that you have read Privacy Policy.</text>
+          <text v-if="notice" class="form-notice">{{ notice }}</text>
+          <button class="primary-button submit-button" @click="handleSubmit">Sign in</button>
+          <text class="policy">By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.</text>
         </view>
       </view>
     </view>
@@ -111,98 +100,59 @@ function pickCountry() {
 </script>
 
 <style scoped lang="scss">
-.login-top {
-  position: relative;
-  z-index: 1;
-  width: min(100%, 520px);
-  margin: 0 auto;
-  padding: 8rpx 8rpx 24rpx;
-}
-
 .login-page {
-  position: relative;
-  min-height: 100vh;
+  padding-bottom: 40rpx;
+  background: var(--cb-canvas);
+}
+
+.login-layout {
+  width: 100%;
+  max-width: 1040rpx;
+  margin: 0 auto;
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding-bottom: 24rpx;
+  border-bottom: 1rpx solid #cfe4fb;
+}
+
+.brand-panel {
+  padding: 28rpx;
   box-sizing: border-box;
-  background-image:
-    linear-gradient(180deg, rgba(5, 14, 23, 0.08), rgba(5, 14, 23, 0.36)),
-    url('/static/login-bg.png');
-  background-size: cover;
-  background-position: center;
-  overflow: hidden;
-}
-
-.status-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8rpx 6rpx 22rpx;
-  font-weight: 800;
-  font-size: 28rpx;
-}
-
-.battery {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-.hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 214rpx;
-}
-
-.brand-row {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
 }
 
 .brand-logo {
-  width: 92rpx;
-  height: 92rpx;
-}
-
-.hello {
-  display: block;
-  font-size: 52rpx;
-  font-weight: 900;
-  color: #ffffff;
-  line-height: 1;
-  text-shadow: 0 4rpx 18rpx rgba(0, 0, 0, 0.26);
+  width: 64rpx;
+  height: 64rpx;
 }
 
 .brand-name {
-  display: block;
-  margin-top: 8rpx;
   font-size: 30rpx;
-  font-weight: 800;
-  color: rgba(255, 255, 255, 0.82);
+  font-weight: 700;
+  color: #111111;
 }
 
-.hero-visual {
-  width: 156rpx;
-  height: 116rpx;
-  border-radius: 16rpx;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1rpx, transparent 1rpx),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.16) 1rpx, transparent 1rpx),
-    rgba(255, 255, 255, 0.1);
-  background-size: 34rpx 34rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 16rpx 34rpx rgba(0, 0, 0, 0.12);
-  backdrop-filter: blur(12rpx);
+.brand-copy {
+  padding: 54rpx 0 20rpx;
+}
+
+.brand-title {
+  display: block;
+  max-width: 600rpx;
+  margin: 16rpx 0 18rpx;
+  font-size: 50rpx;
+  line-height: 1.12;
+  font-weight: 700;
+  color: #111111;
 }
 
 .auth-card {
-  position: relative;
-  z-index: 1;
-  width: min(100%, 520px);
-  margin: 0 auto;
+  width: 100%;
   overflow: hidden;
-  background: rgba(8, 19, 30, 0.72);
-  border-color: rgba(255, 255, 255, 0.16);
-  box-shadow: 0 28rpx 76rpx rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(24rpx);
+  box-shadow: 0 16rpx 42rpx rgba(34, 54, 74, 0.09);
 }
 
 .tab-strip {
@@ -211,41 +161,39 @@ function pickCountry() {
 }
 
 .tab {
+  position: relative;
   min-height: 92rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12rpx;
-  font-size: 30rpx;
-  font-weight: 900;
+  font-size: 28rpx;
+  font-weight: 700;
+  border-bottom: 1rpx solid #dedfe3;
 }
 
 .tab text {
-  font-size: 34rpx;
-  font-weight: 900;
-  color: #ffffff;
+  color: #6f7178;
+}
+
+.tab.active {
+  border-bottom: 4rpx solid #002fa7;
+}
+
+.tab.active text {
+  color: #002fa7;
 }
 
 .muted-tab {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.muted-tab text {
-  color: rgba(255, 255, 255, 0.56);
+  background: #f7f7f8;
 }
 
 .form-body {
-  padding: 26rpx;
+  padding: 32rpx 28rpx 28rpx;
 }
 
-.field-label {
-  color: rgba(255, 255, 255, 0.74);
-}
-
-.field-input {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(255, 255, 255, 0.28);
+.form-field + .form-field {
+  margin-top: 24rpx;
 }
 
 .picker-field {
@@ -255,63 +203,53 @@ function pickCountry() {
 }
 
 .picker-arrow {
-  color: #7d8b97;
-  font-size: 24rpx;
-  font-weight: 900;
-}
-
-.helper-row {
-  display: flex;
-  justify-content: space-between;
-  margin: 22rpx 6rpx 28rpx;
-}
-
-.helper-link {
+  color: #002fa7;
   font-size: 24rpx;
   font-weight: 700;
-  color: #55c7ff;
 }
 
-.or-text {
+.form-notice {
   display: block;
-  text-align: center;
-  font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.56);
-  padding: 20rpx 0;
-  font-weight: 700;
+  margin-top: 22rpx;
+  color: #b42318;
+  font-size: 24rpx;
+}
+
+.submit-button {
+  width: 100%;
+  margin-top: 28rpx;
 }
 
 .policy {
-  display: flex;
-  gap: 16rpx;
-  align-items: flex-start;
+  display: block;
+  margin-top: 22rpx;
+  color: #6f7178;
+  font-size: 22rpx;
+  line-height: 1.5;
 }
 
-.policy .muted {
-  color: rgba(255, 255, 255, 0.58);
-}
-
-.policy-box {
-  width: 48rpx;
-  height: 44rpx;
-  border-radius: 8rpx;
-  background: #0088cc;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18rpx;
-  font-weight: 900;
-}
-
-@media (min-width: 900px) {
+@media (min-width: 768px) {
   .login-page {
-    padding-top: 34px;
+    display: flex;
+    align-items: center;
+    padding-top: 40rpx;
   }
 
-  .login-top,
-  .auth-card {
-    width: 488px;
+  .login-layout {
+    max-width: 1040px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 520px;
+    gap: 72rpx;
+    align-items: center;
+  }
+
+  .brand-panel {
+    align-self: stretch;
+    padding: 42rpx;
+  }
+
+  .brand-copy {
+    padding-top: 100rpx;
   }
 }
 </style>

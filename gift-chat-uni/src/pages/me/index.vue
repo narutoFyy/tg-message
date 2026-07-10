@@ -1,128 +1,125 @@
 <template>
   <view class="page-shell soft-page me-page">
-    <view class="me-backdrop"></view>
-
-    <view class="status-row">
-      <text class="clock">05:48</text>
-      <text class="battery">31%</text>
-    </view>
-
-    <view class="me-head">
-      <text class="me-title">Me</text>
-      <view class="icons">
-        <image class="head-icon" :src="uiIcons.share" mode="aspectFit" @click="shareInvite" />
-        <image class="head-icon" :src="uiIcons.settings" mode="aspectFit" @click="goSettings" />
-      </view>
-    </view>
-
-    <view class="profile-card">
-      <view class="avatar-wrap" @click="chooseAvatar">
-        <image class="avatar-image" :src="avatarSrc" mode="aspectFill" />
-        <view class="avatar-edit">
-          <text>{{ avatarUploading ? '...' : '+' }}</text>
+    <view class="me-content">
+      <view class="me-head">
+        <view>
+          <text class="eyebrow">Account</text>
+          <text class="me-title">Me</text>
+        </view>
+        <view class="head-actions">
+          <image class="head-icon" :src="uiIcons.share" mode="aspectFit" @click="shareInvite" />
+          <image class="head-icon" :src="uiIcons.settings" mode="aspectFit" @click="goSettings" />
         </view>
       </view>
-      <text class="profile-name">{{ displayName }}</text>
-      <view class="invite-row" @click.stop="copyInvite">
-        <text class="invite">Invite code: {{ inviteCode }}</text>
-        <image class="copy-icon" :src="uiIcons.copy" mode="aspectFit" />
-      </view>
-    </view>
 
-    <view class="vip-card" @click="goPerformance">
-      <view class="vip-top-row">
-        <view class="vip-left">
-          <image class="vip-badge" :src="pageArt.vipBadge" mode="aspectFit" />
-          <view class="vip-copy-block">
-            <text class="vip-label">{{ vipSummary?.level || 'VIP1' }}</text>
-            <text class="vip-copy">{{ vipSummary?.points || '0' }} pts</text>
+      <view class="profile-section">
+        <view class="avatar-wrap" @click="chooseAvatar">
+          <image class="avatar-image" :src="avatarSrc" mode="aspectFill" />
+          <view class="avatar-edit"><text>{{ avatarUploading ? '...' : '+' }}</text></view>
+        </view>
+        <view class="profile-copy">
+          <text class="profile-name">{{ displayName }}</text>
+          <view class="invite-row" @click.stop="copyInvite">
+            <text class="invite">Invite code: {{ inviteCode }}</text>
+            <image class="copy-icon" :src="uiIcons.copy" mode="aspectFit" />
           </view>
         </view>
-        <view class="bronze-pill">
-          <text>{{ vipSummary?.levelName || 'Bronze' }}</text>
-          <text class="bronze-arrow">></text>
-        </view>
       </view>
-      <view class="vip-progress-wrap">
-        <view class="vip-progress-track">
-          <view class="vip-progress-fill" :style="{ width: `${vipProgress}%` }"></view>
-        </view>
-        <text class="vip-progress-text">{{ vipProgressText }}</text>
-      </view>
-      <view class="vip-notch"></view>
-    </view>
 
-    <view class="quick-grid">
-      <view class="quick-card wallet" @click="goWallet">
+      <view class="vip-row" @click="goPerformance">
+        <view class="vip-copy-block">
+          <view class="vip-title-row">
+            <text class="vip-title">{{ vipSummary?.level || 'VIP1' }} / {{ vipSummary?.levelName || 'Bronze' }}</text>
+            <text class="vip-points">{{ vipSummary?.points || '0' }} pts</text>
+          </view>
+          <view class="vip-progress-track">
+            <view class="vip-progress-fill" :style="{ width: `${vipProgress}%` }"></view>
+          </view>
+          <text class="vip-progress-text">{{ vipProgressText }}</text>
+        </view>
+        <text class="row-action">View</text>
+      </view>
+
+      <view class="summary-strip">
+        <view class="summary-item wallet-summary" @click="goWallet">
+          <text class="summary-label">Wallet</text>
+          <text class="summary-value">{{ walletValue }}</text>
+        </view>
+        <view class="summary-item invite-summary" @click="shareInvite">
+          <text class="summary-label">Invited users</text>
+          <text class="summary-value">{{ invitedUserCount }}</text>
+        </view>
+      </view>
+
+      <view class="reward-card" @click="goLottery">
         <view>
-          <text class="quick-title">Wallet</text>
-          <text class="quick-value">{{ walletValue }}</text>
+          <text class="reward-label">Lucky Wheel</text>
+          <text class="reward-value">{{ lotteryHint }}</text>
         </view>
-        <image class="quick-art wallet-art" :src="pageArt.wallet" mode="aspectFit" />
+        <image class="reward-art" src="/static/lottery/stone-technology.png" mode="aspectFit" />
       </view>
-      <view class="quick-card invite-card" @click="shareInvite">
-        <view>
-          <text class="quick-title">Invited Users</text>
-          <text class="quick-value">{{ invitedUserCount }}</text>
-        </view>
-        <image class="quick-art friend-art" :src="pageArt.friend" mode="aspectFit" />
-      </view>
-    </view>
 
-    <view class="lottery-card" @click="goLottery">
-      <view>
-        <text class="quick-title">Lucky Wheel</text>
-        <text class="quick-value">{{ lotteryHint }}</text>
+      <view class="menu-group identity-group">
+        <view class="menu-row" @click="goProfileInfo">
+          <view class="menu-copy">
+            <text class="menu-title">Personal information</text>
+            <text class="menu-subtitle">Account, phone, email and bank details</text>
+          </view>
+          <text class="row-action">Open</text>
+        </view>
       </view>
-      <image class="quick-art lottery-art" src="/static/lottery/stone-technology.png" mode="aspectFit" />
-    </view>
 
-    <view class="profile-info-entry" @click="goProfileInfo">
-      <view class="profile-info-icon">
-        <text>i</text>
+      <view class="ranking-card" @click="goRanking">
+        <text class="ranking-title">Rank (Month)</text>
+        <view class="ranking-content">
+          <view class="ranking-side">
+            <text class="ranking-label">Sales</text>
+            <text class="ranking-value">{{ walletValue }} / No.{{ salesRankLabel }}</text>
+          </view>
+          <image class="ranking-art" :src="pageArt.trophy" mode="aspectFit" />
+          <view class="ranking-side align-right">
+            <text class="ranking-label">Invitation</text>
+            <text class="ranking-value">{{ invitedUserCount }} invites / No.{{ invitationRankLabel }}</text>
+          </view>
+        </view>
       </view>
-      <view class="profile-info-copy">
-        <text class="profile-info-title">Personal Information</text>
-        <text class="profile-info-subtitle">Account, phone, email and bank details</text>
-      </view>
-      <text class="profile-info-arrow">></text>
-    </view>
 
-    <view class="rank-card" @click="goRanking">
-      <text class="rank-title">Rank ( Month )</text>
-      <view class="rank-row">
-        <view class="rank-col">
-          <text class="muted label-muted">Sales</text>
-          <text class="rank-value">{{ monthlySales }}/ No.{{ salesRankLabel }}</text>
+      <view class="menu-group finance-group">
+        <view class="menu-row" @click="goWallet">
+          <view class="menu-copy">
+            <text class="menu-title">Wallet</text>
+            <text class="menu-subtitle">Payout balance and withdrawal tools</text>
+          </view>
+          <text class="row-action">{{ walletValue }}</text>
         </view>
-        <image class="rank-art" :src="pageArt.trophy" mode="aspectFit" />
-        <view class="rank-col align-right">
-          <text class="muted label-muted">Invitation</text>
-          <text class="rank-value">{{ invitationCount }}/ No.{{ invitationRankLabel }}</text>
-        </view>
-      </view>
-      <view class="rank-ribbon"></view>
-    </view>
-
-    <view class="panel manage-panel">
-      <text class="manage-title">Contact and Management</text>
-      <view class="manage-grid">
-        <view class="manage-item" @click="goBlacklist">
-          <image class="manage-icon" :src="uiIcons.scammer" mode="aspectFit" />
-          <text class="manage-label">Scammer</text>
-        </view>
-        <view class="manage-item" @click="goSupport">
-          <image class="manage-icon" :src="uiIcons.staff" mode="aspectFit" />
-          <text class="manage-label">Staff Lookup</text>
-        </view>
-        <view class="manage-item" @click="goLoan">
-          <image class="manage-icon" :src="uiIcons.wallet" mode="aspectFit" />
-          <text class="manage-label">Loan</text>
+        <view class="menu-row" @click="goLoan">
+          <view class="menu-copy">
+            <text class="menu-title">Loan applications</text>
+            <text class="menu-subtitle">Apply and review existing requests</text>
+          </view>
+          <text class="row-action">Open</text>
         </view>
       </view>
-    </view>
 
-    <text v-if="notice" class="notice-text">{{ notice }}</text>
+      <view class="menu-group support-group">
+        <view class="menu-row" @click="goSupport">
+          <view class="menu-copy">
+            <text class="menu-title">Support</text>
+            <text class="menu-subtitle">Open your dedicated support conversation</text>
+          </view>
+          <text class="row-action">Chat</text>
+        </view>
+        <view class="menu-row" @click="goBlacklist">
+          <view class="menu-copy">
+            <text class="menu-title">Blacklist</text>
+            <text class="menu-subtitle">Review blocked accounts</text>
+          </view>
+          <text class="row-action">Open</text>
+        </view>
+      </view>
+
+      <text v-if="notice" class="notice-text">{{ notice }}</text>
+    </view>
 
     <AppNav current="me" />
   </view>
@@ -158,7 +155,7 @@ const vipProgressText = computed(() => {
   const vip = vipSummary.value
   if (!vip) return '0 / 20 to VIP2'
   if (vip.maxLevel) return 'Highest level reached'
-  return `${vip.points} / ${vip.nextThreshold} to ${vip.nextLevel} · ${vip.remainingPoints} pts left`
+  return `${vip.points} / ${vip.nextThreshold} to ${vip.nextLevel} / ${vip.remainingPoints} pts left`
 })
 const lotteryHint = computed(() => {
   const eligibility = store.state.lotteryEligibility
@@ -167,22 +164,14 @@ const lotteryHint = computed(() => {
 })
 const salesRankLabel = computed(() => rankLabel(salesRanking.value?.currentUser?.rank, '500+'))
 const invitationCount = computed(() => invitationRanking.value?.currentUser?.score || '0 invites')
-const invitedUserCount = computed(() => {
-  const match = invitationCount.value.match(/\d+/)
-  return match ? match[0] : '0'
-})
+const invitedUserCount = computed(() => invitationCount.value.match(/\d+/)?.[0] || '0')
 const invitationRankLabel = computed(() => rankLabel(invitationRanking.value?.currentUser?.rank, '100+'))
-const displayName = computed(() => store.state.currentUser?.username || 'Jay Crown')
+const displayName = computed(() => store.state.currentUser?.username || 'CardBrother user')
 const avatarSrc = computed(() => {
   const avatarUrl = store.state.currentUser?.avatarUrl
-  return avatarUrl ? resolveMediaUrl(avatarUrl) : pageArt.profileAvatar
+  return avatarUrl ? resolveMediaUrl(avatarUrl) : uiIcons.user
 })
-const inviteCode = computed(() => {
-  const code = store.state.currentUser?.inviteCode
-  if (code) return code
-  const base = (store.state.currentUser?.username || 'dhceqw').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
-  return (base + 'QW').slice(0, 6)
-})
+const inviteCode = computed(() => store.state.currentUser?.inviteCode || 'Not available')
 
 const completedPayout = computed(() =>
   store.state.transactions
@@ -190,19 +179,15 @@ const completedPayout = computed(() =>
     .reduce((sum, item) => sum + parseNgn(item.payoutAmount), 0)
 )
 
-const monthlySales = computed(() => formatNaira(completedPayout.value))
 const walletValue = computed(() => formatNaira(completedPayout.value))
 
 async function refreshPersonalRankings() {
   try {
-    const [sales, invitation] = await Promise.all([
-      fetchRanking('sales'),
-      fetchRanking('invitation')
-    ])
+    const [sales, invitation] = await Promise.all([fetchRanking('sales'), fetchRanking('invitation')])
     salesRanking.value = sales
     invitationRanking.value = invitation
   } catch {
-    // The wallet and profile should stay usable even if leaderboard data is unavailable.
+    // Profile navigation remains available when ranking data is unavailable.
   }
 }
 
@@ -212,49 +197,22 @@ function rankLabel(rank: number | undefined, fallback: string) {
 }
 
 function parseNgn(value: string) {
-  const digits = value.replace(/[^\d.]/g, '')
-  return Number(digits || '0')
+  return Number(value.replace(/[^\d.]/g, '') || '0')
 }
 
 function formatNaira(value: number) {
-  return `₦${value.toLocaleString('en-US')}`
+  return `NGN ${value.toLocaleString('en-US')}`
 }
 
-function goBlacklist() {
-  uni.navigateTo({ url: '/pages/blacklist/index' })
-}
-
-function goSupport() {
-  uni.redirectTo({ url: '/pages/support/index' })
-}
-
-function goLoan() {
-  uni.navigateTo({ url: '/pages/loan/index' })
-}
-
-function goWallet() {
-  uni.navigateTo({ url: '/pages/wallet/index' })
-}
-
-function goPerformance() {
-  uni.navigateTo({ url: '/pages/performance/index' })
-}
-
-function goRanking() {
-  uni.navigateTo({ url: '/pages/ranking/index' })
-}
-
-function goLottery() {
-  uni.navigateTo({ url: '/pages/lucky-wheel/index' })
-}
-
-function goProfileInfo() {
-  uni.navigateTo({ url: '/pages/profile-info/index' })
-}
-
-function goSettings() {
-  uni.navigateTo({ url: '/pages/settings/index' })
-}
+function goBlacklist() { uni.navigateTo({ url: '/pages/blacklist/index' }) }
+function goSupport() { uni.redirectTo({ url: '/pages/support/index' }) }
+function goLoan() { uni.navigateTo({ url: '/pages/loan/index' }) }
+function goWallet() { uni.navigateTo({ url: '/pages/wallet/index' }) }
+function goPerformance() { uni.navigateTo({ url: '/pages/performance/index' }) }
+function goRanking() { uni.navigateTo({ url: '/pages/ranking/index' }) }
+function goLottery() { uni.navigateTo({ url: '/pages/lucky-wheel/index' }) }
+function goProfileInfo() { uni.navigateTo({ url: '/pages/profile-info/index' }) }
+function goSettings() { uni.navigateTo({ url: '/pages/settings/index' }) }
 
 function chooseAvatar() {
   if (avatarUploading.value) return
@@ -281,520 +239,463 @@ function chooseAvatar() {
 }
 
 function copyInvite() {
+  if (!store.state.currentUser?.inviteCode) {
+    notice.value = 'Invite code is not available.'
+    return
+  }
   uni.setClipboardData({
     data: `Invite code: ${inviteCode.value}`,
-    success() {
-      notice.value = 'Invite code copied.'
-    }
+    success() { notice.value = 'Invite code copied.' }
   })
 }
 
 function shareInvite() {
-  const text = `Join CardBrother with my invite code: ${inviteCode.value}`
+  if (!store.state.currentUser?.inviteCode) {
+    notice.value = 'Invite code is not available.'
+    return
+  }
   uni.setClipboardData({
-    data: text,
-    success() {
-      notice.value = 'Share text copied to clipboard.'
-    }
+    data: `Join CardBrother with my invite code: ${inviteCode.value}`,
+    success() { notice.value = 'Share text copied to clipboard.' }
   })
 }
 </script>
 
 <style scoped lang="scss">
 .me-page {
-  position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
-.me-backdrop {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 620rpx;
-  background: linear-gradient(180deg, #edf4f8 0%, rgba(247, 249, 251, 0.92) 48%, rgba(255, 255, 255, 0) 100%);
-  pointer-events: none;
+.me-content {
+  width: 100%;
+  max-width: 1040rpx;
+  margin: 0 auto;
 }
 
-.status-row,
 .me-head {
-  position: relative;
-  z-index: 1;
+  min-height: 82rpx;
+  padding-bottom: 20rpx;
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: center;
+  gap: 24rpx;
+  border-bottom: 1rpx solid #c8c9cf;
 }
 
-.status-row {
-  font-size: 28rpx;
-  font-weight: 900;
-  margin-bottom: 14rpx;
-}
-
-.battery {
-  color: #0088cc;
-}
-
-.me-head {
-  margin-bottom: 22rpx;
+.me-head .eyebrow,
+.me-title {
+  display: block;
 }
 
 .me-title {
-  font-size: 48rpx;
-  font-weight: 900;
+  margin-top: 5rpx;
+  color: #111111;
+  font-size: 40rpx;
+  font-weight: 700;
 }
 
-.icons {
+.head-actions {
   display: flex;
-  gap: 28rpx;
+  align-items: center;
+  gap: 24rpx;
 }
 
 .head-icon {
-  width: 50rpx;
-  height: 50rpx;
+  width: 42rpx;
+  height: 42rpx;
 }
 
-.profile-card {
-  position: relative;
-  z-index: 1;
+.profile-section {
+  padding: 32rpx 4rpx 28rpx;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10rpx;
-  padding: 12rpx 0 10rpx;
+  gap: 24rpx;
 }
 
 .avatar-wrap {
   position: relative;
-  width: 152rpx;
-  height: 152rpx;
+  width: 116rpx;
+  height: 116rpx;
+  flex: 0 0 auto;
 }
 
 .avatar-image {
-  width: 152rpx;
-  height: 152rpx;
+  width: 116rpx;
+  height: 116rpx;
   border-radius: 50%;
-  background: #eef2f4;
+  background: #efeff1;
 }
 
 .avatar-edit {
   position: absolute;
-  right: 2rpx;
-  bottom: 2rpx;
-  width: 42rpx;
-  height: 42rpx;
+  right: -2rpx;
+  bottom: -2rpx;
+  width: 34rpx;
+  height: 34rpx;
   border-radius: 50%;
-  background: #0088cc;
-  border: 4rpx solid #ffffff;
+  border: 3rpx solid #f7f7f8;
+  background: var(--cb-lilac-strong);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 30rpx;
-  font-weight: 900;
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
+.profile-copy {
+  min-width: 0;
 }
 
 .profile-name {
-  font-size: 46rpx;
-  font-weight: 900;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #111111;
+  font-size: 36rpx;
+  font-weight: 700;
 }
 
 .invite-row {
+  margin-top: 10rpx;
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .invite {
-  font-size: 28rpx;
-  color: #4b4b4b;
+  color: #6f7178;
+  font-size: 24rpx;
 }
 
 .copy-icon {
-  width: 30rpx;
-  height: 30rpx;
+  width: 26rpx;
+  height: 26rpx;
 }
 
-.vip-card {
-  position: relative;
-  z-index: 1;
-  margin-top: 22rpx;
-  min-height: 176rpx;
-  border-radius: 16rpx;
-  padding: 24rpx 26rpx 26rpx;
-  background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.08), transparent 36%),
-    linear-gradient(180deg, #17212b, #223241);
-  color: #ffffff;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 22rpx;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.vip-top-row {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-}
-
-.vip-copy {
-  display: block;
-  margin-top: 4rpx;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.vip-progress-wrap {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-}
-
-.vip-progress-track {
-  height: 10rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.22);
-  overflow: hidden;
-}
-
-.vip-progress-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: #f7d56f;
-}
-
-.vip-progress-text {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 21rpx;
-  color: rgba(255, 255, 255, 0.76);
-}
-
-.lottery-card {
-  margin-top: 18rpx;
-  min-height: 146rpx;
-  padding: 24rpx;
-  border-radius: 18rpx;
-  background: #fff7df;
-  border: 1rpx solid rgba(224, 160, 38, 0.18);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: relative;
-  z-index: 1;
-}
-
-.lottery-art {
-  border-radius: 16rpx;
-}
-
-.profile-info-entry {
-  position: relative;
-  z-index: 1;
-  margin-top: 18rpx;
-  min-height: 126rpx;
-  border-radius: 14rpx;
-  padding: 22rpx 24rpx;
-  background: #ffffff;
-  border: 1rpx solid rgba(136, 153, 166, 0.16);
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  box-sizing: border-box;
-}
-
-.profile-info-icon {
-  width: 70rpx;
-  height: 70rpx;
-  border-radius: 50%;
-  background: #d9ffe7;
-  color: #0088cc;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 38rpx;
-  font-weight: 900;
-  flex: 0 0 auto;
-}
-
-.profile-info-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.profile-info-title,
-.profile-info-subtitle {
-  display: block;
-}
-
-.profile-info-title {
-  font-size: 31rpx;
-  font-weight: 900;
-  color: #171717;
-}
-
-.profile-info-subtitle {
-  margin-top: 6rpx;
-  font-size: 23rpx;
-  color: #6f7a86;
-  line-height: 1.3;
-}
-
-.profile-info-arrow {
-  color: #9aa4ad;
-  font-size: 34rpx;
-  font-weight: 900;
-  flex: 0 0 auto;
-}
-
-.vip-card::before,
-.vip-card::after {
-  content: '';
-  position: absolute;
-  border-radius: 999rpx;
-  border: 2rpx solid rgba(255, 255, 255, 0.08);
-  transform: rotate(-12deg);
-}
-
-.vip-card::before {
-  width: 220rpx;
-  height: 220rpx;
-  right: 150rpx;
-  top: -110rpx;
-}
-
-.vip-card::after {
-  width: 260rpx;
-  height: 260rpx;
-  right: -60rpx;
-  top: -80rpx;
-}
-
-.vip-left {
-  display: flex;
-  align-items: center;
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18rpx;
-  position: relative;
-  z-index: 1;
-  flex: 1;
-  min-width: 0;
 }
 
-.vip-badge {
-  width: 72rpx;
-  height: 56rpx;
-  flex: 0 0 auto;
+.summary-item {
+  min-width: 0;
+  min-height: 118rpx;
+  padding: 24rpx;
+  box-sizing: border-box;
+  border: 1rpx solid transparent;
+  border-radius: 12rpx;
+}
+
+.wallet-summary {
+  background: var(--cb-sky);
+  border-color: #cfe4fb;
+}
+
+.invite-summary {
+  background: var(--cb-mint);
+  border-color: #c6ead8;
+}
+
+.summary-label,
+.summary-value {
+  display: block;
+}
+
+.summary-label {
+  color: #6f7178;
+  font-size: 20rpx;
+}
+
+.summary-value {
+  margin-top: 8rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #111111;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.vip-row {
+  margin-top: 22rpx;
+  min-height: 112rpx;
+  padding: 20rpx 22rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  background: var(--cb-navy);
+  border: 1rpx solid #263b4b;
+  border-radius: 12rpx;
+  color: #ffffff;
+  box-shadow: 0 14rpx 32rpx rgba(23, 38, 51, 0.14);
 }
 
 .vip-copy-block {
   min-width: 0;
+  flex: 1;
 }
 
-.vip-label {
-  display: block;
-  font-size: 44rpx;
-  font-weight: 900;
-  line-height: 1.1;
-}
-
-.bronze-pill {
-  position: relative;
-  z-index: 1;
-  flex: 0 0 auto;
-  min-width: 208rpx;
-  height: 74rpx;
-  border-radius: 10rpx;
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+.vip-title-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-  font-size: 34rpx;
-  font-weight: 800;
-}
-
-.bronze-arrow {
-  font-size: 28rpx;
-}
-
-.vip-notch {
-  position: absolute;
-  left: 50%;
-  bottom: -16rpx;
-  width: 42rpx;
-  height: 32rpx;
-  background: #2d315b;
-  transform: translateX(-50%) rotate(45deg);
-}
-
-.quick-grid {
-  position: relative;
-  z-index: 1;
-  margin-top: 24rpx;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20rpx;
-}
-
-.quick-card {
-  min-height: 158rpx;
-  border-radius: 12rpx;
-  padding: 22rpx;
-  display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  align-items: center;
+  gap: 18rpx;
+}
+
+.vip-title {
+  color: #ffffff;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.vip-points,
+.vip-progress-text {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 20rpx;
+}
+
+.vip-row .row-action {
+  color: #ffffff;
+}
+
+.vip-progress-track {
+  height: 6rpx;
+  margin-top: 12rpx;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.vip-progress-fill {
+  height: 100%;
+  background: #f2c75c;
+}
+
+.vip-progress-text {
+  display: block;
+  margin-top: 7rpx;
+}
+
+.menu-group {
+  margin-top: 22rpx;
+  background: #ffffff;
+  border: 1rpx solid var(--cb-line);
+  border-radius: 12rpx;
   overflow: hidden;
 }
 
-.wallet {
-  background: #f3f6f8;
+.identity-group { background: var(--cb-lilac); border-color: #ddd5fb; }
+.finance-group { background: var(--cb-mint); border-color: #c6ead8; }
+.support-group { background: var(--cb-coral); border-color: #f1c8c2; }
+
+.menu-row {
+  position: relative;
+  min-height: 94rpx;
+  padding: 18rpx 22rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  border-bottom: 1rpx solid #dedfe3;
+  background: rgba(255, 255, 255, 0.72);
 }
 
-.invite-card {
-  background: rgba(20, 216, 111, 0.12);
+.menu-row:last-child {
+  border-bottom: 0;
 }
 
-.quick-title {
+.menu-row:active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5rpx;
+  background: var(--cb-lilac-strong);
+}
+
+.menu-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.menu-title,
+.menu-subtitle {
   display: block;
+}
+
+.menu-title {
+  color: #111111;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.menu-subtitle {
+  margin-top: 5rpx;
+  color: #6f7178;
+  font-size: 21rpx;
+  line-height: 1.35;
+}
+
+.row-action {
+  flex: 0 0 auto;
+  max-width: 210rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cb-lilac-strong);
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.reward-card {
+  min-height: 126rpx;
+  margin-top: 22rpx;
+  padding: 22rpx 26rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  background: var(--cb-amber);
+  border: 1rpx solid #f0daa4;
+  border-radius: 12rpx;
+}
+
+.reward-label,
+.reward-value {
+  display: block;
+}
+
+.reward-label {
+  color: #5f4200;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.reward-value {
+  margin-top: 8rpx;
+  color: #17212b;
   font-size: 30rpx;
-  font-weight: 800;
-  margin-bottom: 14rpx;
+  font-weight: 700;
 }
 
-.quick-value {
-  font-size: 46rpx;
-  font-weight: 900;
-}
-
-.quick-art {
-  width: 120rpx;
-  height: 120rpx;
+.reward-art {
+  width: 86rpx;
+  height: 86rpx;
+  border-radius: 8rpx;
+  background: #1b130e;
   flex: 0 0 auto;
 }
 
-.wallet-art {
-  margin-right: -8rpx;
-}
-
-.friend-art {
-  width: 126rpx;
-  height: 126rpx;
-  margin-right: -10rpx;
-}
-
-.rank-card {
-  position: relative;
-  z-index: 1;
+.ranking-card {
   margin-top: 22rpx;
-  min-height: 258rpx;
-  border-radius: 16rpx;
-  padding: 26rpx 26rpx 22rpx;
+  padding: 24rpx 26rpx;
   background: #ffffff;
-  border: 1rpx solid rgba(136, 153, 166, 0.16);
-  overflow: hidden;
+  border: 1rpx solid var(--cb-line);
+  border-radius: 12rpx;
+  box-shadow: 0 8rpx 24rpx rgba(34, 54, 74, 0.05);
 }
 
-.rank-title {
+.ranking-title {
   display: block;
-  font-size: 32rpx;
-  font-weight: 900;
-  margin-bottom: 18rpx;
+  color: #17212b;
+  font-size: 26rpx;
+  font-weight: 700;
 }
 
-.rank-row {
+.ranking-content {
+  margin-top: 18rpx;
   display: grid;
-  grid-template-columns: 1fr 220rpx 1fr;
+  grid-template-columns: minmax(0, 1fr) 150rpx minmax(0, 1fr);
   align-items: center;
+  gap: 16rpx;
 }
 
-.rank-col {
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
+.ranking-side {
   min-width: 0;
 }
 
-.align-right {
-  align-items: flex-end;
+.ranking-label,
+.ranking-value {
+  display: block;
 }
 
-.label-muted {
+.ranking-label {
+  color: var(--cb-muted);
+  font-size: 20rpx;
+}
+
+.ranking-value {
+  margin-top: 7rpx;
+  color: #17212b;
   font-size: 24rpx;
-}
-
-.rank-value {
-  font-size: 34rpx;
-  font-weight: 900;
-  color: #171717;
-  line-height: 1.24;
-  word-break: break-word;
-}
-
-.rank-art {
-  width: 220rpx;
-  height: 146rpx;
-}
-
-.rank-ribbon {
-  position: absolute;
-  left: -20rpx;
-  right: -20rpx;
-  bottom: -14rpx;
-  height: 52rpx;
-  border-radius: 50%;
-  border-bottom: 10rpx solid #17d56f;
-}
-
-.manage-panel {
-  position: relative;
-  z-index: 1;
-  margin-top: 26rpx;
-  padding-top: 34rpx;
-  padding-bottom: 38rpx;
-}
-
-.manage-title {
-  font-size: 32rpx;
-  font-weight: 900;
-}
-
-.manage-grid {
-  display: flex;
-  gap: 48rpx;
-  padding-top: 34rpx;
-}
-
-.manage-item {
-  width: 190rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14rpx;
-}
-
-.manage-icon {
-  width: 74rpx;
-  height: 74rpx;
-}
-
-.manage-label {
-  font-size: 28rpx;
   font-weight: 700;
+}
+
+.ranking-art {
+  width: 150rpx;
+  height: 100rpx;
+}
+
+.align-right {
+  text-align: right;
 }
 
 .notice-text {
   display: block;
-  position: relative;
-  z-index: 1;
+  margin-top: 20rpx;
+  color: #6f7178;
+  font-size: 23rpx;
   text-align: center;
-  margin-top: 16rpx;
-  font-size: 24rpx;
-  color: #5d646d;
+}
+
+@media (max-width: 420px) {
+  .summary-value {
+    font-size: 23rpx;
+  }
+}
+
+@media (min-width: 768px) {
+  .me-content {
+    max-width: 1280px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .me-head,
+  .profile-section,
+  .vip-row,
+  .summary-strip,
+  .reward-card,
+  .identity-group,
+  .ranking-card,
+  .notice-text {
+    grid-column: 1 / -1;
+  }
+
+  .profile-section {
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .profile-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .vip-row,
+  .summary-strip,
+  .reward-card,
+  .menu-group,
+  .ranking-card {
+    margin-top: 0;
+  }
 }
 </style>

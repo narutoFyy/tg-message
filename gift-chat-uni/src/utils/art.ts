@@ -73,12 +73,12 @@ export const navIcons = {
   home: {
     active: svgToDataUri(`
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-        <path d="M24 6 38 16v19a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V16L24 6Z" fill="#15d66f"/>
+        <path d="M24 6 38 16v19a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V16L24 6Z" fill="#2f80ed"/>
         <rect x="21" y="24" width="6" height="12" rx="2" fill="#ffffff" opacity="0.9"/>
       </svg>
     `),
     inactive: svgToDataUri(`
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#c8d0d8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#777980" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <path d="M7 21 24 8l17 13"/>
         <path d="M12 19v18a3 3 0 0 0 3 3h18a3 3 0 0 0 3-3V19"/>
       </svg>
@@ -87,14 +87,14 @@ export const navIcons = {
   chat: {
     active: svgToDataUri(`
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-        <path d="M24 10c8.8 0 16 6.4 16 14.4 0 7.8-6.8 14.1-15.2 14.4L16 43l2.5-5.5C13 35.7 8 30.6 8 24.4 8 16.4 15.2 10 24 10Z" fill="#15d66f"/>
+        <path d="M24 10c8.8 0 16 6.4 16 14.4 0 7.8-6.8 14.1-15.2 14.4L16 43l2.5-5.5C13 35.7 8 30.6 8 24.4 8 16.4 15.2 10 24 10Z" fill="#20b86a"/>
         <circle cx="18" cy="25" r="2.3" fill="#ffffff"/>
         <circle cx="24" cy="25" r="2.3" fill="#ffffff"/>
         <circle cx="30" cy="25" r="2.3" fill="#ffffff"/>
       </svg>
     `),
     inactive: svgToDataUri(`
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#c8d0d8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#777980" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <path d="M24 10c8.8 0 16 6.4 16 14.4 0 7.8-6.8 14.1-15.2 14.4L16 43l2.5-5.5C13 35.7 8 30.6 8 24.4 8 16.4 15.2 10 24 10Z"/>
       </svg>
     `)
@@ -102,21 +102,21 @@ export const navIcons = {
   swap: {
     active: svgToDataUri(`
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-        <path d="M11 17h20l-5-5" fill="none" stroke="#15d66f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M37 31H17l5 5" fill="none" stroke="#15d66f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M11 17h20l-5-5" fill="none" stroke="#df6658" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M37 31H17l5 5" fill="none" stroke="#df6658" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     `),
     inactive: svgToDataUri(`
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-        <path d="M11 17h20l-5-5" fill="none" stroke="#c8d0d8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M37 31H17l5 5" fill="none" stroke="#c8d0d8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M11 17h20l-5-5" fill="none" stroke="#777980" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M37 31H17l5 5" fill="none" stroke="#777980" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     `)
   },
   games: {
     active: svgToDataUri(`
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-        <rect x="9" y="16" width="30" height="20" rx="10" fill="#15d66f"/>
+        <rect x="9" y="16" width="30" height="20" rx="10" fill="#e3a72f"/>
         <circle cx="18" cy="26" r="2.4" fill="#ffffff"/>
         <circle cx="30" cy="24" r="2" fill="#ffffff"/>
         <circle cx="34" cy="28" r="2" fill="#ffffff"/>
@@ -124,23 +124,23 @@ export const navIcons = {
       </svg>
     `),
     inactive: svgToDataUri(`
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#c8d0d8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#777980" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <rect x="9" y="16" width="30" height="20" rx="10"/>
         <path d="M14 26h8M18 22v8"/>
-        <circle cx="30" cy="24" r="1.5" fill="#c8d0d8" stroke="none"/>
-        <circle cx="34" cy="28" r="1.5" fill="#c8d0d8" stroke="none"/>
+        <circle cx="30" cy="24" r="1.5" fill="#777980" stroke="none"/>
+        <circle cx="34" cy="28" r="1.5" fill="#777980" stroke="none"/>
       </svg>
     `)
   },
   me: {
     active: svgToDataUri(`
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-        <circle cx="24" cy="15" r="8" fill="#15d66f"/>
-        <path d="M9 39c3-8.5 8.8-13 15-13s12 4.5 15 13" fill="#15d66f"/>
+        <circle cx="24" cy="15" r="8" fill="#6f5bd3"/>
+        <path d="M9 39c3-8.5 8.8-13 15-13s12 4.5 15 13" fill="#6f5bd3"/>
       </svg>
     `),
     inactive: svgToDataUri(`
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#c8d0d8" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#777980" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="24" cy="15" r="7"/>
         <path d="M11 38c2.7-7.5 7.7-11.5 13-11.5S34.3 30.5 37 38"/>
       </svg>

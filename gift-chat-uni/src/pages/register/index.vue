@@ -1,36 +1,46 @@
 <template>
-  <view class="page-shell soft-page">
-    <view class="panel">
-      <text class="eyebrow">Sign up</text>
-      <view style="height: 12rpx"></view>
-      <text class="title">Create your CardBrother account</text>
-    </view>
-
-    <view class="panel">
-      <text class="field-label">Username</text>
-      <input v-model.trim="form.username" class="field-input" placeholder="Enter a unique username" />
-      <view style="height: 20rpx"></view>
-      <text class="field-label">Email</text>
-      <input v-model.trim="form.email" class="field-input" placeholder="Optional email address" />
-      <view style="height: 20rpx"></view>
-      <text class="field-label">Phone number</text>
-      <view class="phone-row">
-        <picker :range="countryCodeLabels" :value="selectedCountryIndex" @change="handleCountryChange">
-          <view class="country-picker">{{ selectedCountry.label }}</view>
-        </picker>
-        <input v-model.trim="form.phone" class="field-input phone-input" placeholder="Enter local phone number only" />
+  <view class="page-shell soft-page register-page">
+    <view class="page-stack">
+      <view class="page-header register-hero tone-market">
+        <view class="page-header-copy">
+          <text class="eyebrow">New account</text>
+          <text class="title">Create your CardBrother account</text>
+        </view>
+        <text class="signin-link" @click="goLogin">Sign in</text>
       </view>
-      <text class="phone-help">{{ phoneHelpText }}</text>
-      <view style="height: 20rpx"></view>
-      <text class="field-label">Password</text>
-      <input v-model="form.password" class="field-input" password placeholder="At least 8 characters" />
-      <view style="height: 20rpx"></view>
-      <text class="field-label">Invite code</text>
-      <input v-model.trim="form.inviteCode" class="field-input" placeholder="Optional invite code" />
-      <view style="height: 24rpx"></view>
-      <button class="primary-button" @click="handleSubmit">Create account</button>
-      <view style="height: 16rpx"></view>
-      <text v-if="notice" class="muted">{{ notice }}</text>
+
+      <view class="register-form surface-card">
+        <view class="form-grid">
+          <view class="form-field">
+            <text class="field-label">Username</text>
+            <input v-model.trim="form.username" class="field-input" placeholder="Enter a unique username" />
+          </view>
+          <view class="form-field">
+            <text class="field-label">Email</text>
+            <input v-model.trim="form.email" class="field-input" placeholder="Optional email address" />
+          </view>
+          <view class="form-field form-field-wide">
+            <text class="field-label">Phone number</text>
+            <view class="phone-row">
+              <picker class="country-control" :range="countryCodeLabels" :value="selectedCountryIndex" @change="handleCountryChange">
+                <view class="country-picker">{{ selectedCountry.label }}</view>
+              </picker>
+              <input v-model.trim="form.phone" class="field-input phone-input" type="number" placeholder="Local phone number" />
+            </view>
+            <text class="phone-help">{{ phoneHelpText }}</text>
+          </view>
+          <view class="form-field">
+            <text class="field-label">Password</text>
+            <input v-model="form.password" class="field-input" password placeholder="At least 8 characters" />
+          </view>
+          <view class="form-field">
+            <text class="field-label">Invite code</text>
+            <input v-model.trim="form.inviteCode" class="field-input" placeholder="Optional invite code" />
+          </view>
+        </view>
+        <text v-if="notice" class="form-notice">{{ notice }}</text>
+        <button class="primary-button submit-button" @click="handleSubmit">Create account</button>
+      </view>
     </view>
   </view>
 </template>
@@ -154,6 +164,10 @@ function handleCountryChange(event: { detail: { value: number | string } }) {
   selectedCountryIndex.value = Number(event.detail.value || 0)
 }
 
+function goLogin() {
+  uni.navigateBack({ fail: () => uni.redirectTo({ url: '/pages/login/index' }) })
+}
+
 function normalizeLocalPhone(value: string) {
   const trimmed = value.trim()
   const normalizedCountry = selectedCountry.value.countryCode.replace(/[^0-9]/g, '')
@@ -181,25 +195,74 @@ function validateLocalPhone(phone: string) {
 </script>
 
 <style scoped lang="scss">
-.phone-row {
+.register-page {
+  padding-bottom: 48rpx;
+}
+
+.page-header-copy {
   display: flex;
-  gap: 12rpx;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.register-hero {
+  padding: 26rpx 28rpx;
   align-items: center;
+  border-bottom: 0;
+}
+
+.signin-link {
+  flex: 0 0 auto;
+  padding: 16rpx 0;
+  color: #002fa7;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.register-form {
+  padding: 30rpx 28rpx;
+  box-shadow: 0 12rpx 34rpx rgba(34, 54, 74, 0.07);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24rpx;
+}
+
+.form-field,
+.form-field-wide {
+  min-width: 0;
+}
+
+.phone-row {
+  display: grid;
+  grid-template-columns: minmax(176rpx, 220rpx) minmax(0, 1fr);
+  gap: 12rpx;
+  align-items: stretch;
+  width: 100%;
+}
+
+.country-control {
+  min-width: 0;
 }
 
 .country-picker {
-  height: 92rpx;
-  min-width: 220rpx;
-  padding: 0 18rpx;
-  border-radius: 12rpx;
-  background: #f2f5f7;
-  border: 1rpx solid rgba(136, 153, 166, 0.16);
+  height: 88rpx;
+  width: 100%;
+  padding: 0 16rpx;
+  box-sizing: border-box;
+  border-radius: 6rpx;
+  background: #f7f7f8;
+  border: 1rpx solid #c8c9cf;
   display: flex;
   align-items: center;
-  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 24rpx;
-  font-weight: 800;
-  color: #20262d;
+  font-weight: 700;
+  color: #111111;
 }
 
 .phone-input {
@@ -212,17 +275,28 @@ function validateLocalPhone(phone: string) {
   margin-top: 8rpx;
   font-size: 22rpx;
   line-height: 1.4;
-  color: #6f7a86;
+  color: #6f7178;
 }
 
-@media (max-width: 420px) {
-  .phone-row {
-    align-items: stretch;
-    flex-direction: column;
+.form-notice {
+  display: block;
+  margin-top: 22rpx;
+  color: #b42318;
+  font-size: 24rpx;
+}
+
+.submit-button {
+  width: 100%;
+  margin-top: 28rpx;
+}
+
+@media (min-width: 768px) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .country-picker {
-    justify-content: flex-start;
+  .form-field-wide {
+    grid-column: 1 / -1;
   }
 }
 </style>

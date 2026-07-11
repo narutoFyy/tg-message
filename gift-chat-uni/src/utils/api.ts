@@ -572,8 +572,8 @@ export function fetchLotteryEligibility() {
   return request<LotteryEligibility>('/lottery/eligibility')
 }
 
-export function spinLottery(prizeName?: string) {
-  return request<LotteryDrawResult>('/lottery/spin', 'POST', prizeName ? { prizeName } : undefined)
+export function spinLottery() {
+  return request<LotteryDrawResult>('/lottery/spin', 'POST')
 }
 
 export function fetchLotteryWinners() {

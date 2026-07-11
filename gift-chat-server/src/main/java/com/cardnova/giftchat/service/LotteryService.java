@@ -68,7 +68,7 @@ public class LotteryService {
     }
 
     @Transactional
-    public LotteryDrawResult spin(String requestedPrizeName) {
+    public LotteryDrawResult spin() {
         UserEntity currentUser = currentUserService.getCurrentUser();
         LocalDateTime now = LocalDateTime.now();
         LotteryEligibility eligibility = eligibilityFor(currentUser, now);
@@ -76,7 +76,7 @@ public class LotteryService {
             throw new IllegalArgumentException(eligibility.message());
         }
 
-        LotteryPrizeEntity prize = choosePrize(requestedPrizeName);
+        LotteryPrizeEntity prize = choosePrize();
         LotteryDrawRecordEntity record = new LotteryDrawRecordEntity();
         record.setId(UUID.randomUUID().toString());
         record.setUser(currentUser);
@@ -222,17 +222,12 @@ public class LotteryService {
         return "After VIP upgrade or admin reset";
     }
 
-    private LotteryPrizeEntity choosePrize(String requestedPrizeName) {
-        List<LotteryPrizeEntity> prizes = lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc();
+    private LotteryPrizeEntity choosePrize() {
+        List<LotteryPrizeEntity> prizes = lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
+            .filter(prize -> DRAWABLE_PRIZE_NAMES.contains(prize.getName()))
+            .toList();
         if (prizes.isEmpty()) {
             throw new IllegalArgumentException("No drawable lottery prize is enabled");
-        }
-        if (StringUtils.hasText(requestedPrizeName)) {
-            String normalized = requestedPrizeName.trim();
-            return prizes.stream()
-                .filter(prize -> normalized.equals(prize.getName()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Unsupported lottery prize"));
         }
         int totalWeight = prizes.stream().mapToInt(prize -> Math.max(0, prize.getWeightValue())).sum();
         if (totalWeight <= 0) {

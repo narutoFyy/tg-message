@@ -996,8 +996,8 @@ export function useAppStore() {
     return orders
   }
 
-  async function spinLottery(prizeName?: string) {
-    const result: LotteryDrawResult = await spinLotteryRequest(prizeName)
+  async function spinLottery() {
+    const result: LotteryDrawResult = await spinLotteryRequest()
     state.lotteryEligibility = result.eligibility
     await refreshLotteryWinners().catch(() => [])
     return result

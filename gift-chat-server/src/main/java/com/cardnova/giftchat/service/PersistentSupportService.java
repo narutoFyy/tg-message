@@ -313,6 +313,37 @@ public class PersistentSupportService {
     }
 
     @Transactional
+    public ChatMessage appendUserOrderMessage(
+        SupportConversationEntity conversation,
+        UserEntity sender,
+        String content
+    ) {
+        if (sender == null || !conversation.getCustomerUser().getId().equals(sender.getId())) {
+            throw new IllegalArgumentException("Order message sender does not own the support conversation");
+        }
+        SupportMessageEntity saved = appendMessageEntity(conversation, sender, "ME", "TEXT", content, "", null);
+        ChatMessage message = normalizeOwnSupportMessage(saved);
+        mirrorAfterCommit(saved);
+        realtimeChatService.broadcast(
+            RealtimeChatService.supportChannel(conversation.getId()),
+            sender.getId(),
+            "me",
+            "friend",
+            "text",
+            saved.getContent(),
+            saved.getId(),
+            MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
+            saved.getClientMessageId(),
+            saved.getServerSeq(),
+            saved.getDeliveryStatus(),
+            saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
+            saved.getFailedReason(),
+            null
+        );
+        return message;
+    }
+
+    @Transactional
     public ChatMessage appendStaffMessage(
         SupportConversationEntity conversation,
         UserEntity sender,
@@ -393,10 +424,9 @@ public class PersistentSupportService {
                 existing.setAssignedAgent(selectBalancedAgent());
                 existing.setAssignmentStatus("AUTO_ASSIGNED");
                 existing.setUpdatedAt(LocalDateTime.now());
-                SupportConversationEntity saved = supportConversationRepository.save(existing);
-                sendAgentWelcomeMessageIfNeeded(saved);
-                return saved;
+                existing = supportConversationRepository.save(existing);
             }
+            sendAgentWelcomeMessageIfNeeded(existing);
             return existing;
         }
 
@@ -478,8 +508,9 @@ public class PersistentSupportService {
             return;
         }
         UserEntity agent = conversation.getAssignedAgent();
-        AgentWelcomeMessageEntity welcome = agentWelcomeMessageRepository.findByAgent_Id(agent.getId()).orElse(null);
-        if (welcome == null || !Boolean.TRUE.equals(welcome.getEnabled()) || !StringUtils.hasText(welcome.getContent())) {
+        AgentWelcomeMessageEntity welcome = agentWelcomeMessageRepository.findByAgent_Id(agent.getId())
+            .orElseGet(() -> createDefaultAgentWelcomeMessage(agent));
+        if (!Boolean.TRUE.equals(welcome.getEnabled()) || !StringUtils.hasText(welcome.getContent())) {
             return;
         }
 
@@ -487,6 +518,18 @@ public class PersistentSupportService {
         conversation.setWelcomeMessageSentAt(LocalDateTime.now());
         conversation.setWelcomeMessageAgent(agent);
         supportConversationRepository.save(conversation);
+    }
+
+    private AgentWelcomeMessageEntity createDefaultAgentWelcomeMessage(UserEntity agent) {
+        LocalDateTime now = LocalDateTime.now();
+        AgentWelcomeMessageEntity welcome = new AgentWelcomeMessageEntity();
+        welcome.setId(UUID.randomUUID().toString());
+        welcome.setAgent(agent);
+        welcome.setContent(AgentWelcomeMessageDefaults.CONTENT);
+        welcome.setEnabled(true);
+        welcome.setCreatedAt(now);
+        welcome.setUpdatedAt(now);
+        return agentWelcomeMessageRepository.save(welcome);
     }
 
     private boolean canAccessConversation(UserEntity user, SupportConversationEntity conversation) {

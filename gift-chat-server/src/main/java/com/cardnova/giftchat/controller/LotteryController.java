@@ -1,7 +1,6 @@
 package com.cardnova.giftchat.controller;
 
 import com.cardnova.giftchat.api.ApiResponse;
-import com.cardnova.giftchat.dto.LotterySpinRequest;
 import com.cardnova.giftchat.dto.CreateLotteryCashClaimRequest;
 import com.cardnova.giftchat.dto.CreateLotteryFulfillmentRequest;
 import com.cardnova.giftchat.model.LotteryDrawResult;
@@ -48,9 +47,8 @@ public class LotteryController {
     }
 
     @PostMapping("/spin")
-    public ApiResponse<LotteryDrawResult> spin(@RequestBody(required = false) LotterySpinRequest request) {
-        String prizeName = request == null ? "" : request.prizeName();
-        return ApiResponse.success("lottery_drawn", lotteryService.spin(prizeName));
+    public ApiResponse<LotteryDrawResult> spin() {
+        return ApiResponse.success("lottery_drawn", lotteryService.spin());
     }
 
     @GetMapping("/winners")

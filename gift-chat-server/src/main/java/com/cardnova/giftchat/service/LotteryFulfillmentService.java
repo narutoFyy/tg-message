@@ -102,7 +102,7 @@ public class LotteryFulfillmentService {
         record.setFulfillmentStatus("PROCESSING");
         record.setProcessedAt(now);
         drawRecordRepository.save(record);
-        persistentSupportService.appendSystemMessage(conversation, fulfillmentMessage(saved));
+        persistentSupportService.appendUserOrderMessage(conversation, currentUser, userOrderMessage(saved));
         notifySupport(currentUser, assignedAgent, saved);
         return toItem(saved);
     }
@@ -141,24 +141,16 @@ public class LotteryFulfillmentService {
         return "PF" + today.format(DateTimeFormatter.ofPattern("yyMMdd")) + "-" + String.format("%03d", count);
     }
 
-    private String fulfillmentMessage(LotteryFulfillmentOrderEntity order) {
-        return """
-            Physical prize fulfillment %s
-            Prize: %s
-            Lottery record: %s
-            Recipient: %s
-            Phone: %s
-            Country: %s
-            Address: %s
-            """.formatted(
-            order.getOrderNo(),
-            order.getLotteryDrawRecord().getPrize().getName(),
-            order.getLotteryDrawRecord().getId(),
-            order.getRecipientName(),
-            order.getPhone(),
-            order.getCountry(),
-            order.getAddressLine()
-        ).trim();
+    private String userOrderMessage(LotteryFulfillmentOrderEntity order) {
+        return "I submitted a delivery request for my %s prize (order %s). Recipient: %s; phone: %s; country: %s; address: %s."
+            .formatted(
+                order.getLotteryDrawRecord().getPrize().getName(),
+                order.getOrderNo(),
+                order.getRecipientName(),
+                order.getPhone(),
+                order.getCountry(),
+                order.getAddressLine()
+            );
     }
 
     private void notifySupport(UserEntity user, UserEntity assignedAgent, LotteryFulfillmentOrderEntity order) {

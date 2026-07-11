@@ -31,7 +31,7 @@
         <view class="prize-section">
           <view class="section-head"><text class="section-title">Featured prizes</text><text class="section-count">{{ featuredPrizes.length }}</text></view>
           <view class="prize-list">
-            <view v-for="prize in featuredPrizes" :key="prize.name" class="prize-row"><image class="prize-image" :src="prize.image" mode="aspectFit" /><view><text class="prize-name">{{ prize.name }}</text><text class="prize-note">{{ prize.note }}</text></view></view>
+            <view v-for="prize in featuredPrizes" :key="prize.name" class="prize-row"><image v-if="prize.image" class="prize-image" :src="prize.image" mode="aspectFit" /><view><text class="prize-name">{{ prize.name }}</text><text class="prize-note">{{ prize.note }}</text></view></view>
           </view>
         </view>
         <view class="winner-section">
@@ -104,11 +104,12 @@ const claimDialogOpen = ref(false); const claimSubmitting = ref(false); const cl
 const bankForm = reactive({ country: '', accountName: '', bankName: '', accountNumber: '' })
 const deliveryForm = reactive({ recipientName: '', phone: '', country: '', addressLine: '' })
 const featuredPrizes = [
-  { name: 'iPhone 17', note: 'Phone prize', image: '/static/lottery/iphone.jpg' },
-  { name: 'iPad', note: 'Tablet prize', image: '/static/lottery/ipad.jpg' },
-  { name: 'Computer', note: 'Laptop prize', image: '/static/lottery/diannao.jpg' }
+  { name: 'NGN 100', note: 'Cash prize', image: '' },
+  { name: 'NGN 200', note: 'Cash prize', image: '' },
+  { name: 'NGN 500', note: 'Cash prize', image: '' },
+  { name: 'NGN 1,000', note: 'Maximum cash prize', image: '' }
 ]
-const wheelPrizes = ['NGN 500', 'iPad', 'NGN 800', 'Computer', 'NGN 500', 'NGN 1,000', 'NGN 2,000', 'NGN 3,000', 'NGN 5,000', 'iPhone 17']
+const wheelPrizes = ['NGN 100', 'NGN 200', 'NGN 500', 'NGN 1,000', 'NGN 100', 'NGN 200', 'NGN 500', 'NGN 1,000']
 const spinDurationMs = 4000
 onShow(() => {
   store.refreshLotteryEligibility().catch(() => undefined)
@@ -124,7 +125,7 @@ const lotteryRecords = computed(() => store.state.lotteryRecords)
 const eligibilityText = computed(() => { if (!eligibility.value) return 'Checking your draw chance.'; if (eligibility.value.eligible) return 'You have a draw chance available.'; return eligibility.value.message || 'No draw chance available.' })
 const spinHint = computed(() => { if (!eligibility.value) return ''; if (eligibility.value.eligible) return 'The server determines the final prize.'; return eligibility.value.nextAvailableAt ? `Next: ${eligibility.value.nextAvailableAt}` : 'Upgrade VIP or wait for reset.' })
 function wheelPrizeImage(prize: string) { return featuredPrizes.find((item) => item.name === prize)?.image || '' }
-function labelStyle(index: number, prize: string) { const angle = index * (360 / wheelPrizes.length) + 18; const distance = wheelPrizeImage(prize) ? 176 : 185; return `transform: rotate(${angle}deg) translateY(-${distance}rpx) rotate(-${angle}deg);` }
+function labelStyle(index: number, prize: string) { const sliceAngle = 360 / wheelPrizes.length; const angle = index * sliceAngle + sliceAngle / 2; const distance = wheelPrizeImage(prize) ? 176 : 185; return `transform: rotate(${angle}deg) translateY(-${distance}rpx) rotate(-${angle}deg);` }
 function prizeKey(prize: string) {
   const cashValue = prize.replace(/[^\d]/g, '')
   return cashValue ? `cash-${cashValue}` : prize.trim().toLowerCase()
@@ -204,7 +205,7 @@ async function submitClaim() {
 .wheel-section { min-height: 650rpx; padding: 28rpx; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--cb-sky); border: 1rpx solid #cfe4fb; border-radius: 12rpx; }
 .wheel-stage { width: min(620rpx, 380px); aspect-ratio: 1; position: relative; display: flex; align-items: center; justify-content: center; }
 .pointer { position: absolute; top: -3rpx; left: 50%; width: 0; height: 0; transform: translateX(-50%); border-left: 18rpx solid transparent; border-right: 18rpx solid transparent; border-top: 48rpx solid #002fa7; z-index: 4; }
-.wheel { position: relative; width: 100%; height: 100%; overflow: hidden; border: 7rpx solid #ffffff; border-radius: 50%; background: conic-gradient(var(--cb-amber) 0 36deg, var(--cb-mint) 36deg 72deg, var(--cb-sky) 72deg 108deg, var(--cb-coral) 108deg 144deg, var(--cb-lilac) 144deg 180deg, #ffe8b8 180deg 216deg, #caf2de 216deg 252deg, #d7eaff 252deg 288deg, #ffd8d2 288deg 324deg, #e2dafc 324deg 360deg); box-sizing: border-box; box-shadow: 0 18rpx 46rpx rgba(34, 54, 74, 0.14); transition: transform 4s cubic-bezier(0.16, 0.72, 0.14, 1); }
+.wheel { position: relative; width: 100%; height: 100%; overflow: hidden; border: 7rpx solid #ffffff; border-radius: 50%; background: conic-gradient(var(--cb-amber) 0 45deg, var(--cb-mint) 45deg 90deg, var(--cb-sky) 90deg 135deg, var(--cb-coral) 135deg 180deg, var(--cb-lilac) 180deg 225deg, #ffe8b8 225deg 270deg, #caf2de 270deg 315deg, #d7eaff 315deg 360deg); box-sizing: border-box; box-shadow: 0 18rpx 46rpx rgba(34, 54, 74, 0.14); transition: transform 4s cubic-bezier(0.16, 0.72, 0.14, 1); }
 .wheel-spoke { position: absolute; left: 50%; top: 50%; width: 2rpx; height: 50%; background: #c8c9cf; transform-origin: 50% 0; }
 .wheel-spoke:nth-child(odd) { background: #002fa7; }
 .wheel-label { position: absolute; left: 50%; top: 50%; width: 108rpx; margin-left: -54rpx; margin-top: -18rpx; display: flex; flex-direction: column; align-items: center; gap: 3rpx; color: #111111; font-size: 18rpx; font-weight: 700; text-align: center; }

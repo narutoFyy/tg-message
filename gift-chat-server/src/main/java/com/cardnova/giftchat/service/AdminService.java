@@ -86,7 +86,7 @@ public class AdminService {
 
     @Transactional
     public AgentItem createAgent(CreateAgentRequest request) {
-        requireAdmin();
+        UserEntity admin = requireAdmin();
         String username = requireTrimmed(request.username(), "Agent username is required");
         String email = normalizeNullable(request.email());
         String phone = normalizeNullable(request.phone());
@@ -113,6 +113,17 @@ public class AdminService {
         agent.setCreatedAt(LocalDateTime.now());
         agent.setUpdatedAt(LocalDateTime.now());
         UserEntity saved = userRepository.save(agent);
+
+        LocalDateTime now = LocalDateTime.now();
+        AgentWelcomeMessageEntity welcome = new AgentWelcomeMessageEntity();
+        welcome.setId(UUID.randomUUID().toString());
+        welcome.setAgent(saved);
+        welcome.setContent(AgentWelcomeMessageDefaults.CONTENT);
+        welcome.setEnabled(true);
+        welcome.setUpdatedBy(admin);
+        welcome.setCreatedAt(now);
+        welcome.setUpdatedAt(now);
+        agentWelcomeMessageRepository.save(welcome);
 
         return toAgentItem(saved);
     }

@@ -156,11 +156,11 @@ public class WithdrawalService {
             currentUser.getPhone(),
             "Lottery prize withdrawal: " + record.getId()
         );
-        persistentSupportService.appendSystemMessage(conversation, withdrawalMessage(saved, true));
         notifyWithdrawal(currentUser, assignedAgent, saved);
         record.setFulfillmentStatus("PROCESSING");
         record.setProcessedAt(LocalDateTime.now());
         lotteryDrawRecordRepository.save(record);
+        persistentSupportService.appendUserOrderMessage(conversation, currentUser, lotteryClaimUserMessage(saved));
 
         return toItem(saved);
     }
@@ -229,6 +229,17 @@ public class WithdrawalService {
             saved.getAccountNumber(),
             lotteryWithdrawal && saved.getLotteryDrawRecord() != null ? "Lottery record: " + saved.getLotteryDrawRecord().getId() : ""
         ).trim();
+    }
+
+    private String lotteryClaimUserMessage(WithdrawalRequestEntity withdrawal) {
+        return "I submitted a lottery cash claim for %s (order %s). Payout account: %s at %s, account number %s."
+            .formatted(
+                withdrawal.getAmount(),
+                withdrawal.getRequestNo(),
+                withdrawal.getAccountName(),
+                withdrawal.getBankName(),
+                withdrawal.getAccountNumber()
+            );
     }
 
     private void notifyWithdrawal(UserEntity currentUser, UserEntity assignedAgent, WithdrawalRequestEntity saved) {

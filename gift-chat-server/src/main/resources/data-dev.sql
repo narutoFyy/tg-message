@@ -50,9 +50,9 @@ VALUES
 
 INSERT INTO support_message (id, conversation_id, sender_user_id, sender_role, message_type, content, created_at)
 VALUES
-('support-msg-1', 'support-1', 'agent-1', 'SUPPORT', 'TEXT', 'Welcome to CardBrother. I am Luna from support and I can help you with rates or payout questions.', CURRENT_TIMESTAMP),
+('support-msg-1', 'support-1', 'agent-1', 'SUPPORT', 'TEXT', 'Welcome to Xcard. I am Luna from support and I can help you with rates or payout questions.', CURRENT_TIMESTAMP),
 ('support-msg-2', 'support-1', 'agent-1', 'SUPPORT', 'TEXT', 'This prototype already supports rates, direct chat, support chat, and blacklist lookup.', CURRENT_TIMESTAMP),
-('support-msg-3', 'support-2', 'agent-1', 'SUPPORT', 'TEXT', 'Hi John! Welcome to CardBrother. How can I help you today?', CURRENT_TIMESTAMP),
+('support-msg-3', 'support-2', 'agent-1', 'SUPPORT', 'TEXT', 'Hi John! Welcome to Xcard. How can I help you today?', CURRENT_TIMESTAMP),
 ('support-msg-4', 'support-2', 'user-5', 'USER', 'TEXT', 'Hello! I want to sell some iTunes cards.', CURRENT_TIMESTAMP),
 ('support-msg-5', 'support-2', 'agent-1', 'SUPPORT', 'TEXT', 'Great! What is the card country and face value?', CURRENT_TIMESTAMP),
 ('support-msg-6', 'support-2', 'user-5', 'USER', 'TEXT', 'USA $100 x 2', CURRENT_TIMESTAMP),

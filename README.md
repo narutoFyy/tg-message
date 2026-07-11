@@ -1,6 +1,6 @@
-# CardBrother Gift Chat
+# Xcard Gift Chat
 
-CardBrother Gift Chat is a gift-card rate, order, wallet, and one-to-one customer-service chat system. The project contains a Spring Boot backend and a uni-app/Vue frontend, with support for realtime IM, media messages, sell-card flows, withdrawal/loan requests, customer-service workbench operations, and TRTC video calls.
+Xcard Gift Chat is a gift-card rate, order, wallet, and one-to-one customer-service chat system. The project contains a Spring Boot backend and a uni-app/Vue frontend, with support for realtime IM, media messages, sell-card flows, withdrawal/loan requests, customer-service workbench operations, and TRTC video calls.
 
 ## Modules
 

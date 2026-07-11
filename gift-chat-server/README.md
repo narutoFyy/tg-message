@@ -1,6 +1,6 @@
-# CardBrother Server
+# Xcard Server
 
-`gift-chat-server` is the Spring Boot backend for the CardBrother production MVP.
+`gift-chat-server` is the Spring Boot backend for the Xcard production MVP.
 
 It now includes:
 

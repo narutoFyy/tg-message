@@ -1,6 +1,6 @@
-# CardBrother Uni App
+# Xcard Uni App
 
-`gift-chat-uni` is the active frontend for the CardBrother production MVP.
+`gift-chat-uni` is the active frontend for the Xcard production MVP.
 
 It targets:
 

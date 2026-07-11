@@ -2,7 +2,7 @@
   <view class="page-shell soft-page games-page">
     <view class="games-content">
       <view class="page-header games-hero tone-reward">
-        <view class="page-header-copy"><text class="eyebrow">Games</text><text class="title">Reward activities</text><text class="subtitle">Available activities linked to your CardBrother account.</text></view>
+        <view class="page-header-copy"><text class="eyebrow">Games</text><text class="title">Reward activities</text><text class="subtitle">Available activities linked to your Xcard account.</text></view>
       </view>
       <view class="activity-row" @click="handleGameCard(gameCard)">
         <image class="activity-image" src="/static/lottery/stone-technology.png" mode="aspectFit" />

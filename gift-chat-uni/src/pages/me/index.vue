@@ -166,7 +166,7 @@ const salesRankLabel = computed(() => rankLabel(salesRanking.value?.currentUser?
 const invitationCount = computed(() => invitationRanking.value?.currentUser?.score || '0 invites')
 const invitedUserCount = computed(() => invitationCount.value.match(/\d+/)?.[0] || '0')
 const invitationRankLabel = computed(() => rankLabel(invitationRanking.value?.currentUser?.rank, '100+'))
-const displayName = computed(() => store.state.currentUser?.username || 'CardBrother user')
+const displayName = computed(() => store.state.currentUser?.username || 'Xcard user')
 const avatarSrc = computed(() => {
   const avatarUrl = store.state.currentUser?.avatarUrl
   return avatarUrl ? resolveMediaUrl(avatarUrl) : uiIcons.user
@@ -255,7 +255,7 @@ function shareInvite() {
     return
   }
   uni.setClipboardData({
-    data: `Join CardBrother with my invite code: ${inviteCode.value}`,
+    data: `Join Xcard with my invite code: ${inviteCode.value}`,
     success() { notice.value = 'Share text copied to clipboard.' }
   })
 }

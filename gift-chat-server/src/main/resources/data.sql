@@ -40,7 +40,7 @@ VALUES
 
 INSERT INTO support_message (id, conversation_id, sender_user_id, sender_role, message_type, content, created_at)
 VALUES
-('support-msg-1', 'support-1', 'agent-1', 'SUPPORT', 'TEXT', 'Welcome to CardBrother. I am Luna from support and I can help you with rates or payout questions.', CURRENT_TIMESTAMP),
+('support-msg-1', 'support-1', 'agent-1', 'SUPPORT', 'TEXT', 'Welcome to Xcard. I am Luna from support and I can help you with rates or payout questions.', CURRENT_TIMESTAMP),
 ('support-msg-2', 'support-1', 'agent-1', 'SUPPORT', 'TEXT', 'This prototype already supports rates, direct chat, support chat, and blacklist lookup.', CURRENT_TIMESTAMP);
 
 INSERT INTO friendship (id, requester_user_id, addressee_user_id, status_code, created_at, updated_at)

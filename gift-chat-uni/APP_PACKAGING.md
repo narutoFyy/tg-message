@@ -1,4 +1,4 @@
-# CardBrother App Packaging Notes
+# Xcard App Packaging Notes
 
 ## Android target
 
@@ -32,7 +32,7 @@ The project now includes the iOS packaging items that can be prepared without an
 Current readiness:
 
 - Bundle ID: `com.cardbrother.app`
-- App display name: `CardBrother`
+- App display name: `Xcard`
 - iOS minimum target: `12.0`
 - iPhone/iPad portrait packaging preset
 - iOS icon placeholders in `src/static/app-icons/ios/`

@@ -4,7 +4,7 @@
       <view class="page-header register-hero tone-market">
         <view class="page-header-copy">
           <text class="eyebrow">New account</text>
-          <text class="title">Create your CardBrother account</text>
+          <text class="title">Create your Xcard account</text>
         </view>
         <text class="signin-link" @click="goLogin">Sign in</text>
       </view>

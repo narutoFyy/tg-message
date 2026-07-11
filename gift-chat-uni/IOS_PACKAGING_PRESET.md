@@ -1,10 +1,10 @@
-# CardBrother iOS Packaging Preset
+# Xcard iOS Packaging Preset
 
 This file tracks iOS packaging settings that can be prepared before an Apple Developer account is available.
 
 ## App Identity
 
-- App name: `CardBrother`
+- App name: `Xcard`
 - Bundle ID: `com.cardbrother.app`
 - uni-app appid: `__UNI__CARDBROTHER85`
 - Version: `1.0.0`
@@ -18,7 +18,7 @@ This file tracks iOS packaging settings that can be prepared before an Apple Dev
 The iOS icon set is under `src/static/app-icons/ios/`.
 The iOS splash images are under `src/static/splash/ios/`.
 
-Current images are generated from the existing `src/static/cardbrother-logo.png` and are ready as packaging placeholders. Replace the files with final design assets using the same names when the production icon and launch screen are finalized.
+Current images are generated from `src/static/lottery/stone-technology-icon.png` and use the same black-and-gold Xcard brand mark shown in the app.
 
 ## Network
 
@@ -44,7 +44,7 @@ VITE_WS_BASE_URL=/ws
 
 Open `gift-chat-uni` in HBuilderX and confirm:
 
-- `manifest.json` app name is `CardBrother`
+- `manifest.json` app name is `Xcard`
 - iOS bundle identifier is `com.cardbrother.app`
 - iOS icon resources point to `static/app-icons/ios`
 - iOS splash resources point to `static/splash/ios`

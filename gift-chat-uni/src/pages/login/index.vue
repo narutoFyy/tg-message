@@ -3,8 +3,8 @@
     <view class="login-layout">
       <view class="brand-panel tone-market">
         <view class="brand-mark">
-          <image class="brand-logo" src="/static/cardbrother-logo.png" mode="aspectFit" />
-          <text class="brand-name">CardBrother</text>
+          <image class="brand-logo" src="/static/lottery/stone-technology-icon.png" mode="aspectFit" />
+          <text class="brand-name">Xcard</text>
         </view>
         <view class="brand-copy">
           <text class="eyebrow">Gift card exchange</text>

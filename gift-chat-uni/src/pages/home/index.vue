@@ -3,9 +3,9 @@
     <view class="home-content">
       <view class="top-head">
         <view class="brand-inline">
-          <image class="brand-logo" src="/static/cardbrother-logo.png" mode="aspectFit" />
+          <image class="brand-logo" src="/static/lottery/stone-technology-icon.png" mode="aspectFit" />
           <view>
-            <text class="brand-title">CardBrother</text>
+            <text class="brand-title">Xcard</text>
             <text class="brand-caption">Rate desk</text>
           </view>
         </view>

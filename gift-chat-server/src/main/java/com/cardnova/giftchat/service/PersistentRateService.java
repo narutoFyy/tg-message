@@ -58,7 +58,7 @@ public class PersistentRateService {
 
         GiftCardRateEntity entity = new GiftCardRateEntity();
         entity.setId(UUID.randomUUID().toString());
-        entity.setCardName(request.cardName().trim());
+        applyCardIdentity(entity, request);
         entity.setRegionCode(normalizeRegionCode(request.region()));
         entity.setRateValue(request.rate().trim());
         entity.setStatusCode("ACTIVE");
@@ -90,7 +90,7 @@ public class PersistentRateService {
 
         GiftCardRateEntity entity = giftCardRateRepository.findById(rateId)
             .orElseThrow(() -> new IllegalArgumentException("Rate not found"));
-        entity.setCardName(request.cardName().trim());
+        applyCardIdentity(entity, request);
         entity.setRegionCode(normalizeRegionCode(request.region()));
         entity.setRateValue(request.rate().trim());
         entity.setUpdatedAt(LocalDateTime.now());
@@ -113,11 +113,42 @@ public class PersistentRateService {
         return new RateItem(
             entity.getId(),
             entity.getCardName(),
+            entity.getCardCode(),
             entity.getRegionCode(),
             entity.getRateValue(),
             entity.getStatusCode().equalsIgnoreCase("ACTIVE") ? "active" : "paused",
             RATE_TIME_FORMATTER.format(entity.getUpdatedAt())
         );
+    }
+
+    private void applyCardIdentity(GiftCardRateEntity entity, CreateRateRequest request) {
+        String requestedCode = value(request.cardCode()).trim();
+        if (!requestedCode.isEmpty()) {
+            GiftCardCatalog.CardDefinition card = GiftCardCatalog.findByCode(requestedCode)
+                .orElseThrow(() -> new IllegalArgumentException("Unsupported gift card code"));
+            entity.setCardCode(card.code());
+            entity.setCardName(card.name());
+            return;
+        }
+
+        String requestedName = value(request.cardName()).trim();
+        validateCustomName(requestedName);
+        GiftCardCatalog.findByName(requestedName).ifPresentOrElse(card -> {
+            entity.setCardCode(card.code());
+            entity.setCardName(card.name());
+        }, () -> {
+            entity.setCardCode(null);
+            entity.setCardName(requestedName);
+        });
+    }
+
+    private void validateCustomName(String name) {
+        if (name.isBlank()) {
+            throw new IllegalArgumentException("Card name is required");
+        }
+        if (name.length() > 128 || name.codePoints().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException("Card name is invalid");
+        }
     }
 
     private String normalizeRegionCode(String region) {
@@ -128,5 +159,9 @@ public class PersistentRateService {
             .replaceAll("[\\s_-]+", "")
             .toUpperCase(Locale.ROOT);
         return REGION_ALIASES.getOrDefault(normalized, trimmed.toUpperCase(Locale.ROOT));
+    }
+
+    private String value(String value) {
+        return value == null ? "" : value;
     }
 }

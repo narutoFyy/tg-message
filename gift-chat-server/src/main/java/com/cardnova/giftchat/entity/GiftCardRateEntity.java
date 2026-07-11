@@ -20,6 +20,9 @@ public class GiftCardRateEntity {
     @Column(name = "card_name", nullable = false, length = 128)
     private String cardName;
 
+    @Column(name = "card_code", length = 64)
+    private String cardCode;
+
     @Column(name = "region_code", nullable = false, length = 32)
     private String regionCode;
 
@@ -50,6 +53,14 @@ public class GiftCardRateEntity {
 
     public void setCardName(String cardName) {
         this.cardName = cardName;
+    }
+
+    public String getCardCode() {
+        return cardCode;
+    }
+
+    public void setCardCode(String cardCode) {
+        this.cardCode = cardCode;
     }
 
     public String getRegionCode() {

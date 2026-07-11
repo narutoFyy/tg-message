@@ -11,28 +11,28 @@ VALUES
 ('agent-5', 'support_zoe', 'zoe@cardnova.app', NULL, '{noop}demo12345', 'AGENT', 'ACTIVE', 'SUPZOE5', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('admin-1', 'admin_mia', 'admin@cardnova.app', NULL, '{noop}demo12345', 'ADMIN', 'ACTIVE', 'ADMINMIA', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
-INSERT INTO gift_card_rate (id, card_name, region_code, rate_value, status_code, updated_at, updated_by)
+INSERT INTO gift_card_rate (id, card_name, card_code, region_code, rate_value, status_code, updated_at, updated_by)
 VALUES
-('rate-1', 'Apple(itunes)', 'NG', '1$ ≈ ₦1051.75', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-2', 'Steam', 'NG', '1$ ≈ ₦886.88', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-3', 'Razer Gold', 'NG', '1$ ≈ ₦1076.56', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-4', 'Zelle', 'NG', '1$ ≈ ₦552.77', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-5', 'Chime', 'NG', '1$ ≈ ₦1203.35', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-6', 'Xbox', 'NG', '1$ ≈ ₦890.67', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-7', 'eBay', 'NG', '1$ ≈ ₦740.96', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-8', 'Sephora', 'NG', '1$ ≈ ₦1053.64', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-9', 'Google', 'NG', '1$ ≈ ₦397.96', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-10', 'Vanilla', 'NG', '1$ ≈ ₦568.51', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-11', 'American Express', 'NG', '1$ ≈ ₦473.76', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-12', 'Apple(itunes)', 'IN', '1$ ≈ ₹82.40', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-13', 'Steam', 'IN', '1$ ≈ ₹78.10', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-14', 'Razer Gold', 'IN', '1$ ≈ ₹83.75', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-15', 'Apple(itunes)', 'CM', '1$ ≈ XAF 605.00', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-16', 'Steam', 'CM', '1$ ≈ XAF 588.00', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-17', 'Razer Gold', 'CM', '1$ ≈ XAF 615.00', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-18', 'Apple(itunes)', 'GH', '1$ ≈ GH₵14.20', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-19', 'Steam', 'GH', '1$ ≈ GH₵13.85', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
-('rate-20', 'Razer Gold', 'GH', '1$ ≈ GH₵14.70', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1');
+('rate-1', 'Apple / iTunes', 'APPLE_ITUNES', 'NG', '1$ ≈ ₦1051.75', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-2', 'Steam', 'STEAM', 'NG', '1$ ≈ ₦886.88', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-3', 'Razer Gold', 'RAZER_GOLD', 'NG', '1$ ≈ ₦1076.56', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-4', 'Zelle', 'ZELLE', 'NG', '1$ ≈ ₦552.77', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-5', 'Chime', 'CHIME', 'NG', '1$ ≈ ₦1203.35', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-6', 'Xbox', 'XBOX', 'NG', '1$ ≈ ₦890.67', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-7', 'eBay', 'EBAY', 'NG', '1$ ≈ ₦740.96', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-8', 'Sephora', 'SEPHORA', 'NG', '1$ ≈ ₦1053.64', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-9', 'Google Play', 'GOOGLE_PLAY', 'NG', '1$ ≈ ₦397.96', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-10', 'Vanilla', 'VANILLA', 'NG', '1$ ≈ ₦568.51', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-11', 'American Express', 'AMERICAN_EXPRESS', 'NG', '1$ ≈ ₦473.76', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-12', 'Apple / iTunes', 'APPLE_ITUNES', 'IN', '1$ ≈ ₹82.40', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-13', 'Steam', 'STEAM', 'IN', '1$ ≈ ₹78.10', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-14', 'Razer Gold', 'RAZER_GOLD', 'IN', '1$ ≈ ₹83.75', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-15', 'Apple / iTunes', 'APPLE_ITUNES', 'CM', '1$ ≈ XAF 605.00', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-16', 'Steam', 'STEAM', 'CM', '1$ ≈ XAF 588.00', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-17', 'Razer Gold', 'RAZER_GOLD', 'CM', '1$ ≈ XAF 615.00', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-18', 'Apple / iTunes', 'APPLE_ITUNES', 'GH', '1$ ≈ GH₵14.20', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-19', 'Steam', 'STEAM', 'GH', '1$ ≈ GH₵13.85', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
+('rate-20', 'Razer Gold', 'RAZER_GOLD', 'GH', '1$ ≈ GH₵14.70', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1');
 
 INSERT INTO support_conversation (id, customer_user_id, assigned_agent_id, assignment_status, created_at, updated_at)
 VALUES

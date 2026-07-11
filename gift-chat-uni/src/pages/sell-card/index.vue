@@ -13,7 +13,7 @@
       </view>
 
       <view class="card-picker tone-market">
-        <image class="card-icon" :src="cardLogoFor(activeRate?.cardName || 'Razer Gold')" mode="aspectFit" />
+        <image class="card-icon" :src="cardLogoFor(activeRate?.cardCode, activeRate?.cardName || 'Razer Gold')" mode="aspectFit" />
         <view class="card-copy">
           <text class="card-name">{{ form.cardName }}</text>
           <text class="muted">Settles in {{ form.settlementCountry }}</text>

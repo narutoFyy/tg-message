@@ -618,7 +618,8 @@ class GiftChatServerApplicationTests {
         mockMvc.perform(get("/api/rates"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.length()").value(greaterThanOrEqualTo(11)))
-            .andExpect(content().string(containsString("Apple(itunes)")))
+            .andExpect(content().string(containsString("Apple / iTunes")))
+            .andExpect(content().string(containsString("APPLE_ITUNES")))
             .andExpect(content().string(containsString("American Express")));
     }
 
@@ -1322,7 +1323,51 @@ class GiftChatServerApplicationTests {
                     }
                     """))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.region").value("NG"));
+            .andExpect(jsonPath("$.data.region").value("NG"))
+            .andExpect(jsonPath("$.data.cardCode").doesNotExist());
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Forged card name",
+                      "cardCode": "STEAM",
+                      "region": "NG",
+                      "rate": "NGN 880 / $1"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.cardCode").value("STEAM"))
+            .andExpect(jsonPath("$.data.cardName").value("Steam"));
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Amex",
+                      "region": "NG",
+                      "rate": "NGN 470 / $1"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.cardCode").value("AMERICAN_EXPRESS"))
+            .andExpect(jsonPath("$.data.cardName").value("American Express"));
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Forged card name",
+                      "cardCode": "NOT_A_CARD",
+                      "region": "NG",
+                      "rate": "NGN 100 / $1"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Unsupported gift card code"));
     }
 
     @Test

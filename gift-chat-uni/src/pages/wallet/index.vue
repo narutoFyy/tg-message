@@ -42,9 +42,12 @@
         </view>
         <view v-if="completedTrades.length" class="trade-list">
           <view v-for="item in completedTrades" :key="item.id" class="trade-row">
-            <view class="trade-copy">
-              <text class="trade-name">{{ item.cardName }}</text>
-              <text class="trade-meta">{{ item.counterpartyName }} / {{ item.updatedAt }}</text>
+            <view class="trade-identity">
+              <image class="trade-logo" :src="cardLogoFor(item.cardName)" mode="aspectFit" />
+              <view class="trade-copy">
+                <text class="trade-name">{{ item.cardName }}</text>
+                <text class="trade-meta">{{ item.counterpartyName }} / {{ item.updatedAt }}</text>
+              </view>
             </view>
             <text class="trade-value">{{ item.payoutAmount }}</text>
           </view>
@@ -63,6 +66,7 @@
 import { computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+import { cardLogoFor } from '@/utils/art'
 
 const store = useAppStore()
 
@@ -206,6 +210,21 @@ function goWithdraw() {
 
 .trade-copy {
   min-width: 0;
+}
+
+.trade-identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.trade-logo {
+  width: 54rpx;
+  height: 54rpx;
+  flex: 0 0 auto;
+  border: 1rpx solid #dedfe3;
+  background: #f7f7f8;
 }
 
 .trade-name,

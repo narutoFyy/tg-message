@@ -548,7 +548,7 @@ export function useAppStore() {
     }
   }
 
-  async function addRate(payload: { cardName: string; region: string; rate: string }) {
+  async function addRate(payload: { cardName: string; cardCode?: string | null; region: string; rate: string }) {
     const rate = await createRateRequest(payload)
     state.rates.unshift(rate)
     return rate
@@ -563,7 +563,7 @@ export function useAppStore() {
     return updated
   }
 
-  async function updateRate(rateId: string, payload: { cardName: string; region: string; rate: string }) {
+  async function updateRate(rateId: string, payload: { cardName: string; cardCode?: string | null; region: string; rate: string }) {
     const updated = await updateRateRequest(rateId, payload)
     const index = state.rates.findIndex((item) => item.id === rateId)
     if (index >= 0) {

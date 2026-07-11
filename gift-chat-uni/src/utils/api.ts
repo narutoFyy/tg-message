@@ -448,6 +448,7 @@ export function updateAccountAvatar(avatarUrl: string) {
 
 export function createRate(payload: {
   cardName: string
+  cardCode?: string | null
   region: string
   rate: string
 }) {
@@ -460,6 +461,7 @@ export function updateRateStatus(rateId: string, status: RateItem['status']) {
 
 export function updateRate(rateId: string, payload: {
   cardName: string
+  cardCode?: string | null
   region: string
   rate: string
 }) {

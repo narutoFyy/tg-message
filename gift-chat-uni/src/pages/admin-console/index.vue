@@ -347,10 +347,13 @@
         <view style="height: 18rpx"></view>
         <view v-for="order in transactions" :key="order.id" class="conversation-card">
           <view class="list-row compact-row">
-            <view>
-              <text class="row-title">{{ order.orderNo }} / {{ order.cardName }}</text>
-              <text class="row-meta">{{ order.faceValue }} / {{ order.payoutAmount }} / {{ order.counterpartyUsername }}</text>
-              <text class="row-meta">{{ order.note }}</text>
+            <view class="admin-order-identity">
+              <image class="admin-order-logo" :src="cardLogoFor(order.cardName)" mode="aspectFit" />
+              <view>
+                <text class="row-title">{{ order.orderNo }} / {{ order.cardName }}</text>
+                <text class="row-meta">{{ order.faceValue }} / {{ order.payoutAmount }} / {{ order.counterpartyUsername }}</text>
+                <text class="row-meta">{{ order.note }}</text>
+              </view>
             </view>
             <text :class="['status-pill', order.status === 'completed' ? 'active' : 'warning']">{{ order.status }}</text>
           </view>
@@ -571,6 +574,7 @@
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref } from 'vue'
+import { cardLogoFor } from '@/utils/art'
 import type {
   AdminDirectConversationItem,
   AdminUserItem,
@@ -1426,6 +1430,21 @@ async function assignConversation(conversationId: string) {
   color: #101820;
   line-height: 1.15;
   word-break: break-word;
+}
+
+.admin-order-identity {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 14rpx;
+}
+
+.admin-order-logo {
+  width: 56rpx;
+  height: 56rpx;
+  flex: 0 0 auto;
+  border: 1rpx solid #d9dde3;
+  background: #f7f7f8;
 }
 
 .claim-type {

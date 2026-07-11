@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS app_user (
 CREATE TABLE IF NOT EXISTS gift_card_rate (
     id VARCHAR(36) PRIMARY KEY,
     card_name VARCHAR(128) NOT NULL,
+    card_code VARCHAR(64),
     region_code VARCHAR(32) NOT NULL,
     rate_value VARCHAR(64) NOT NULL,
     status_code VARCHAR(32) NOT NULL,

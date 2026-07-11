@@ -1,6 +1,7 @@
 export interface RateItem {
   id: string
   cardName: string
+  cardCode?: string | null
   region: string
   rate: string
   status: 'active' | 'paused'

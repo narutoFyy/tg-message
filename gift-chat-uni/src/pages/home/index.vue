@@ -51,7 +51,7 @@
       <view class="rate-list">
         <view v-for="rate in filteredRates" :key="rate.id" class="rate-row">
           <view class="rate-left">
-            <image class="rate-icon" :src="cardLogoFor(rate.cardName)" mode="aspectFit" />
+            <image class="rate-icon" :src="cardLogoFor(rate.cardCode, rate.cardName)" mode="aspectFit" />
             <view class="rate-copy">
               <view class="rate-name-line">
                 <text class="rate-name">{{ rate.cardName }}</text>

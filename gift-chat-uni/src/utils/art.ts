@@ -1,3 +1,5 @@
+import { resolveGiftCard, type GiftCardLogoKey } from '@/utils/gift-card-catalog'
+
 const compactSvg = (svg: string) => svg.replace(/\s{2,}/g, ' ').replace(/>\s+</g, '><').trim()
 
 const svgToDataUri = (svg: string) => `data:image/svg+xml;utf8,${encodeURIComponent(compactSvg(svg))}`
@@ -377,20 +379,9 @@ const cardLogoMap = {
   `)
 }
 
-export function cardLogoFor(name: string) {
-  const normalized = name.toLowerCase()
-
-  if (normalized.includes('apple')) return cardLogoMap.apple
-  if (normalized.includes('steam')) return cardLogoMap.steam
-  if (normalized.includes('razer')) return cardLogoMap.razer
-  if (normalized.includes('xbox')) return cardLogoMap.xbox
-  if (normalized.includes('ebay')) return cardLogoMap.ebay
-  if (normalized.includes('sephora')) return cardLogoMap.sephora
-  if (normalized.includes('google')) return cardLogoMap.google
-  if (normalized.includes('vanilla')) return cardLogoMap.vanilla
-  if (normalized.includes('american')) return cardLogoMap.amex
-  if (normalized.includes('zelle')) return cardLogoMap.zelle
-  if (normalized.includes('chime')) return cardLogoMap.chime
-
-  return cardLogoMap.fallback
+export function cardLogoFor(cardCodeOrName?: string | null, cardName?: string | null) {
+  const card = cardName === undefined
+    ? resolveGiftCard(undefined, cardCodeOrName)
+    : resolveGiftCard(cardCodeOrName, cardName)
+  return card ? cardLogoMap[card.logoKey as GiftCardLogoKey] : cardLogoMap.fallback
 }

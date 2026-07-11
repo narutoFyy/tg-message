@@ -32,10 +32,13 @@
           </view>
 
           <view class="transaction-main">
-            <view class="trade-summary">
-              <text class="card-title">{{ item.cardName }}</text>
-              <text class="trade-line">Face value {{ item.faceValue }}</text>
-              <text class="payout-line">{{ item.payoutAmount }}</text>
+            <view class="trade-card-identity">
+              <image class="trade-card-logo" :src="cardLogoFor(item.cardName)" mode="aspectFit" />
+              <view class="trade-summary">
+                <text class="card-title">{{ item.cardName }}</text>
+                <text class="trade-line">Face value {{ item.faceValue }}</text>
+                <text class="payout-line">{{ item.payoutAmount }}</text>
+              </view>
             </view>
             <view class="counterparty">
               <text class="meta-label">Counterparty</text>
@@ -81,6 +84,7 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AppNav from '@/components/AppNav.vue'
 import { useAppStore } from '@/store/app'
+import { cardLogoFor } from '@/utils/art'
 import type { TransactionItem } from '@/types'
 
 const store = useAppStore()
@@ -350,6 +354,25 @@ function hideTransaction(item: TransactionItem) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(190rpx, 240rpx);
   gap: 22rpx;
+}
+
+.trade-card-identity {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.trade-card-logo {
+  width: 58rpx;
+  height: 58rpx;
+  flex: 0 0 auto;
+  border: 1rpx solid #dedfe3;
+  background: #f7f7f8;
+}
+
+.trade-summary {
+  min-width: 0;
 }
 
 .card-title,

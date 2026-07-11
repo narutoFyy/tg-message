@@ -454,7 +454,10 @@
               <text class="work-title">{{ selectedOrder.orderNo }}</text>
               <text :class="['work-status', selectedOrder.status]">{{ statusText(selectedOrder.status) }}</text>
             </view>
-            <text class="work-line">{{ selectedOrder.cardName }} / {{ selectedOrder.faceValue }}</text>
+            <view class="work-card-line">
+              <image class="work-card-logo" :src="cardLogoFor(selectedOrder.cardName)" mode="aspectFit" />
+              <text class="work-line">{{ selectedOrder.cardName }} / {{ selectedOrder.faceValue }}</text>
+            </view>
             <text class="work-line strong">{{ selectedOrder.payoutAmount }}</text>
             <view class="work-actions">
               <button v-if="selectedOrder.status === 'pending'" class="mini-btn" @click="changeOrderStatus(selectedOrder.id, 'processing')">{{ workbenchText.process }}</button>
@@ -610,7 +613,7 @@ import { useComposerAttachments, type ComposerAttachmentKind } from '@/component
 import { fetchAgents, translateToChinese, uploadImage } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
-import { uiIcons } from '@/utils/art'
+import { cardLogoFor, uiIcons } from '@/utils/art'
 import type { AgentItem, ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
 import type { LotteryFulfillmentItem, TransactionItem, WithdrawalItem } from '@/types'
@@ -2622,6 +2625,25 @@ function previewImage(url: string) {
 .mini-btn.danger {
   background: #ff6961;
   color: #ffffff;
+}
+
+.work-card-line {
+  margin-top: 7px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.work-card-line .work-line {
+  margin-top: 0;
+}
+
+.work-card-logo {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid #dce3dd;
+  background: #f7f7f8;
 }
 
 .risk-item {

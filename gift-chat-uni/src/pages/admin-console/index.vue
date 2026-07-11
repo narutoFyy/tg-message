@@ -376,12 +376,14 @@
       </view>
 
       <view v-if="activeTab === 'withdrawals'" class="panel">
-        <text class="section-title">Withdrawal requests</text>
+        <text class="section-title">Withdrawals and prize claims</text>
         <view style="height: 18rpx"></view>
         <view v-for="item in withdrawals" :key="item.id" class="conversation-card">
           <view class="list-row compact-row">
             <view>
+              <text class="claim-type">{{ item.sourceType === 'lottery_cash' ? 'Lottery cash claim' : 'Wallet withdrawal' }}</text>
               <text class="row-title">{{ item.requestNo }} / {{ item.amount }}</text>
+              <text v-if="item.sourceType === 'lottery_cash'" class="row-meta">{{ item.prizeName }} / Lottery record {{ item.lotteryRecordId }}</text>
               <text class="row-meta">{{ item.ownerUsername || item.accountName }} / {{ item.bankName }} / {{ item.accountNumber }}</text>
               <text class="row-meta">{{ item.assignedAgent }} / {{ item.createdAt }}</text>
             </view>
@@ -395,6 +397,27 @@
             Mark Completed
           </button>
         </view>
+        <view v-for="item in lotteryFulfillments" :key="item.id" class="conversation-card physical-claim-card">
+          <view class="list-row compact-row">
+            <view>
+              <text class="claim-type physical">Physical prize delivery</text>
+              <text class="row-title">{{ item.orderNo }} / {{ item.prizeName }}</text>
+              <text class="row-meta">{{ item.ownerUsername }} / Lottery record {{ item.lotteryRecordId }}</text>
+              <text class="row-meta">{{ item.recipientName }} / {{ item.phone }} / {{ item.country }}</text>
+              <text class="row-meta address-meta">{{ item.addressLine }}</text>
+              <text class="row-meta">{{ item.assignedAgent }} / {{ item.createdAt }}</text>
+            </view>
+            <text :class="['status-pill', item.status === 'completed' ? 'active' : 'warning']">{{ item.status }}</text>
+          </view>
+          <button
+            v-if="item.status !== 'completed'"
+            class="ghost-button mini-button"
+            @click="completeLotteryFulfillment(item.id)"
+          >
+            Mark Delivered
+          </button>
+        </view>
+        <text v-if="withdrawals.length === 0 && lotteryFulfillments.length === 0" class="row-meta">No withdrawal or prize claims.</text>
       </view>
 
       <view v-if="activeTab === 'risks'" class="panel">
@@ -556,6 +579,7 @@ import type {
   BankAccountRiskMatch,
   BroadcastItem,
   LoanApplicationItem,
+  LotteryFulfillmentItem,
   LotteryPrizeItem,
   LotteryRecordItem,
   NotificationItem,
@@ -581,6 +605,7 @@ import {
   fetchAgents,
   fetchBroadcasts,
   fetchLoans,
+  fetchLotteryFulfillments,
   fetchNotifications,
   fetchReferralRewardConfig,
   fetchReferralRewards,
@@ -597,6 +622,7 @@ import {
   updateReferralRewardConfig,
   updateRegistrationBonusConfig,
   updateTransactionStatus,
+  updateLotteryFulfillmentStatus,
   updateWithdrawalStatus
 } from '@/utils/api'
 import { useAppStore } from '@/store/app'
@@ -612,6 +638,7 @@ const directConversations = ref<AdminDirectConversationItem[]>([])
 const broadcasts = ref<BroadcastItem[]>([])
 const transactions = ref<TransactionItem[]>([])
 const withdrawals = ref<WithdrawalItem[]>([])
+const lotteryFulfillments = ref<LotteryFulfillmentItem[]>([])
 const bankAccounts = ref<BankAccountItem[]>([])
 const bankAccountRisks = ref<BankAccountRiskMatch[]>([])
 const loans = ref<LoanApplicationItem[]>([])
@@ -707,6 +734,7 @@ async function refreshAll() {
       nextBroadcasts,
       nextTransactions,
       nextWithdrawals,
+      nextLotteryFulfillments,
       nextBankAccounts,
       nextBankAccountRisks,
       nextLoans,
@@ -724,6 +752,7 @@ async function refreshAll() {
       fetchBroadcasts(),
       fetchTransactions(),
       fetchWithdrawals(),
+      fetchLotteryFulfillments(),
       fetchAdminBankAccounts(),
       fetchAdminBankAccountRisks(),
       fetchLoans(),
@@ -741,6 +770,7 @@ async function refreshAll() {
     broadcasts.value = nextBroadcasts
     transactions.value = nextTransactions
     withdrawals.value = nextWithdrawals
+    lotteryFulfillments.value = nextLotteryFulfillments
     bankAccounts.value = nextBankAccounts
     bankAccountRisks.value = nextBankAccountRisks
     loans.value = nextLoans
@@ -1095,6 +1125,16 @@ async function toggleAgent(agentId: string, status: string) {
   }
 }
 
+async function completeLotteryFulfillment(orderId: string) {
+  try {
+    await updateLotteryFulfillmentStatus(orderId, 'completed')
+    notice.value = 'Prize delivery completed.'
+    await refreshAll()
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Prize delivery update failed'
+  }
+}
+
 function editWelcomeMessage(agent: AgentItem) {
   if (!welcomeDrafts[agent.id]) {
     welcomeDrafts[agent.id] = {
@@ -1386,6 +1426,32 @@ async function assignConversation(conversationId: string) {
   color: #101820;
   line-height: 1.15;
   word-break: break-word;
+}
+
+.claim-type {
+  display: inline-flex;
+  margin-bottom: 8rpx;
+  padding: 5rpx 9rpx;
+  border: 1rpx solid #b9c9ef;
+  border-radius: 4rpx;
+  background: #f2f6ff;
+  color: #002fa7;
+  font-size: 20rpx;
+  font-weight: 800;
+}
+
+.claim-type.physical {
+  border-color: #efd389;
+  background: #fff8df;
+  color: #7a5600;
+}
+
+.physical-claim-card {
+  border-left: 5rpx solid #e9a900;
+}
+
+.address-meta {
+  overflow-wrap: anywhere;
 }
 
 .growth-summary-panel,

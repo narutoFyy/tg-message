@@ -15,6 +15,7 @@ import type {
   LoanApplicationItem,
   LotteryDrawResult,
   LotteryEligibility,
+  LotteryFulfillmentItem,
   LotteryPrizeItem,
   LotteryRecordItem,
   LotteryWinnerItem,
@@ -95,7 +96,7 @@ function readErrorMessage(body: unknown, fallback: string) {
   return fallback
 }
 
-function request<T>(url: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', data?: Record<string, unknown>) {
+function request<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', data?: Record<string, unknown>) {
   const token = getAccessToken()
 
   return new Promise<T>((resolve, reject) => {
@@ -272,8 +273,47 @@ export function bindBankAccount(payload: {
   return request<BankAccountItem>('/bank-accounts', 'POST', payload)
 }
 
-export function requestLotteryWithdrawal(recordId: string) {
-  return request<WithdrawalItem>(`/lottery/records/${recordId}/withdrawal-request`, 'POST')
+export function replaceBankAccount(payload: {
+  country: string
+  accountName: string
+  bankName: string
+  accountNumber: string
+}) {
+  return request<BankAccountItem>('/bank-accounts/me', 'PUT', payload)
+}
+
+export function requestLotteryWithdrawal(recordId: string, bankAccount?: {
+  country: string
+  accountName: string
+  bankName: string
+  accountNumber: string
+}) {
+  return request<WithdrawalItem>(
+    `/lottery/records/${recordId}/withdrawal-request`,
+    'POST',
+    bankAccount ? { bankAccount } : undefined
+  )
+}
+
+export function fetchMyLotteryRecords() {
+  return request<LotteryRecordItem[]>('/lottery/records/me')
+}
+
+export function fetchLotteryFulfillments() {
+  return request<LotteryFulfillmentItem[]>('/lottery-fulfillments')
+}
+
+export function createLotteryFulfillment(recordId: string, payload: {
+  recipientName: string
+  phone: string
+  country: string
+  addressLine: string
+}) {
+  return request<LotteryFulfillmentItem>(`/lottery/records/${recordId}/fulfillment-order`, 'POST', payload)
+}
+
+export function updateLotteryFulfillmentStatus(orderId: string, status: LotteryFulfillmentItem['status']) {
+  return request<LotteryFulfillmentItem>(`/lottery-fulfillments/${orderId}/status`, 'POST', { status })
 }
 
 export function updateWithdrawalStatus(withdrawalId: string, status: WithdrawalItem['status']) {

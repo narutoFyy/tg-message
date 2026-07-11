@@ -1,6 +1,7 @@
 package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.entity.LoanApplicationEntity;
+import com.cardnova.giftchat.entity.LotteryFulfillmentOrderEntity;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.TradeOrderEntity;
 import com.cardnova.giftchat.entity.UserEntity;
@@ -8,12 +9,14 @@ import com.cardnova.giftchat.entity.VideoSessionEntity;
 import com.cardnova.giftchat.entity.WithdrawalRequestEntity;
 import com.cardnova.giftchat.model.CustomerBalanceSummary;
 import com.cardnova.giftchat.model.LoanApplicationItem;
+import com.cardnova.giftchat.model.LotteryFulfillmentItem;
 import com.cardnova.giftchat.model.SupportCustomerInfo;
 import com.cardnova.giftchat.model.SupportCustomerProfile;
 import com.cardnova.giftchat.model.TransactionItem;
 import com.cardnova.giftchat.model.VideoSessionItem;
 import com.cardnova.giftchat.model.WithdrawalItem;
 import com.cardnova.giftchat.repository.LoanApplicationRepository;
+import com.cardnova.giftchat.repository.LotteryFulfillmentOrderRepository;
 import com.cardnova.giftchat.repository.TradeOrderRepository;
 import com.cardnova.giftchat.repository.VideoSessionRepository;
 import com.cardnova.giftchat.repository.WithdrawalRequestRepository;
@@ -24,6 +27,7 @@ import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -37,6 +41,7 @@ public class SupportCustomerProfileService {
     private final PersistentSupportService persistentSupportService;
     private final TradeOrderRepository tradeOrderRepository;
     private final WithdrawalRequestRepository withdrawalRequestRepository;
+    private final LotteryFulfillmentOrderRepository lotteryFulfillmentOrderRepository;
     private final LoanApplicationRepository loanApplicationRepository;
     private final VideoSessionRepository videoSessionRepository;
     private final UserPresenceService userPresenceService;
@@ -50,6 +55,7 @@ public class SupportCustomerProfileService {
         PersistentSupportService persistentSupportService,
         TradeOrderRepository tradeOrderRepository,
         WithdrawalRequestRepository withdrawalRequestRepository,
+        LotteryFulfillmentOrderRepository lotteryFulfillmentOrderRepository,
         LoanApplicationRepository loanApplicationRepository,
         VideoSessionRepository videoSessionRepository,
         UserPresenceService userPresenceService,
@@ -62,6 +68,7 @@ public class SupportCustomerProfileService {
         this.persistentSupportService = persistentSupportService;
         this.tradeOrderRepository = tradeOrderRepository;
         this.withdrawalRequestRepository = withdrawalRequestRepository;
+        this.lotteryFulfillmentOrderRepository = lotteryFulfillmentOrderRepository;
         this.loanApplicationRepository = loanApplicationRepository;
         this.videoSessionRepository = videoSessionRepository;
         this.userPresenceService = userPresenceService;
@@ -78,6 +85,7 @@ public class SupportCustomerProfileService {
 
         List<TradeOrderEntity> orders = tradeOrderRepository.findByOwnerUser_IdOrderByUpdatedAtDesc(customer.getId());
         List<WithdrawalRequestEntity> withdrawals = withdrawalRequestRepository.findByOwnerUser_IdOrderByUpdatedAtDesc(customer.getId());
+        List<LotteryFulfillmentOrderEntity> lotteryFulfillments = lotteryFulfillmentOrderRepository.findByOwnerUser_IdOrderByUpdatedAtDesc(customer.getId());
         List<LoanApplicationEntity> loans = loanApplicationRepository.findByOwnerUser_IdOrderByUpdatedAtDesc(customer.getId());
         List<VideoSessionEntity> videoSessions = videoSessionRepository.findByChannelTypeAndChannelIdOrderByCreatedAtDesc("SUPPORT", conversation.getId());
 
@@ -87,6 +95,7 @@ public class SupportCustomerProfileService {
             toBalance(customer, orders, withdrawals),
             orders.stream().map(order -> toTransactionItem(order, conversation)).toList(),
             withdrawals.stream().map(this::toWithdrawalItem).toList(),
+            lotteryFulfillments.stream().map(this::toLotteryFulfillmentItem).toList(),
             loans.stream().map(this::toLoanItem).toList(),
             videoSessions.stream().map(this::toVideoSessionItem).toList(),
             registrationBonusService.recordForUser(customer.getId()),
@@ -122,6 +131,7 @@ public class SupportCustomerProfileService {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal withdrawn = withdrawals.stream()
             .filter(withdrawal -> "COMPLETED".equalsIgnoreCase(withdrawal.getStatusCode()))
+            .filter(withdrawal -> "WALLET".equalsIgnoreCase(withdrawal.getSourceType()))
             .map(withdrawal -> amountFromText(withdrawal.getAmount()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal rewards = referralRewardService.availableRewardsForUsers(List.of(customer.getId()));
@@ -162,7 +172,11 @@ public class SupportCustomerProfileService {
         return new WithdrawalItem(
             entity.getId(),
             entity.getRequestNo(),
+            entity.getSourceType().toLowerCase(),
             entity.getOwnerUser().getUsername(),
+            entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getId(),
+            entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getPrize().getName(),
+            entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getPrize().getPrizeType().toLowerCase(),
             entity.getAmount(),
             entity.getCountry(),
             entity.getAccountName(),
@@ -171,6 +185,25 @@ public class SupportCustomerProfileService {
             value(entity.getContact()),
             value(entity.getNote()),
             entity.getStatusCode().toLowerCase(),
+            entity.getAssignedAgent() == null ? "" : entity.getAssignedAgent().getUsername(),
+            TIME_FORMATTER.format(entity.getCreatedAt()),
+            TIME_FORMATTER.format(entity.getUpdatedAt())
+        );
+    }
+
+    private LotteryFulfillmentItem toLotteryFulfillmentItem(LotteryFulfillmentOrderEntity entity) {
+        return new LotteryFulfillmentItem(
+            entity.getId(),
+            entity.getOrderNo(),
+            entity.getOwnerUser().getUsername(),
+            entity.getLotteryDrawRecord().getId(),
+            entity.getLotteryDrawRecord().getPrize().getName(),
+            entity.getLotteryDrawRecord().getPrize().getPrizeType().toLowerCase(Locale.ROOT),
+            entity.getRecipientName(),
+            entity.getPhone(),
+            entity.getCountry(),
+            entity.getAddressLine(),
+            entity.getStatusCode().toLowerCase(Locale.ROOT),
             entity.getAssignedAgent() == null ? "" : entity.getAssignedAgent().getUsername(),
             TIME_FORMATTER.format(entity.getCreatedAt()),
             TIME_FORMATTER.format(entity.getUpdatedAt())

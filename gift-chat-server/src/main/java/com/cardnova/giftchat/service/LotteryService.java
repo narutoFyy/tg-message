@@ -127,6 +127,13 @@ public class LotteryService {
             .toList();
     }
 
+    public List<LotteryRecordItem> myRecords() {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        return lotteryDrawRecordRepository.findByUser_IdOrderByDrawnAtDesc(currentUser.getId()).stream()
+            .map(this::toRecordItem)
+            .toList();
+    }
+
     @Transactional
     public LotteryRecordItem updateRecordStatus(String recordId, String status) {
         UserEntity currentUser = currentUserService.getCurrentUser();
@@ -216,21 +223,16 @@ public class LotteryService {
     }
 
     private LotteryPrizeEntity choosePrize(String requestedPrizeName) {
-        List<LotteryPrizeEntity> prizes = lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
-            .filter(prize -> DRAWABLE_PRIZE_NAMES.contains(prize.getName()))
-            .toList();
+        List<LotteryPrizeEntity> prizes = lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc();
         if (prizes.isEmpty()) {
             throw new IllegalArgumentException("No drawable lottery prize is enabled");
         }
         if (StringUtils.hasText(requestedPrizeName)) {
             String normalized = requestedPrizeName.trim();
-            if (!DRAWABLE_PRIZE_NAMES.contains(normalized)) {
-                throw new IllegalArgumentException("Unsupported lottery prize");
-            }
             return prizes.stream()
                 .filter(prize -> normalized.equals(prize.getName()))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Requested lottery prize is not enabled"));
+                .orElseThrow(() -> new IllegalArgumentException("Unsupported lottery prize"));
         }
         int totalWeight = prizes.stream().mapToInt(prize -> Math.max(0, prize.getWeightValue())).sum();
         if (totalWeight <= 0) {

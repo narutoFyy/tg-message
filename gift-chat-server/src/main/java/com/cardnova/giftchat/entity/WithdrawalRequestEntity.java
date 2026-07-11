@@ -36,6 +36,9 @@ public class WithdrawalRequestEntity {
     @JoinColumn(name = "lottery_draw_record_id")
     private LotteryDrawRecordEntity lotteryDrawRecord;
 
+    @Column(name = "source_type", nullable = false, length = 32)
+    private String sourceType;
+
     @Column(nullable = false, length = 32)
     private String amount;
 
@@ -112,6 +115,14 @@ public class WithdrawalRequestEntity {
 
     public void setLotteryDrawRecord(LotteryDrawRecordEntity lotteryDrawRecord) {
         this.lotteryDrawRecord = lotteryDrawRecord;
+    }
+
+    public String getSourceType() {
+        return sourceType;
+    }
+
+    public void setSourceType(String sourceType) {
+        this.sourceType = sourceType;
     }
 
     public String getAmount() {

@@ -14,5 +14,7 @@ public interface UserBankAccountRepository extends JpaRepository<UserBankAccount
 
     boolean existsByAccountFingerprint(String accountFingerprint);
 
+    boolean existsByAccountFingerprintAndOwnerUser_IdNot(String accountFingerprint, String ownerUserId);
+
     List<UserBankAccountEntity> findAllByOrderByCreatedAtDesc();
 }

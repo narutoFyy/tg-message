@@ -8,6 +8,7 @@ public record SupportCustomerProfile(
     CustomerBalanceSummary balance,
     List<TransactionItem> orders,
     List<WithdrawalItem> withdrawals,
+    List<LotteryFulfillmentItem> lotteryFulfillments,
     List<LoanApplicationItem> loans,
     List<VideoSessionItem> videoSessions,
     RegistrationBonusRecordItem registrationBonus,

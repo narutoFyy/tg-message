@@ -99,6 +99,7 @@ public class SupportLedgerService {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal withdrawn = withdrawals.stream()
             .filter(withdrawal -> "COMPLETED".equalsIgnoreCase(withdrawal.getStatusCode()))
+            .filter(withdrawal -> "WALLET".equalsIgnoreCase(withdrawal.getSourceType()))
             .map(withdrawal -> amountFromText(withdrawal.getAmount()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal rewards = referralRewardService.availableRewardsForUsers(List.of(customer.getId()));

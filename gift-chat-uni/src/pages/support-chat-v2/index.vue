@@ -477,10 +477,33 @@
               <text class="work-title">{{ item.requestNo }}</text>
               <text :class="['work-status', item.status]">{{ statusText(item.status) }}</text>
             </view>
+            <text class="claim-kind">{{ item.sourceType === 'lottery_cash' ? 'Lottery cash claim' : 'Wallet withdrawal' }}</text>
+            <text v-if="item.sourceType === 'lottery_cash'" class="work-line strong">{{ item.prizeName }} / {{ item.lotteryRecordId }}</text>
             <text class="work-line">{{ item.amount }} / {{ item.country }}</text>
-            <text class="work-line">{{ item.bankName }} {{ item.accountNumber }}</text>
+            <text class="work-line">{{ item.accountName }} / {{ item.bankName }} / {{ item.accountNumber }}</text>
             <view v-if="item.status === 'pending'" class="work-actions">
               <button class="mini-btn primary" @click="changeWithdrawalStatus(item.id, 'completed')">{{ workbenchText.markPaid }}</button>
+            </view>
+          </view>
+        </view>
+
+        <view class="profile-section">
+          <view class="section-head">
+            <text class="section-title">Physical prize claims</text>
+            <text class="section-count">{{ profile.lotteryFulfillments.length }}</text>
+          </view>
+          <view v-if="profile.lotteryFulfillments.length === 0" class="mini-empty">No physical prize claims</view>
+          <view v-for="item in profile.lotteryFulfillments.slice(0, 4)" :key="item.id" class="work-item physical-claim">
+            <view class="work-top">
+              <text class="work-title">{{ item.orderNo }}</text>
+              <text :class="['work-status', item.status]">{{ statusText(item.status) }}</text>
+            </view>
+            <text class="claim-kind">Physical prize delivery</text>
+            <text class="work-line strong">{{ item.prizeName }} / {{ item.lotteryRecordId }}</text>
+            <text class="work-line">{{ item.recipientName }} / {{ item.phone }} / {{ item.country }}</text>
+            <text class="work-line address-line">{{ item.addressLine }}</text>
+            <view v-if="item.status === 'pending'" class="work-actions">
+              <button class="mini-btn primary" @click="changeLotteryFulfillmentStatus(item.id, 'completed')">Mark delivered</button>
             </view>
           </view>
         </view>
@@ -590,7 +613,7 @@ import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { uiIcons } from '@/utils/art'
 import type { AgentItem, ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
-import type { TransactionItem, WithdrawalItem } from '@/types'
+import type { LotteryFulfillmentItem, TransactionItem, WithdrawalItem } from '@/types'
 
 const store = useAppStore()
 const draft = ref('')
@@ -1555,6 +1578,15 @@ function translateVisibleIncomingMessages() {
     })
 }
 
+async function changeLotteryFulfillmentStatus(orderId: string, status: LotteryFulfillmentItem['status']) {
+  try {
+    await store.updateLotteryFulfillmentStatus(orderId, status)
+    uni.showToast({ title: 'Prize delivery updated', icon: 'success' })
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : 'Prize delivery update failed', icon: 'none' })
+  }
+}
+
 function goAdminConsole() {
   uni.redirectTo({ url: '/pages/admin-console/index' })
 }
@@ -2504,6 +2536,26 @@ function previewImage(url: string) {
 .work-status.ended {
   background: #daf7e5;
   color: #0b7b43;
+}
+
+.claim-kind {
+  display: inline-flex;
+  margin-top: 8px;
+  padding: 3px 7px;
+  border: 1px solid rgba(0, 47, 167, 0.18);
+  border-radius: 4px;
+  background: #f2f6ff;
+  color: #002fa7;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.physical-claim {
+  border-left: 3px solid #e9a900;
+}
+
+.address-line {
+  overflow-wrap: anywhere;
 }
 
 .work-status.disputed,

@@ -2,6 +2,7 @@ package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.dto.BindBankAccountRequest;
 import com.cardnova.giftchat.dto.CreateWithdrawalRequest;
+import com.cardnova.giftchat.dto.CreateLotteryCashClaimRequest;
 import com.cardnova.giftchat.entity.LotteryDrawRecordEntity;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.UserBankAccountEntity;
@@ -108,6 +109,11 @@ public class WithdrawalService {
 
     @Transactional
     public WithdrawalItem createLotteryWithdrawal(String recordId) {
+        return createLotteryWithdrawal(recordId, null);
+    }
+
+    @Transactional
+    public WithdrawalItem createLotteryWithdrawal(String recordId, CreateLotteryCashClaimRequest request) {
         UserEntity currentUser = currentUserService.getCurrentUser();
         if (!"USER".equalsIgnoreCase(currentUser.getRoleCode())) {
             throw new IllegalArgumentException("Only users can request lottery withdrawals");
@@ -117,11 +123,20 @@ public class WithdrawalService {
         if (!record.getUser().getId().equals(currentUser.getId())) {
             throw new IllegalArgumentException("Lottery record not accessible");
         }
+        if (!"CASH".equalsIgnoreCase(record.getPrize().getPrizeType())) {
+            throw new IllegalArgumentException("Physical prizes require delivery details");
+        }
         if (withdrawalRequestRepository.existsByLotteryDrawRecord_Id(record.getId())) {
             throw new IllegalArgumentException("Lottery withdrawal request already exists");
         }
 
-        UserBankAccountEntity bankAccount = bankAccountService.requireCurrentUserBankAccount(currentUser);
+        UserBankAccountEntity bankAccount = bankAccountService.findForUser(currentUser).orElse(null);
+        if (bankAccount == null) {
+            if (request == null || request.bankAccount() == null) {
+                throw new IllegalArgumentException("Please bind a bank account first");
+            }
+            bankAccount = bankAccountService.bindForUser(currentUser, request.bankAccount());
+        }
         SupportConversationEntity conversation = persistentSupportService.ensureUserConversation(currentUser);
         UserEntity assignedAgent = conversation == null ? null : conversation.getAssignedAgent();
         if (assignedAgent == null) {
@@ -141,6 +156,7 @@ public class WithdrawalService {
             currentUser.getPhone(),
             "Lottery prize withdrawal: " + record.getId()
         );
+        persistentSupportService.appendSystemMessage(conversation, withdrawalMessage(saved, true));
         notifyWithdrawal(currentUser, assignedAgent, saved);
         record.setFulfillmentStatus("PROCESSING");
         record.setProcessedAt(LocalDateTime.now());
@@ -169,6 +185,7 @@ public class WithdrawalService {
         entity.setAssignedAgent(assignedAgent);
         entity.setBankAccount(bankAccount);
         entity.setLotteryDrawRecord(lotteryDrawRecord);
+        entity.setSourceType(lotteryDrawRecord == null ? "WALLET" : "LOTTERY_CASH");
         entity.setAmount(amount.trim());
         entity.setCountry(country.trim());
         entity.setAccountName(accountName.trim());
@@ -196,7 +213,7 @@ public class WithdrawalService {
     private String withdrawalMessage(WithdrawalRequestEntity saved, boolean lotteryWithdrawal) {
         String title = lotteryWithdrawal ? "Lottery withdrawal request %s" : "Withdrawal request %s";
         return """
-            Withdrawal request %s
+            %s
             Amount: %s
             Country: %s
             Account: %s
@@ -215,11 +232,13 @@ public class WithdrawalService {
     }
 
     private void notifyWithdrawal(UserEntity currentUser, UserEntity assignedAgent, WithdrawalRequestEntity saved) {
+        boolean lotteryClaim = saved.getLotteryDrawRecord() != null;
+        String title = lotteryClaim ? "New lottery cash claim" : "New withdrawal request";
         notificationService.notifyUser(
             assignedAgent,
             currentUser,
             "WITHDRAWAL",
-            "New withdrawal request",
+            title,
             currentUser.getUsername() + " submitted " + saved.getRequestNo(),
             "WITHDRAWAL",
             saved.getId()
@@ -227,7 +246,7 @@ public class WithdrawalService {
         notificationService.notifyAdmins(
             currentUser,
             "WITHDRAWAL",
-            "New withdrawal request",
+            title,
             currentUser.getUsername() + " submitted " + saved.getRequestNo(),
             "WITHDRAWAL",
             saved.getId()
@@ -255,14 +274,26 @@ public class WithdrawalService {
 
         entity.setStatusCode(normalized.toUpperCase());
         entity.setUpdatedAt(LocalDateTime.now());
-        return toItem(withdrawalRequestRepository.save(entity));
+        WithdrawalRequestEntity saved = withdrawalRequestRepository.save(entity);
+        if ("COMPLETED".equalsIgnoreCase(saved.getStatusCode()) && saved.getLotteryDrawRecord() != null) {
+            LotteryDrawRecordEntity record = saved.getLotteryDrawRecord();
+            record.setFulfillmentStatus("FULFILLED");
+            record.setProcessedBy(currentUser);
+            record.setProcessedAt(LocalDateTime.now());
+            lotteryDrawRecordRepository.save(record);
+        }
+        return toItem(saved);
     }
 
     private WithdrawalItem toItem(WithdrawalRequestEntity entity) {
         return new WithdrawalItem(
             entity.getId(),
             entity.getRequestNo(),
+            entity.getSourceType().toLowerCase(),
             entity.getOwnerUser().getUsername(),
+            entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getId(),
+            entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getPrize().getName(),
+            entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getPrize().getPrizeType().toLowerCase(),
             entity.getAmount(),
             entity.getCountry(),
             entity.getAccountName(),

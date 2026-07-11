@@ -244,7 +244,11 @@ export interface SellOrderPayload {
 export interface WithdrawalItem {
   id: string
   requestNo: string
+  sourceType: 'wallet' | 'lottery_cash'
   ownerUsername: string
+  lotteryRecordId: string
+  prizeName: string
+  prizeType: string
   amount: string
   country: string
   accountName: string
@@ -252,6 +256,23 @@ export interface WithdrawalItem {
   accountNumber: string
   contact: string
   note: string
+  status: 'pending' | 'completed'
+  assignedAgent: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LotteryFulfillmentItem {
+  id: string
+  orderNo: string
+  ownerUsername: string
+  lotteryRecordId: string
+  prizeName: string
+  prizeType: string
+  recipientName: string
+  phone: string
+  country: string
+  addressLine: string
   status: 'pending' | 'completed'
   assignedAgent: string
   createdAt: string
@@ -523,6 +544,7 @@ export interface SupportCustomerProfile {
   balance: CustomerBalanceSummary
   orders: TransactionItem[]
   withdrawals: WithdrawalItem[]
+  lotteryFulfillments: LotteryFulfillmentItem[]
   loans: LoanApplicationItem[]
   videoSessions: VideoSessionItem[]
   registrationBonus?: RegistrationBonusRecordItem | null

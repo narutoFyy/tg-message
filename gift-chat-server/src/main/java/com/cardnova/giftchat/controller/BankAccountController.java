@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
 
 @RestController
 @RequestMapping("/api/bank-accounts")
@@ -29,5 +30,10 @@ public class BankAccountController {
     @PostMapping
     public ApiResponse<BankAccountItem> bind(@Valid @RequestBody BindBankAccountRequest request) {
         return ApiResponse.success("bank_account_bound", bankAccountService.bind(request));
+    }
+
+    @PutMapping("/me")
+    public ApiResponse<BankAccountItem> replace(@Valid @RequestBody BindBankAccountRequest request) {
+        return ApiResponse.success("bank_account_replaced", bankAccountService.replace(request));
     }
 }

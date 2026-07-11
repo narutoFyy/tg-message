@@ -36,6 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -336,17 +337,13 @@ class GiftChatServerApplicationTests {
         bindBankAccount(userToken, "Nigeria", "Lucky User", "Prize Bank", "7000 8888")
             .andExpect(status().isOk());
 
-        MvcResult spinResult = mockMvc.perform(post("/api/lottery/spin")
-                .header("Authorization", bearer(userToken)))
-            .andExpect(status().isOk())
-            .andReturn();
-        String recordId = objectMapper.readTree(spinResult.getResponse().getContentAsString())
-            .at("/data/recordId")
-            .asText();
+        JsonNode spin = spinLottery(userToken, lotteryPrizeName(userToken, "cash"));
+        String recordId = spin.path("recordId").asText();
 
         mockMvc.perform(post("/api/lottery/records/%s/withdrawal-request".formatted(recordId))
-                .header("Authorization", bearer(userToken)))
+            .header("Authorization", bearer(userToken)))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.sourceType").value("lottery_cash"))
             .andExpect(jsonPath("$.data.note").value("Lottery prize withdrawal: " + recordId))
             .andExpect(jsonPath("$.data.bankName").value("Prize Bank"));
 
@@ -356,10 +353,133 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.message").value("Lottery withdrawal request already exists"));
 
         mockMvc.perform(get("/api/support/conversations")
+            .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("Lottery withdrawal request")))
+            .andExpect(content().string(containsString(recordId)));
+    }
+
+    @Test
+    void lotteryCashClaimBindsOnceStaysOutsideWalletAndAllowsReplacementAfterCompletion() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String userToken = registerToken("cash_claim_" + suffix);
+        JsonNode spin = spinLottery(userToken, lotteryPrizeName(userToken, "cash"));
+        String recordId = spin.path("recordId").asText();
+
+        MvcResult claimResult = mockMvc.perform(post("/api/lottery/records/%s/withdrawal-request".formatted(recordId))
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "bankAccount": {
+                        "country": "Nigeria",
+                        "accountName": "Cash Winner",
+                        "bankName": "Lucky Bank",
+                        "accountNumber": "70001234"
+                      }
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.sourceType").value("lottery_cash"))
+            .andExpect(jsonPath("$.data.lotteryRecordId").value(recordId))
+            .andExpect(jsonPath("$.data.prizeType").value("cash"))
+            .andExpect(jsonPath("$.data.status").value("pending"))
+            .andReturn();
+        JsonNode claim = objectMapper.readTree(claimResult.getResponse().getContentAsString()).path("data");
+        String withdrawalId = claim.path("id").asText();
+        String assignedAgent = claim.path("assignedAgent").asText();
+
+        mockMvc.perform(get("/api/bank-accounts/me")
                 .header("Authorization", bearer(userToken)))
             .andExpect(status().isOk())
-            .andExpect(content().string(not(containsString("Lottery withdrawal request"))))
-            .andExpect(content().string(not(containsString(recordId))));
+            .andExpect(jsonPath("$.data.maskedAccountNumber").value("****1234"));
+
+        mockMvc.perform(put("/api/bank-accounts/me")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"country":"Nigeria","accountName":"Cash Winner","bankName":"New Bank","accountNumber":"90005678"}
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Complete pending withdrawals before changing the bank account"));
+
+        String agentToken = loginToken(assignedAgent);
+        mockMvc.perform(post("/api/withdrawals/%s/status".formatted(withdrawalId))
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"completed\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("completed"));
+
+        mockMvc.perform(get("/api/lottery/records/me")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("fulfilled")));
+
+        mockMvc.perform(get("/api/balances/summary")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("0.00"))
+            .andExpect(jsonPath("$.data.withdrawnTotal").value("0.00"));
+
+        mockMvc.perform(put("/api/bank-accounts/me")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"country":"Nigeria","accountName":"Cash Winner","bankName":"New Bank","accountNumber":"90005678"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.maskedAccountNumber").value("****5678"));
+    }
+
+    @Test
+    void physicalLotteryPrizeCreatesSupportFulfillmentOrderAndCompletesDraw() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String userToken = registerToken("physical_claim_" + suffix);
+        JsonNode spin = spinLottery(userToken, lotteryPrizeName(userToken, "physical"));
+        String recordId = spin.path("recordId").asText();
+
+        MvcResult orderResult = mockMvc.perform(post("/api/lottery/records/%s/fulfillment-order".formatted(recordId))
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "recipientName":"Physical Winner",
+                      "phone":"+2348012345678",
+                      "country":"Nigeria",
+                      "addressLine":"12 Prize Street, Lagos"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.lotteryRecordId").value(recordId))
+            .andExpect(jsonPath("$.data.prizeType").value("physical"))
+            .andExpect(jsonPath("$.data.status").value("pending"))
+            .andReturn();
+        JsonNode order = objectMapper.readTree(orderResult.getResponse().getContentAsString()).path("data");
+        String orderId = order.path("id").asText();
+        String orderNo = order.path("orderNo").asText();
+        String agentToken = loginToken(order.path("assignedAgent").asText());
+
+        mockMvc.perform(get("/api/lottery-fulfillments")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString(orderNo)));
+        mockMvc.perform(get("/api/lottery-fulfillments")
+                .header("Authorization", bearer(agentToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString(orderNo)));
+
+        mockMvc.perform(post("/api/lottery-fulfillments/%s/status".formatted(orderId))
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"completed\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("completed"));
+
+        mockMvc.perform(get("/api/lottery/records/me")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("fulfilled")));
     }
 
     @Test
@@ -1556,6 +1676,7 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.balance.availableTotal").isString())
             .andExpect(jsonPath("$.data.orders").isArray())
             .andExpect(jsonPath("$.data.withdrawals").isArray())
+            .andExpect(jsonPath("$.data.lotteryFulfillments").isArray())
             .andExpect(jsonPath("$.data.loans").isArray())
             .andExpect(jsonPath("$.data.videoSessions").isArray());
 
@@ -1669,7 +1790,13 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦100", "₦200", "₦500", "₦1000").contains(prizeName));
+        String prizeType = objectMapper.readTree(spinResult.getResponse().getContentAsString())
+            .path("data")
+            .path("prize")
+            .path("prizeType")
+            .asText();
+        assertFalse(prizeName.isBlank());
+        assertTrue(List.of("cash", "physical").contains(prizeType));
 
         mockMvc.perform(post("/api/lottery/spin")
                 .header("Authorization", bearer(userToken)))
@@ -1682,7 +1809,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "prizeName": "₦5000"
+                      "prizeName": "Definitely not a prize"
                     }
                     """))
             .andExpect(status().isBadRequest())
@@ -2159,6 +2286,29 @@ class GiftChatServerApplicationTests {
                   "accountNumber": "%s"
                 }
                 """.formatted(country, accountName, bankName, accountNumber)));
+    }
+
+    private String lotteryPrizeName(String token, String prizeType) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/lottery/prizes")
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andReturn();
+        for (JsonNode prize : objectMapper.readTree(result.getResponse().getContentAsString()).path("data")) {
+            if (prizeType.equalsIgnoreCase(prize.path("prizeType").asText()) && prize.path("enabled").asBoolean()) {
+                return prize.path("name").asText();
+            }
+        }
+        throw new IllegalStateException("No enabled " + prizeType + " lottery prize");
+    }
+
+    private JsonNode spinLottery(String token, String prizeName) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/lottery/spin")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(java.util.Map.of("prizeName", prizeName))))
+            .andExpect(status().isOk())
+            .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
     }
 
     private void disableReferralRegistrationCashback() throws Exception {

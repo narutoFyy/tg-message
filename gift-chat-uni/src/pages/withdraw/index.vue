@@ -89,6 +89,7 @@
         <view v-for="item in store.state.withdrawals" :key="item.id" class="withdraw-row">
           <view class="row-copy">
             <text class="row-title">{{ item.requestNo }}</text>
+            <text class="row-meta">{{ item.sourceType === 'lottery_cash' ? 'Lottery cash claim' : 'Wallet withdrawal' }}</text>
             <text class="row-meta">{{ item.bankName }} / {{ item.accountNumber }}</text>
             <text class="row-meta">{{ item.createdAt }}</text>
           </view>
@@ -134,16 +135,8 @@ onShow(() => {
 })
 
 const availableBalance = computed(() => {
-  const completed = store.state.transactions
-    .filter((item) => item.status === 'completed')
-    .reduce((sum, item) => sum + parseMoney(item.payoutAmount), 0)
-  const withdrawn = store.state.withdrawals.reduce((sum, item) => sum + parseMoney(item.amount), 0)
-  return `NGN ${Math.max(0, completed - withdrawn).toLocaleString('en-US')}`
+  return `NGN ${store.state.balanceSummary?.availableTotal || '0.00'}`
 })
-
-function parseMoney(value: string) {
-  return Number(value.replace(/[^\d.]/g, '') || '0')
-}
 
 async function bindAccount() {
   try {

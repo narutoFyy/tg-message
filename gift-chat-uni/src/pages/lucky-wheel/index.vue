@@ -26,7 +26,7 @@
         <view class="status-section"><text class="section-title">Draw status</text><text class="status-copy">{{ eligibilityText }}</text></view>
         <view v-if="lastPrize" class="result-section">
           <text class="eyebrow">Result saved</text><text class="result-prize">{{ lastPrize }}</text><text class="muted">This prize is now recorded on your account.</text>
-          <button class="primary-button withdrawal-button" @click="goBindBankAccount">Set up withdrawal</button>
+          <button class="primary-button withdrawal-button" @click="openLatestClaim">Claim prize</button>
         </view>
         <view class="prize-section">
           <view class="section-head"><text class="section-title">Featured prizes</text><text class="section-count">{{ featuredPrizes.length }}</text></view>
@@ -41,14 +41,68 @@
         </view>
       </view>
     </view>
+
+    <view class="claim-history">
+      <view class="section-head"><text class="section-title">My prize orders</text><text class="section-count">{{ lotteryRecords.length }}</text></view>
+      <view v-if="!lotteryRecords.length" class="empty-winners"><text class="muted">Your lottery prizes will appear here.</text></view>
+      <view v-for="record in lotteryRecords" :key="record.id" class="claim-row">
+        <view class="claim-copy">
+          <view class="claim-title-line"><text class="claim-prize">{{ record.prizeName }}</text><text :class="['status-pill', claimStatus(record) === 'completed' ? 'active' : 'warning']">{{ claimStatus(record) }}</text></view>
+          <text class="claim-meta">{{ record.prizeType === 'cash' ? 'Cash prize withdrawal' : 'Physical prize delivery' }} / {{ record.drawnAt }}</text>
+          <text v-if="claimOrderNo(record)" class="claim-meta">Order {{ claimOrderNo(record) }}</text>
+        </view>
+        <button v-if="canClaim(record)" class="ghost-button claim-button" @click="openClaim(record)">Claim</button>
+      </view>
+    </view>
+
+    <view v-if="claimDialogOpen" class="claim-overlay" @click.self="closeClaimDialog">
+      <view class="claim-dialog">
+        <view class="claim-dialog-head">
+          <view><text class="eyebrow">Prize claim</text><text class="dialog-title">{{ activePrizeName }}</text></view>
+          <button class="close-button" @click="closeClaimDialog">X</button>
+        </view>
+
+        <template v-if="activePrizeType === 'cash'">
+          <view v-if="bankAccount" class="saved-bank tone-finance">
+            <text class="section-title">Payout bank</text>
+            <text class="saved-bank-name">{{ bankAccount.bankName }}</text>
+            <text class="claim-meta">{{ bankAccount.accountName }} / {{ bankAccount.maskedAccountNumber }}</text>
+          </view>
+          <view v-else class="claim-form">
+            <text class="section-title">Bind bank account</text>
+            <text class="claim-meta">This account will be reused for future cash prizes.</text>
+            <input v-model="bankForm.country" class="claim-input" placeholder="Country or region" />
+            <input v-model="bankForm.accountName" class="claim-input" placeholder="Account holder" />
+            <input v-model="bankForm.bankName" class="claim-input" placeholder="Bank name" />
+            <input v-model="bankForm.accountNumber" class="claim-input" type="number" placeholder="Account number" />
+          </view>
+        </template>
+
+        <view v-else class="claim-form">
+          <text class="section-title">Delivery details</text>
+          <input v-model="deliveryForm.recipientName" class="claim-input" placeholder="Recipient name" />
+          <input v-model="deliveryForm.phone" class="claim-input" placeholder="Phone number" />
+          <input v-model="deliveryForm.country" class="claim-input" placeholder="Country or region" />
+          <textarea v-model="deliveryForm.addressLine" class="claim-textarea" placeholder="Full delivery address" />
+        </view>
+
+        <text v-if="claimNotice" class="claim-notice">{{ claimNotice }}</text>
+        <button class="primary-button submit-claim" :disabled="claimSubmitting" @click="submitClaim">{{ claimSubmitting ? 'Submitting...' : activePrizeType === 'cash' ? 'Submit cash withdrawal' : 'Submit delivery order' }}</button>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
-const store = useAppStore(); const spinning = ref(false); const rotation = ref(0); const lastPrize = ref(''); const lastRecordId = ref('')
+import { createLotteryFulfillment, fetchMyBankAccount, requestLotteryWithdrawal } from '@/utils/api'
+import type { BankAccountItem, LotteryRecordItem } from '@/types'
+const store = useAppStore(); const spinning = ref(false); const rotation = ref(0); const lastPrize = ref(''); const lastRecordId = ref(''); const lastPrizeType = ref('cash')
+const claimDialogOpen = ref(false); const claimSubmitting = ref(false); const claimNotice = ref(''); const activeRecordId = ref(''); const activePrizeName = ref(''); const activePrizeType = ref('cash'); const bankAccount = ref<BankAccountItem | null>(null)
+const bankForm = reactive({ country: '', accountName: '', bankName: '', accountNumber: '' })
+const deliveryForm = reactive({ recipientName: '', phone: '', country: '', addressLine: '' })
 const featuredPrizes = [
   { name: 'iPhone 17', note: 'Phone prize', image: '/static/lottery/iphone.jpg' },
   { name: 'iPad', note: 'Tablet prize', image: '/static/lottery/ipad.jpg' },
@@ -56,9 +110,17 @@ const featuredPrizes = [
 ]
 const wheelPrizes = ['NGN 500', 'iPad', 'NGN 800', 'Computer', 'NGN 500', 'NGN 1,000', 'NGN 2,000', 'NGN 3,000', 'NGN 5,000', 'iPhone 17']
 const spinDurationMs = 4000
-onShow(() => { store.refreshLotteryEligibility().catch(() => undefined); store.refreshLotteryWinners().catch(() => undefined) })
+onShow(() => {
+  store.refreshLotteryEligibility().catch(() => undefined)
+  store.refreshLotteryWinners().catch(() => undefined)
+  store.refreshLotteryRecords().catch(() => undefined)
+  store.refreshLotteryFulfillments().catch(() => undefined)
+  store.refreshWithdrawals().catch(() => undefined)
+  refreshBankAccount()
+})
 const eligibility = computed(() => store.state.lotteryEligibility)
 const recentWinners = computed(() => store.state.lotteryWinners.slice(0, 6))
+const lotteryRecords = computed(() => store.state.lotteryRecords)
 const eligibilityText = computed(() => { if (!eligibility.value) return 'Checking your draw chance.'; if (eligibility.value.eligible) return 'You have a draw chance available.'; return eligibility.value.message || 'No draw chance available.' })
 const spinHint = computed(() => { if (!eligibility.value) return ''; if (eligibility.value.eligible) return 'The server determines the final prize.'; return eligibility.value.nextAvailableAt ? `Next: ${eligibility.value.nextAvailableAt}` : 'Upgrade VIP or wait for reset.' })
 function wheelPrizeImage(prize: string) { return featuredPrizes.find((item) => item.name === prize)?.image || '' }
@@ -78,11 +140,56 @@ function waitForSpin() { return new Promise<void>((resolve) => { setTimeout(reso
 async function handleSpin() {
   if (spinning.value || !eligibility.value?.eligible) return
   spinning.value = true; lastPrize.value = ''; lastRecordId.value = ''
-  try { const result = await store.spinLottery(); rotation.value = targetRotationForPrize(result.prize.name); await waitForSpin(); lastPrize.value = result.prize.name; lastRecordId.value = result.recordId }
+  try {
+    const result = await store.spinLottery(); rotation.value = targetRotationForPrize(result.prize.name); await waitForSpin()
+    lastPrize.value = result.prize.name; lastRecordId.value = result.recordId; lastPrizeType.value = result.prize.prizeType
+    await store.refreshLotteryRecords().catch(() => undefined)
+    openClaimDetails(result.recordId, result.prize.name, result.prize.prizeType)
+  }
   catch (error) { uni.showToast({ title: error instanceof Error ? error.message : 'Draw failed', icon: 'none' }) }
   finally { spinning.value = false }
 }
-function goBindBankAccount() { if (lastRecordId.value) uni.navigateTo({ url: `/pages/withdraw/index?lotteryRecordId=${encodeURIComponent(lastRecordId.value)}` }) }
+function cashOrderFor(record: LotteryRecordItem) { return store.state.withdrawals.find((item) => item.sourceType === 'lottery_cash' && item.lotteryRecordId === record.id) }
+function physicalOrderFor(record: LotteryRecordItem) { return store.state.lotteryFulfillments.find((item) => item.lotteryRecordId === record.id) }
+function claimOrderNo(record: LotteryRecordItem) { return cashOrderFor(record)?.requestNo || physicalOrderFor(record)?.orderNo || '' }
+function claimStatus(record: LotteryRecordItem) { return cashOrderFor(record)?.status || physicalOrderFor(record)?.status || (record.fulfillmentStatus === 'fulfilled' ? 'completed' : 'unclaimed') }
+function canClaim(record: LotteryRecordItem) { return record.fulfillmentStatus === 'pending' && !cashOrderFor(record) && !physicalOrderFor(record) }
+function openLatestClaim() { if (lastRecordId.value) openClaimDetails(lastRecordId.value, lastPrize.value, lastPrizeType.value) }
+function openClaim(record: LotteryRecordItem) { openClaimDetails(record.id, record.prizeName, record.prizeType) }
+async function openClaimDetails(recordId: string, prizeName: string, prizeType: string) {
+  activeRecordId.value = recordId; activePrizeName.value = prizeName; activePrizeType.value = prizeType; claimNotice.value = ''; claimDialogOpen.value = true
+  if (prizeType === 'cash') await refreshBankAccount()
+}
+function closeClaimDialog() { if (!claimSubmitting.value) claimDialogOpen.value = false }
+async function refreshBankAccount() {
+  try { bankAccount.value = await fetchMyBankAccount() } catch { bankAccount.value = null }
+}
+function completeBankForm() { return bankForm.country.trim() && bankForm.accountName.trim() && bankForm.bankName.trim() && bankForm.accountNumber.trim() }
+function completeDeliveryForm() { return deliveryForm.recipientName.trim() && deliveryForm.phone.trim() && deliveryForm.country.trim() && deliveryForm.addressLine.trim() }
+async function submitClaim() {
+  if (claimSubmitting.value || !activeRecordId.value) return
+  if (activePrizeType.value === 'cash' && !bankAccount.value && !completeBankForm()) { claimNotice.value = 'Complete all bank account fields.'; return }
+  if (activePrizeType.value !== 'cash' && !completeDeliveryForm()) { claimNotice.value = 'Complete all delivery fields.'; return }
+  claimSubmitting.value = true; claimNotice.value = ''
+  try {
+    if (activePrizeType.value === 'cash') {
+      const order = await requestLotteryWithdrawal(activeRecordId.value, bankAccount.value ? undefined : {
+        country: bankForm.country.trim(), accountName: bankForm.accountName.trim(), bankName: bankForm.bankName.trim(), accountNumber: bankForm.accountNumber.trim()
+      })
+      store.state.withdrawals.unshift(order)
+      await refreshBankAccount()
+    } else {
+      const order = await createLotteryFulfillment(activeRecordId.value, {
+        recipientName: deliveryForm.recipientName.trim(), phone: deliveryForm.phone.trim(), country: deliveryForm.country.trim(), addressLine: deliveryForm.addressLine.trim()
+      })
+      store.state.lotteryFulfillments.unshift(order)
+    }
+    await store.refreshLotteryRecords().catch(() => undefined)
+    claimDialogOpen.value = false
+    uni.showToast({ title: 'Prize order submitted', icon: 'success' })
+  } catch (error) { claimNotice.value = error instanceof Error ? error.message : 'Prize claim failed' }
+  finally { claimSubmitting.value = false }
+}
 </script>
 
 <style scoped lang="scss">
@@ -131,6 +238,27 @@ function goBindBankAccount() { if (lastRecordId.value) uni.navigateTo({ url: `/p
 .winner-time { margin-top: 4rpx; color: #777980; font-size: 18rpx; }
 .winner-name { max-width: 190rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #002fa7; font-size: 21rpx; font-weight: 700; }
 .empty-winners { padding: 24rpx 18rpx; }
+.claim-history { margin-top: 22rpx; overflow: hidden; background: #ffffff; border: 1rpx solid var(--cb-line); border-radius: 12rpx; }
+.claim-row { min-height: 104rpx; padding: 18rpx 20rpx; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 18rpx; border-bottom: 1rpx solid #dedfe3; }
+.claim-row:last-child { border-bottom: 0; }
+.claim-copy { min-width: 0; flex: 1; }
+.claim-title-line { display: flex; align-items: center; gap: 12rpx; }
+.claim-prize { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #111111; font-size: 25rpx; font-weight: 700; }
+.claim-meta { display: block; margin-top: 5rpx; color: #6f7178; font-size: 20rpx; line-height: 1.35; }
+.claim-button { flex: 0 0 auto; min-width: 120rpx; margin: 0; }
+.claim-overlay { position: fixed; inset: 0; z-index: 100; padding: 28rpx; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: rgba(17, 17, 17, 0.52); }
+.claim-dialog { width: min(100%, 660rpx); max-height: calc(100vh - 56rpx); overflow-y: auto; padding: 26rpx; box-sizing: border-box; background: #ffffff; border-radius: 12rpx; box-shadow: 0 20rpx 60rpx rgba(17, 17, 17, 0.24); }
+.claim-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; padding-bottom: 20rpx; border-bottom: 1rpx solid #dedfe3; }
+.dialog-title { display: block; margin-top: 6rpx; color: #111111; font-size: 32rpx; font-weight: 700; }
+.close-button { width: 60rpx; height: 60rpx; margin: 0; padding: 0; border: 1rpx solid #c8c9cf; border-radius: 50%; background: #ffffff; color: #111111; font-size: 24rpx; line-height: 58rpx; }
+.close-button::after { border: 0; }
+.saved-bank, .claim-form { margin-top: 22rpx; padding: 22rpx; border: 1rpx solid #cfe4fb; border-radius: 8rpx; }
+.saved-bank-name { display: block; margin-top: 12rpx; color: #111111; font-size: 28rpx; font-weight: 700; }
+.claim-input, .claim-textarea { width: 100%; margin-top: 14rpx; padding: 0 18rpx; box-sizing: border-box; background: #ffffff; border: 1rpx solid #c8c9cf; border-radius: 4rpx; color: #111111; font-size: 24rpx; }
+.claim-input { height: 78rpx; }
+.claim-textarea { min-height: 150rpx; padding-top: 18rpx; }
+.claim-notice { display: block; margin-top: 16rpx; color: #c53224; font-size: 22rpx; }
+.submit-claim { width: 100%; margin-top: 22rpx; }
 @media (max-width: 900px) { .draw-layout { grid-template-columns: minmax(0, 1fr); } .wheel-stage { width: min(620rpx, calc(100vw - 96rpx)); } }
-@media (max-width: 420px) { .wheel-section { min-height: 570rpx; padding: 20rpx 12rpx; } .wheel-stage { width: min(560rpx, calc(100vw - 76rpx)); } .wheel-label { transform-origin: center; font-size: 18rpx; } }
+@media (max-width: 420px) { .wheel-section { min-height: 570rpx; padding: 20rpx 12rpx; } .wheel-stage { width: min(560rpx, calc(100vw - 76rpx)); } .wheel-label { transform-origin: center; font-size: 18rpx; } .claim-overlay { padding: 18rpx; align-items: flex-end; } .claim-dialog { max-height: calc(100vh - 36rpx); } }
 </style>

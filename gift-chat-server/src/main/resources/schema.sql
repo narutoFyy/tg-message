@@ -225,6 +225,7 @@ CREATE TABLE IF NOT EXISTS withdrawal_request (
     assigned_agent_id VARCHAR(36),
     bank_account_id VARCHAR(36),
     lottery_draw_record_id VARCHAR(36),
+    source_type VARCHAR(32) NOT NULL DEFAULT 'WALLET',
     amount VARCHAR(32) NOT NULL,
     country VARCHAR(64) NOT NULL,
     account_name VARCHAR(128) NOT NULL,
@@ -237,7 +238,26 @@ CREATE TABLE IF NOT EXISTS withdrawal_request (
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_withdrawal_owner FOREIGN KEY (owner_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_withdrawal_agent FOREIGN KEY (assigned_agent_id) REFERENCES app_user (id),
-    CONSTRAINT fk_withdrawal_bank_account FOREIGN KEY (bank_account_id) REFERENCES user_bank_account (id)
+    CONSTRAINT fk_withdrawal_bank_account FOREIGN KEY (bank_account_id) REFERENCES user_bank_account (id),
+    CONSTRAINT fk_withdrawal_lottery_draw FOREIGN KEY (lottery_draw_record_id) REFERENCES lottery_draw_record (id)
+);
+
+CREATE TABLE IF NOT EXISTS lottery_fulfillment_order (
+    id VARCHAR(36) PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL UNIQUE,
+    owner_user_id VARCHAR(36) NOT NULL,
+    assigned_agent_id VARCHAR(36),
+    lottery_draw_record_id VARCHAR(36) NOT NULL UNIQUE,
+    recipient_name VARCHAR(128) NOT NULL,
+    phone VARCHAR(64) NOT NULL,
+    country VARCHAR(64) NOT NULL,
+    address_line VARCHAR(512) NOT NULL,
+    status_code VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_lottery_fulfillment_owner FOREIGN KEY (owner_user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_lottery_fulfillment_agent FOREIGN KEY (assigned_agent_id) REFERENCES app_user (id),
+    CONSTRAINT fk_lottery_fulfillment_draw FOREIGN KEY (lottery_draw_record_id) REFERENCES lottery_draw_record (id)
 );
 
 CREATE TABLE IF NOT EXISTS broadcast_message (

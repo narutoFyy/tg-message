@@ -5,6 +5,7 @@ import com.cardnova.giftchat.entity.UserBankAccountEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.model.BankAccountItem;
 import com.cardnova.giftchat.repository.UserBankAccountRepository;
+import com.cardnova.giftchat.repository.WithdrawalRequestRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,13 +30,16 @@ public class BankAccountService {
 
     private final UserBankAccountRepository userBankAccountRepository;
     private final CurrentUserService currentUserService;
+    private final WithdrawalRequestRepository withdrawalRequestRepository;
 
     public BankAccountService(
         UserBankAccountRepository userBankAccountRepository,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        WithdrawalRequestRepository withdrawalRequestRepository
     ) {
         this.userBankAccountRepository = userBankAccountRepository;
         this.currentUserService = currentUserService;
+        this.withdrawalRequestRepository = withdrawalRequestRepository;
     }
 
     public BankAccountItem myBankAccount() {
@@ -60,6 +64,46 @@ public class BankAccountService {
             throw new IllegalArgumentException("Only users can bind bank accounts");
         }
         return toItem(bindForUser(currentUser, request), true);
+    }
+
+    @Transactional
+    public BankAccountItem replace(BindBankAccountRequest request) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        if (!"USER".equalsIgnoreCase(currentUser.getRoleCode())) {
+            throw new IllegalArgumentException("Only users can replace bank accounts");
+        }
+        if (withdrawalRequestRepository.existsByOwnerUser_IdAndStatusCode(currentUser.getId(), "PENDING")) {
+            throw new IllegalArgumentException("Complete pending withdrawals before changing the bank account");
+        }
+
+        UserBankAccountEntity account = userBankAccountRepository.findByOwnerUser_Id(currentUser.getId())
+            .orElseThrow(() -> new IllegalArgumentException("Please bind a bank account first"));
+        String country = requireTrimmed(request.country(), "Country is required");
+        String accountName = requireTrimmed(request.accountName(), "Account name is required");
+        String bankName = requireTrimmed(request.bankName(), "Bank name is required");
+        String accountNumber = requireTrimmed(request.accountNumber(), "Account number is required");
+        String normalizedBank = normalizeBankName(bankName);
+        String normalizedAccount = normalizeAccountNumber(accountNumber);
+        String fingerprint = fingerprint(country, normalizedBank, normalizedAccount);
+        if (userBankAccountRepository.existsByAccountFingerprintAndOwnerUser_IdNot(fingerprint, currentUser.getId())) {
+            throw new IllegalArgumentException("This bank account is already bound");
+        }
+
+        account.setCountry(country);
+        account.setAccountName(accountName);
+        account.setBankName(bankName);
+        account.setAccountNumber(accountNumber);
+        account.setNormalizedBankName(normalizedBank);
+        account.setNormalizedAccountNumber(normalizedAccount);
+        account.setAccountFingerprint(fingerprint);
+        account.setMaskedAccountNumber(maskAccountNumber(normalizedAccount));
+        account.setStatusCode("ACTIVE");
+        account.setUpdatedAt(LocalDateTime.now());
+        try {
+            return toItem(userBankAccountRepository.saveAndFlush(account), true);
+        } catch (DataIntegrityViolationException exception) {
+            throw new IllegalArgumentException("This bank account is already bound");
+        }
     }
 
     @Transactional

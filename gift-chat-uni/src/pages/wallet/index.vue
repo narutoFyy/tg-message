@@ -71,24 +71,10 @@ onShow(() => {
 })
 
 const completedTrades = computed(() => store.state.transactions.filter((item) => item.status === 'completed'))
-const pendingTrades = computed(() => store.state.transactions.filter((item) => item.status === 'pending' || item.status === 'processing'))
 const registrationBonus = computed(() => store.state.registrationBonusRecord)
 
-function parseNgn(value: string) {
-  return Number(value.replace(/[^\d.]/g, '') || '0')
-}
-
-function formatNaira(value: number) {
-  return `NGN ${value.toLocaleString('en-US')}`
-}
-
-const availableBalance = computed(() =>
-  formatNaira(completedTrades.value.reduce((sum, item) => sum + parseNgn(item.payoutAmount), 0))
-)
-
-const pendingBalance = computed(() =>
-  formatNaira(pendingTrades.value.reduce((sum, item) => sum + parseNgn(item.payoutAmount), 0))
-)
+const availableBalance = computed(() => `NGN ${store.state.balanceSummary?.availableTotal || '0.00'}`)
+const pendingBalance = computed(() => `NGN ${store.state.balanceSummary?.pendingTotal || '0.00'}`)
 
 function goTransactions() {
   uni.redirectTo({ url: '/pages/transactions/index' })

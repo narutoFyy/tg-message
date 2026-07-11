@@ -10,6 +10,8 @@ import type {
   LoanApplicationItem,
   LotteryDrawResult,
   LotteryEligibility,
+  LotteryFulfillmentItem,
+  LotteryRecordItem,
   LotteryWinnerItem,
   RankingBoard,
   RateItem,
@@ -54,6 +56,8 @@ import {
   fetchCurrentAccount,
   fetchHiddenRecords,
   fetchLotteryEligibility,
+  fetchLotteryFulfillments,
+  fetchMyLotteryRecords,
   fetchLotteryWinners,
   fetchMyRegistrationBonus,
   fetchLoans,
@@ -90,6 +94,7 @@ import {
   updateTransactionStatus as updateTransactionStatusRequest,
   updateAccountAvatar as updateAccountAvatarRequest,
   updateVideoSessionStatus as updateVideoSessionStatusRequest,
+  updateLotteryFulfillmentStatus as updateLotteryFulfillmentStatusRequest,
   updateWithdrawalStatus as updateWithdrawalStatusRequest
 } from '@/utils/api'
 import { closeAllChatSockets } from '@/utils/realtime'
@@ -117,6 +122,8 @@ const state = reactive({
   vipSummary: null as VipSummary | null,
   lotteryEligibility: null as LotteryEligibility | null,
   lotteryWinners: [] as LotteryWinnerItem[],
+  lotteryRecords: [] as LotteryRecordItem[],
+  lotteryFulfillments: [] as LotteryFulfillmentItem[],
   hiddenRecords: [] as HiddenRecordItem[],
   supportCustomerSearchResults: [] as SupportCustomerSearchResult[],
   supportMessageSearchResults: [] as SupportMessageSearchResult[],
@@ -382,6 +389,8 @@ export function useAppStore() {
         vipSummary,
         lotteryEligibility,
         lotteryWinners,
+        lotteryRecords,
+        lotteryFulfillments,
         hiddenRecords
       ] = await Promise.all([
         fetchRates(),
@@ -397,6 +406,8 @@ export function useAppStore() {
         fetchVipSummary(),
         fetchLotteryEligibility(),
         fetchLotteryWinners(),
+        fetchMyLotteryRecords(),
+        fetchLotteryFulfillments(),
         fetchHiddenRecords()
       ])
 
@@ -416,6 +427,8 @@ export function useAppStore() {
       state.vipSummary = vipSummary
       state.lotteryEligibility = lotteryEligibility
       state.lotteryWinners = lotteryWinners
+      state.lotteryRecords = lotteryRecords
+      state.lotteryFulfillments = lotteryFulfillments
       state.hiddenRecords = hiddenRecords
       state.friendRequests = friendRequests
       refreshBalanceSummary().catch(() => {})
@@ -522,6 +535,8 @@ export function useAppStore() {
       state.vipSummary = null
       state.lotteryEligibility = null
       state.lotteryWinners = []
+      state.lotteryRecords = []
+      state.lotteryFulfillments = []
       state.hiddenRecords = []
       state.supportCustomerSearchResults = []
       state.supportMessageSearchResults = []
@@ -969,6 +984,18 @@ export function useAppStore() {
     return winners
   }
 
+  async function refreshLotteryRecords() {
+    const records = await fetchMyLotteryRecords()
+    state.lotteryRecords = records
+    return records
+  }
+
+  async function refreshLotteryFulfillments() {
+    const orders = await fetchLotteryFulfillments()
+    state.lotteryFulfillments = orders
+    return orders
+  }
+
   async function spinLottery(prizeName?: string) {
     const result: LotteryDrawResult = await spinLotteryRequest(prizeName)
     state.lotteryEligibility = result.eligibility
@@ -1098,6 +1125,22 @@ export function useAppStore() {
     return updated
   }
 
+  async function refreshWithdrawals() {
+    const withdrawals = await fetchWithdrawals()
+    state.withdrawals = withdrawals
+    return withdrawals
+  }
+
+  async function updateLotteryFulfillmentStatus(orderId: string, status: LotteryFulfillmentItem['status']) {
+    const updated = await updateLotteryFulfillmentStatusRequest(orderId, status)
+    const index = state.lotteryFulfillments.findIndex((item) => item.id === orderId)
+    if (index >= 0) {
+      state.lotteryFulfillments.splice(index, 1, updated)
+    }
+    refreshSupportCustomerProfile(state.supportConversationId, true).catch(() => {})
+    return updated
+  }
+
   async function cancelTransaction(transactionId: string, payload: { reason: string; note?: string; notifyCustomer?: boolean }) {
     const updated = await cancelTransactionRequest(transactionId, payload)
     const index = state.transactions.findIndex((item) => item.id === transactionId)
@@ -1171,7 +1214,9 @@ export function useAppStore() {
     updateTransactionStatus,
     cancelTransaction,
     createWithdrawal,
+    refreshWithdrawals,
     updateWithdrawalStatus,
+    updateLotteryFulfillmentStatus,
     createLoanApplication,
     updateLoanStatus,
     refreshBroadcasts,
@@ -1180,6 +1225,8 @@ export function useAppStore() {
     refreshVipSummary,
     refreshLotteryEligibility,
     refreshLotteryWinners,
+    refreshLotteryRecords,
+    refreshLotteryFulfillments,
     spinLottery,
     searchSupportCustomers,
     searchSupportMessages,

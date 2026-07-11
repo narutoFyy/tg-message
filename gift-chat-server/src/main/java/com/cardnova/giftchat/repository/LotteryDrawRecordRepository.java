@@ -19,4 +19,6 @@ public interface LotteryDrawRecordRepository extends JpaRepository<LotteryDrawRe
     List<LotteryDrawRecordEntity> findTop50ByOrderByDrawnAtDesc();
 
     List<LotteryDrawRecordEntity> findAllByOrderByDrawnAtDesc();
+
+    List<LotteryDrawRecordEntity> findByUser_IdOrderByDrawnAtDesc(String userId);
 }

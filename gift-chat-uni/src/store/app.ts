@@ -100,15 +100,11 @@ import {
 import { closeAllChatSockets } from '@/utils/realtime'
 import { safeRouteForRole } from '@/utils/routeGuard'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
+import { supportedCountryOptions } from '@/data/supported-countries'
 
 const state = reactive({
   currentUser: getInitialUser(),
-  countries: [
-    { code: 'NG', name: 'Nigeria' },
-    { code: 'IN', name: 'India' },
-    { code: 'CM', name: 'Cameroon' },
-    { code: 'GH', name: 'Ghana' }
-  ] as CountryOption[],
+  countries: supportedCountryOptions as CountryOption[],
   selectedCountryCode: 'NG',
   rates: [] as RateItem[],
   friends: [] as FriendProfile[],

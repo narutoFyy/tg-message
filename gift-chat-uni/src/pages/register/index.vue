@@ -52,18 +52,11 @@ import { useAppStore } from '@/store/app'
 import { safeRouteForRole } from '@/utils/routeGuard'
 import { fetchCountryCodeRules } from '@/utils/api'
 import type { CountryCodeRule } from '@/types'
+import { fallbackCountryCodeRules } from '@/data/supported-countries'
 
 const store = useAppStore()
 const notice = ref('')
-const fallbackCountryCodes: CountryCodeRule[] = [
-  { countryCode: '+234', countryName: 'Nigeria', minLocalLength: 10, maxLocalLength: 10, enabled: true, sortOrder: 10 },
-  { countryCode: '+91', countryName: 'India', minLocalLength: 10, maxLocalLength: 10, enabled: true, sortOrder: 20 },
-  { countryCode: '+233', countryName: 'Ghana', minLocalLength: 9, maxLocalLength: 9, enabled: true, sortOrder: 30 },
-  { countryCode: '+86', countryName: 'China', minLocalLength: 11, maxLocalLength: 11, enabled: true, sortOrder: 40 },
-  { countryCode: '+44', countryName: 'United Kingdom', minLocalLength: 10, maxLocalLength: 10, enabled: true, sortOrder: 50 },
-  { countryCode: '+1', countryName: 'United States', minLocalLength: 10, maxLocalLength: 10, enabled: true, sortOrder: 60 }
-]
-const countryCodes = ref<CountryCodeRule[]>(fallbackCountryCodes)
+const countryCodes = ref<CountryCodeRule[]>(fallbackCountryCodeRules)
 const selectedCountryIndex = ref(0)
 const countryCodeLabels = computed(() => countryCodes.value.map((item) => `${item.countryCode} ${item.countryName}`))
 
@@ -156,7 +149,7 @@ async function loadCountryCodes() {
       countryCodes.value = enabled
     }
   } catch {
-    countryCodes.value = fallbackCountryCodes
+    countryCodes.value = fallbackCountryCodeRules
   }
 }
 

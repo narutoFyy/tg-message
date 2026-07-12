@@ -14,10 +14,9 @@ public class CountryCodeService {
     private static final List<CountryCodeRule> RULES = List.of(
         new CountryCodeRule("+234", "Nigeria", 10, 10, true, 10),
         new CountryCodeRule("+91", "India", 10, 10, true, 20),
-        new CountryCodeRule("+233", "Ghana", 9, 9, true, 30),
-        new CountryCodeRule("+86", "China", 11, 11, true, 40),
-        new CountryCodeRule("+44", "United Kingdom", 10, 10, true, 50),
-        new CountryCodeRule("+1", "United States", 10, 10, true, 60)
+        new CountryCodeRule("+237", "Cameroon", 9, 9, true, 30),
+        new CountryCodeRule("+233", "Ghana", 9, 9, true, 40),
+        new CountryCodeRule("+254", "Kenya", 9, 9, true, 50)
     );
 
     public List<CountryCodeRule> rules() {

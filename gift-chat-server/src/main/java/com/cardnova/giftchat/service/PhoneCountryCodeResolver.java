@@ -10,7 +10,9 @@ import java.util.List;
 @Component
 public class PhoneCountryCodeResolver {
 
-    private static final List<String> FALLBACK_CODES = List.of("+234", "+233", "+237", "+91", "+86", "+44", "+1");
+    private static final List<String> FALLBACK_CODES = List.of(
+        "+234", "+91", "+237", "+233", "+254", "+86", "+44", "+1"
+    );
 
     public String resolve(String phone, Collection<String> configuredCodes) {
         if (!StringUtils.hasText(phone)) {

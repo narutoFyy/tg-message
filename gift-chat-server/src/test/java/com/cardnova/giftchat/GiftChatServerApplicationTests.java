@@ -320,6 +320,45 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void loginAndRegistrationCountryOptionsAreAligned() throws Exception {
+        mockMvc.perform(get("/api/country-codes"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data", hasSize(5)))
+            .andExpect(jsonPath("$.data[0].countryCode").value("+234"))
+            .andExpect(jsonPath("$.data[1].countryCode").value("+91"))
+            .andExpect(jsonPath("$.data[2].countryCode").value("+237"))
+            .andExpect(jsonPath("$.data[3].countryCode").value("+233"))
+            .andExpect(jsonPath("$.data[4].countryCode").value("+254"))
+            .andExpect(content().string(not(containsString("China"))))
+            .andExpect(content().string(not(containsString("+86"))));
+
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "username": "kenya_phone_%s",
+                      "phone": "+254712345678",
+                      "password": "demo12345"
+                    }
+                    """.formatted(suffix)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.phone").value("+254712345678"));
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "username": "china_phone_%s",
+                      "phone": "+8613800138000",
+                      "password": "demo12345"
+                    }
+                    """.formatted(suffix)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Unsupported phone country code"));
+    }
+
+    @Test
     void bankAccountBindingIsOnePerUserAndUniqueAcrossUsers() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String firstToken = registerToken("bank_one_" + suffix);

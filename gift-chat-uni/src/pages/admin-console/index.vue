@@ -666,7 +666,7 @@ const registrationBonusDrafts = reactive<Record<string, {
   note: string
 }>>({})
 const broadcastTypes = ['text', 'image', 'voice', 'gif', 'link'] as const
-const adminBroadcastCountryOptions = ['+234', '+91', '+233']
+const adminBroadcastCountryOptions = ['+234', '+91', '+237', '+233', '+254']
 const lotteryStatuses = ['pending', 'processing', 'fulfilled', 'canceled']
 const vipRules = [
   { level: 'VIP1', threshold: '0-19 pts', draw: 'One welcome draw' },

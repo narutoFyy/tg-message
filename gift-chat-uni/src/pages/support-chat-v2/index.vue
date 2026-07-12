@@ -632,7 +632,7 @@ let supportSearchSerial = 0
 const showBroadcastPanel = ref(false)
 const broadcastDraft = ref('')
 const broadcastKeyword = ref('')
-const broadcastCountryOptions = ['+234', '+91', '+233']
+const broadcastCountryOptions = ['+234', '+91', '+237', '+233', '+254']
 const broadcastCountryCodes = ref<string[]>([])
 const broadcastSelectedConversationIds = ref<string[]>([])
 const socketTask = ref<UniApp.SocketTask | null>(null)
@@ -1025,7 +1025,9 @@ function countryLabel(code?: string) {
   return {
     '+234': 'Nigeria',
     '+91': 'India',
+    '+237': 'Cameroon',
     '+233': 'Ghana',
+    '+254': 'Kenya',
     '+86': 'China',
     '+44': 'United Kingdom',
     '+1': 'United States',

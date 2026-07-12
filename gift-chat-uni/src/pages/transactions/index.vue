@@ -10,6 +10,20 @@
         <text class="order-count">{{ filteredTransactions.length }}</text>
       </view>
 
+      <view class="completed-feed">
+        <view class="feed-heading">
+          <view class="feed-title-wrap"><view class="live-dot"></view><text class="section-title">Recent completed trades</text></view>
+          <text class="feed-count">{{ completedFeed.length }}</text>
+        </view>
+        <swiper v-if="completedFeed.length > 1" class="completed-ticker" vertical autoplay circular :interval="3000" :duration="500" :disable-touch="false">
+          <swiper-item v-for="item in completedFeed" :key="`${item.displayName}-${item.cardName}-${item.completedAt}`">
+            <view class="feed-row"><view class="feed-copy"><text class="feed-message">{{ item.displayName }} completed a {{ item.cardName }} trade</text><text class="feed-time">{{ item.completedAt }}</text></view><text class="feed-amount">{{ formatFeedAmount(item.payoutAmount) }}</text></view>
+          </swiper-item>
+        </swiper>
+        <view v-else-if="completedFeed.length === 1" class="feed-row"><view class="feed-copy"><text class="feed-message">{{ completedFeed[0].displayName }} completed a {{ completedFeed[0].cardName }} trade</text><text class="feed-time">{{ completedFeed[0].completedAt }}</text></view><text class="feed-amount">{{ formatFeedAmount(completedFeed[0].payoutAmount) }}</text></view>
+        <view v-else class="feed-empty"><text class="muted">No recently completed trades.</text></view>
+      </view>
+
       <scroll-view scroll-x class="filter-scroll" :show-scrollbar="false">
         <view class="filter-row">
           <view
@@ -91,6 +105,7 @@ const store = useAppStore()
 const notice = ref('')
 const loadingId = ref('')
 const activeFilter = ref<'all' | TransactionItem['status']>('all')
+const completedFeed = computed(() => store.state.recentCompletedTransactions)
 
 const filters = [
   { label: 'All', value: 'all' as const },
@@ -117,6 +132,14 @@ function statusLabel(status: TransactionItem['status']) {
     disputed: 'Disputed',
     canceled: 'Canceled'
   }[status]
+}
+
+function formatFeedAmount(value: string) {
+  const match = value.match(/^(.*?)(-?[\d,]+(?:\.\d+)?)$/)
+  if (!match) return value
+  const amount = Number(match[2].replace(/,/g, ''))
+  if (!Number.isFinite(amount)) return value
+  return `${match[1]}${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
 }
 
 function statusClass(status: TransactionItem['status']) {
@@ -219,9 +242,96 @@ function hideTransaction(item: TransactionItem) {
   text-align: right;
 }
 
+.completed-feed {
+  margin-top: 20rpx;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1rpx solid var(--cb-line);
+  border-radius: 12rpx;
+}
+
+.feed-heading {
+  min-height: 64rpx;
+  padding: 0 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1rpx solid #dedfe3;
+}
+
+.feed-title-wrap,
+.feed-row {
+  display: flex;
+  align-items: center;
+}
+
+.feed-title-wrap {
+  gap: 10rpx;
+}
+
+.live-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #002fa7;
+  box-shadow: 0 0 0 6rpx rgba(0, 47, 167, 0.1);
+}
+
+.feed-count {
+  color: #6f7178;
+  font-size: 20rpx;
+}
+
+.completed-ticker {
+  height: 92rpx;
+}
+
+.feed-row {
+  height: 92rpx;
+  padding: 0 20rpx;
+  box-sizing: border-box;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.feed-copy {
+  min-width: 0;
+}
+
+.feed-message,
+.feed-time {
+  display: block;
+}
+
+.feed-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #111111;
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
+.feed-time {
+  margin-top: 5rpx;
+  color: #777980;
+  font-size: 18rpx;
+}
+
+.feed-amount {
+  flex: 0 0 auto;
+  color: #137a4e;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.feed-empty {
+  padding: 24rpx 20rpx;
+}
+
 .filter-scroll {
   width: 100%;
-  margin-top: 24rpx;
+  margin-top: 20rpx;
   background: #ffffff;
   border: 1rpx solid var(--cb-line);
   border-radius: 12rpx;

@@ -33,8 +33,8 @@
           </view>
 
           <view class="form-field">
-            <text class="field-label">Email or phone</text>
-            <input v-model.trim="form.identifier" class="field-input" placeholder="Enter your email or phone" />
+            <text class="field-label">Username, email or phone</text>
+            <input v-model.trim="form.identifier" class="field-input" placeholder="Enter username, email or full phone number" />
           </view>
 
           <view class="form-field">
@@ -76,7 +76,7 @@ async function handleSubmit() {
     const identifier = form.identifier.trim()
     const password = form.password
     if (!identifier) {
-      notice.value = 'Email or phone is required.'
+      notice.value = 'Username, email or phone is required.'
       return
     }
     if (!password) {

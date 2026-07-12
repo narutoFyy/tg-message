@@ -76,6 +76,24 @@ public class CountryCodeService {
         return rule.countryCode() + localNumber;
     }
 
+    public String normalizeLoginPhone(String phone, String selectedCountryCode) {
+        if (!StringUtils.hasText(phone)) {
+            return null;
+        }
+        String trimmed = phone.trim();
+        if (trimmed.startsWith("+") || trimmed.startsWith("00")) {
+            return normalizeFullPhone(trimmed);
+        }
+        if (!StringUtils.hasText(selectedCountryCode)) {
+            return null;
+        }
+        String localNumber = trimmed.replaceAll("[^0-9]", "");
+        if (!StringUtils.hasText(localNumber)) {
+            return null;
+        }
+        return requireCountry(selectedCountryCode).countryCode() + localNumber;
+    }
+
     private String normalizeIsoCode(String code) {
         return StringUtils.hasText(code) ? code.trim().toUpperCase(Locale.ROOT) : "";
     }

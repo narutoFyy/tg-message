@@ -37,6 +37,7 @@ import type {
   SupportLedgerReport,
   SupportMessageSearchResult,
   TransactionItem,
+  CompletedTransactionFeedItem,
   UploadAsset,
   VideoSessionBootstrap,
   VideoSessionItem,
@@ -234,6 +235,10 @@ export function updateSupportConversationNote(conversationId: string, note: stri
 
 export function fetchTransactions() {
   return request<TransactionItem[]>('/transactions')
+}
+
+export function fetchRecentCompletedTransactions() {
+  return request<CompletedTransactionFeedItem[]>('/transactions/recent-completed')
 }
 
 export function createSellOrder(payload: SellOrderPayload) {
@@ -504,6 +509,8 @@ export function updateAdminCurrencyExchangeRate(payload: {
 
 function normalizeRateText(value: string) {
   return value
+    .replace(/\$1\s*=\s*/g, () => '$1 ≈ ')
+    .replace(/1\s+USD\s*=\s*/gi, () => '1 USD ≈ ')
     .replace(/\s+\?\s+\?/g, ' ≈ ₦')
     .replace(/\s+\u00e2\u0089\u0088\s+\u00e2\u0082\u00a6/g, ' ≈ ₦')
 }

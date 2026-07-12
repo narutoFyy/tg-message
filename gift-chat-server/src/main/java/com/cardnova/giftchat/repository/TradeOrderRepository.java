@@ -15,5 +15,7 @@ public interface TradeOrderRepository extends JpaRepository<TradeOrderEntity, St
 
     List<TradeOrderEntity> findAllByOrderByUpdatedAtDesc();
 
+    List<TradeOrderEntity> findTop12ByStatusCodeOrderByUpdatedAtDesc(String statusCode);
+
     long countByCreatedAtBetween(java.time.LocalDateTime start, java.time.LocalDateTime end);
 }

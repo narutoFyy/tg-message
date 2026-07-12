@@ -3,6 +3,7 @@ import type {
   BroadcastItem,
   BalanceSummary,
   ChatMessage,
+  CompletedTransactionFeedItem,
   CountryOption,
   CurrencyExchangeRateItem,
   FriendProfile,
@@ -69,6 +70,7 @@ import {
   fetchSupportLedger,
   fetchSupportMessages,
   fetchTransactions,
+  fetchRecentCompletedTransactions,
   fetchVideoSessionBootstrap,
   fetchVideoSessions,
   fetchWithdrawals,
@@ -119,6 +121,7 @@ const state = reactive({
   supportUnreadCount: 0,
   supportConversations: [] as SupportConversationItem[],
   transactions: [] as TransactionItem[],
+  recentCompletedTransactions: [] as CompletedTransactionFeedItem[],
   vipSummary: null as VipSummary | null,
   lotteryEligibility: null as LotteryEligibility | null,
   lotteryWinners: [] as LotteryWinnerItem[],
@@ -385,6 +388,7 @@ export function useAppStore() {
         blacklist,
         support,
         transactions,
+        recentCompletedTransactions,
         friendRequests,
         withdrawals,
         loans,
@@ -402,6 +406,7 @@ export function useAppStore() {
         fetchBlacklist(),
         fetchSupportMessages(),
         fetchTransactions(),
+        fetchRecentCompletedTransactions(),
         fetchFriendRequests(),
         fetchWithdrawals(),
         fetchLoans(),
@@ -424,6 +429,7 @@ export function useAppStore() {
       state.supportConversations = applySupportReadCache(normalizedSupport)
       rememberSupportConversationCursors(state.supportConversations)
       state.transactions = transactions
+      state.recentCompletedTransactions = recentCompletedTransactions
       state.withdrawals = withdrawals
       state.loans = loans
       state.videoSessions = videoSessions
@@ -1165,7 +1171,16 @@ export function useAppStore() {
     }
     refreshSupportCustomerProfile(state.supportConversationId, true).catch(() => {})
     refreshSupportLedger().catch(() => {})
+    if (status === 'completed') {
+      refreshCompletedTransactionFeed().catch(() => {})
+    }
     return updated
+  }
+
+  async function refreshCompletedTransactionFeed() {
+    const transactions = await fetchRecentCompletedTransactions()
+    state.recentCompletedTransactions = transactions
+    return transactions
   }
 
   async function blockUser(username: string, reason?: string) {
@@ -1228,6 +1243,7 @@ export function useAppStore() {
     createTransaction,
     createSellOrder,
     updateTransactionStatus,
+    refreshCompletedTransactionFeed,
     cancelTransaction,
     createWithdrawal,
     refreshWithdrawals,

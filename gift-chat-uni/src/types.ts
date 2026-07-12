@@ -157,6 +157,13 @@ export interface TransactionItem {
   updatedAt: string
 }
 
+export interface CompletedTransactionFeedItem {
+  displayName: string
+  cardName: string
+  payoutAmount: string
+  completedAt: string
+}
+
 export interface VipSummary {
   level: 'VIP1' | 'VIP2' | 'VIP3' | 'VIP4' | string
   levelName: string

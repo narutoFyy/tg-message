@@ -6,6 +6,7 @@ import com.cardnova.giftchat.dto.CreateSellOrderRequest;
 import com.cardnova.giftchat.dto.CreateTransactionRequest;
 import com.cardnova.giftchat.dto.UpdateTransactionStatusRequest;
 import com.cardnova.giftchat.model.TransactionItem;
+import com.cardnova.giftchat.model.CompletedTransactionFeedItem;
 import com.cardnova.giftchat.service.PersistentTransactionService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +31,11 @@ public class TransactionController {
     @GetMapping
     public ApiResponse<List<TransactionItem>> getTransactions() {
         return ApiResponse.success(persistentTransactionService.getTransactions());
+    }
+
+    @GetMapping("/recent-completed")
+    public ApiResponse<List<CompletedTransactionFeedItem>> getRecentCompletedTransactions() {
+        return ApiResponse.success(persistentTransactionService.getRecentCompletedTransactions());
     }
 
     @GetMapping("/{transactionId}")

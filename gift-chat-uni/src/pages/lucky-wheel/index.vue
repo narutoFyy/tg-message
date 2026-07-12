@@ -35,16 +35,20 @@
           </view>
         </view>
         <view class="winner-section">
-          <view class="section-head"><text class="section-title">Recent winners</text><text class="section-count">{{ recentWinners.length }}</text></view>
-          <view v-for="winner in recentWinners" :key="`${winner.displayName}-${winner.prizeName}-${winner.drawnAt}`" class="winner-row"><view><text class="winner-prize">{{ winner.prizeName }}</text><text class="winner-time">{{ winner.drawnAt || 'Recent draw' }}</text></view><text class="winner-name">{{ winner.displayName }}</text></view>
+          <view class="section-head"><view><text class="section-title">Live draw activity</text><text class="live-label">Real winner feed</text></view><text class="section-count">{{ recentWinners.length }}</text></view>
+          <swiper v-if="recentWinners.length" class="winner-ticker" vertical autoplay circular :interval="2800" :duration="500" :disable-touch="recentWinners.length < 2">
+            <swiper-item v-for="winner in recentWinners" :key="`${winner.displayName}-${winner.prizeName}-${winner.drawnAt}`">
+              <view class="winner-row"><view><text class="winner-prize">{{ winner.prizeName }}</text><text class="winner-time">{{ winner.drawnAt || 'Recent draw' }}</text></view><text class="winner-name">{{ winner.displayName }}</text></view>
+            </swiper-item>
+          </swiper>
           <view v-if="!recentWinners.length" class="empty-winners"><text class="muted">No recent winners.</text></view>
         </view>
       </view>
     </view>
 
     <view class="claim-history">
-      <view class="section-head"><text class="section-title">My prize orders</text><text class="section-count">{{ lotteryRecords.length }}</text></view>
-      <view v-if="!lotteryRecords.length" class="empty-winners"><text class="muted">Your lottery prizes will appear here.</text></view>
+      <view class="section-head"><view><text class="section-title">My draw history</text><text class="history-caption">Every result from this account</text></view><text class="section-count">{{ lotteryRecords.length }}</text></view>
+      <view v-if="!lotteryRecords.length" class="empty-winners"><text class="muted">Your draw results will appear here.</text></view>
       <view v-for="record in lotteryRecords" :key="record.id" class="claim-row">
         <view class="claim-copy">
           <view class="claim-title-line"><text class="claim-prize">{{ record.displayAmount || record.prizeName }}</text><text :class="['status-pill', claimStatus(record) === 'completed' ? 'active' : 'warning']">{{ claimStatus(record) }}</text></view>
@@ -150,7 +154,10 @@ async function handleSpin() {
   try {
     const result = await store.spinLottery(); const displayPrize = result.prize.displayAmount || result.prize.name; rotation.value = targetRotationForPrize(displayPrize); await waitForSpin()
     lastPrize.value = displayPrize; lastRecordId.value = result.recordId; lastPrizeType.value = result.prize.prizeType
-    await store.refreshLotteryRecords().catch(() => undefined)
+    await Promise.all([
+      store.refreshLotteryRecords().catch(() => undefined),
+      store.refreshLotteryWinners().catch(() => undefined)
+    ])
     openClaimDetails(result.recordId, result.prize.name, result.prize.prizeType)
   }
   catch (error) { uni.showToast({ title: error instanceof Error ? error.message : 'Draw failed', icon: 'none' }) }
@@ -231,6 +238,7 @@ async function submitClaim() {
 .prize-section { background: var(--cb-sky); border-color: #cfe4fb; }
 .winner-section { background: var(--cb-lilac); border-color: #ddd5fb; }
 .section-head { min-height: 72rpx; padding: 0 20rpx; display: flex; align-items: center; justify-content: space-between; border-bottom: 1rpx solid #dedfe3; }
+.live-label, .history-caption { display: block; margin-top: 3rpx; color: #6f7178; font-size: 18rpx; }
 .section-count { color: #6f7178; font-size: 21rpx; }
 .prize-row { min-height: 92rpx; padding: 12rpx 18rpx; box-sizing: border-box; display: grid; grid-template-columns: 94rpx minmax(0, 1fr); align-items: center; gap: 14rpx; border-bottom: 1rpx solid #dedfe3; }
 .prize-row:last-child { border-bottom: 0; }
@@ -238,8 +246,8 @@ async function submitClaim() {
 .prize-name, .prize-note { display: block; }
 .prize-name { color: #111111; font-size: 25rpx; font-weight: 700; }
 .prize-note { margin-top: 5rpx; color: #6f7178; font-size: 20rpx; }
-.winner-row { min-height: 76rpx; padding: 12rpx 18rpx; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 14rpx; border-bottom: 1rpx solid #dedfe3; }
-.winner-row:last-child { border-bottom: 0; }
+.winner-ticker { height: 86rpx; }
+.winner-row { height: 86rpx; padding: 12rpx 18rpx; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 14rpx; }
 .winner-prize, .winner-time { display: block; }
 .winner-prize { color: #111111; font-size: 23rpx; font-weight: 700; }
 .winner-time { margin-top: 4rpx; color: #777980; font-size: 18rpx; }

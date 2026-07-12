@@ -8,6 +8,7 @@ import com.cardnova.giftchat.entity.TradeOrderEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.entity.GiftCardRateEntity;
 import com.cardnova.giftchat.model.TransactionItem;
+import com.cardnova.giftchat.model.CompletedTransactionFeedItem;
 import com.cardnova.giftchat.repository.BlacklistEntryRepository;
 import com.cardnova.giftchat.repository.FriendshipRepository;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
@@ -263,6 +264,18 @@ public class PersistentTransactionService {
         );
     }
 
+    public List<CompletedTransactionFeedItem> getRecentCompletedTransactions() {
+        currentUserService.getCurrentUser();
+        return tradeOrderRepository.findTop12ByStatusCodeOrderByUpdatedAtDesc("COMPLETED").stream()
+            .map(order -> new CompletedTransactionFeedItem(
+                maskUsername(order.getOwnerUser().getUsername()),
+                order.getCardName(),
+                order.getPayoutAmount(),
+                TIME_FORMATTER.format(order.getUpdatedAt())
+            ))
+            .toList();
+    }
+
     @Transactional
     public TransactionItem cancelTransaction(String transactionId, String reason, String note, Boolean notifyCustomer) {
         UserEntity currentUser = currentUserService.getCurrentUser();
@@ -462,6 +475,20 @@ public class PersistentTransactionService {
 
     private String decimal(BigDecimal amount) {
         return amount == null ? "" : amount.stripTrailingZeros().toPlainString();
+    }
+
+    private String maskUsername(String username) {
+        if (!StringUtils.hasText(username)) {
+            return "***";
+        }
+        String normalized = username.trim();
+        if (normalized.length() == 1) {
+            return normalized + "***";
+        }
+        if (normalized.length() == 2) {
+            return normalized.charAt(0) + "***";
+        }
+        return normalized.charAt(0) + "***" + normalized.charAt(normalized.length() - 1);
     }
 
     private String formatLocalAmount(String symbol, BigDecimal amount) {

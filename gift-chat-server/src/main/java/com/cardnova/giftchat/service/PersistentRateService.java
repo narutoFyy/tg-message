@@ -206,7 +206,7 @@ public class PersistentRateService {
 
     private String displayRate(String symbol, BigDecimal amount) {
         String separator = symbol.length() > 1 ? " " : "";
-        return "$1 = " + symbol + separator + decimal(amount);
+        return "$1 ≈ " + symbol + separator + decimal(amount);
     }
 
     private String decimal(BigDecimal amount) {

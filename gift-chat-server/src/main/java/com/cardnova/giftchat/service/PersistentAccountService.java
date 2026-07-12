@@ -71,7 +71,7 @@ public class PersistentAccountService {
         loginRateLimitService.checkAllowed(normalizedIdentifier, clientIp);
 
         try {
-            UserEntity user = findByIdentifier(normalizedIdentifier)
+            UserEntity user = findByIdentifier(normalizedIdentifier, countryCode)
                 .orElseThrow(this::invalidLogin);
 
             if (!"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
@@ -189,14 +189,25 @@ public class PersistentAccountService {
         );
     }
 
-    private Optional<UserEntity> findByIdentifier(String identifier) {
+    private Optional<UserEntity> findByIdentifier(String identifier, String countryCode) {
         if (!StringUtils.hasText(identifier)) {
             return Optional.empty();
         }
 
         return userRepository.findByUsername(identifier)
-            .or(() -> userRepository.findByEmail(identifier))
-            .or(() -> userRepository.findByPhone(identifier));
+            .or(() -> userRepository.findByEmailIgnoreCase(identifier))
+            .or(() -> findByPhone(identifier, countryCode));
+    }
+
+    private Optional<UserEntity> findByPhone(String identifier, String countryCode) {
+        try {
+            String normalizedPhone = countryCodeService.normalizeLoginPhone(identifier, countryCode);
+            return StringUtils.hasText(normalizedPhone)
+                ? userRepository.findByNormalizedPhone(normalizedPhone)
+                : Optional.empty();
+        } catch (IllegalArgumentException exception) {
+            return Optional.empty();
+        }
     }
 
     private void ensureCountryBinding(UserEntity user) {

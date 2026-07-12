@@ -98,7 +98,7 @@ public class CurrencyExchangeRateService {
             country.currencyCode(),
             country.currencySymbol(),
             amount,
-            "$1 = " + country.currencySymbol() + separator + amount,
+            "$1 ≈ " + country.currencySymbol() + separator + amount,
             entity.isEnabled(),
             entity.getNote() == null ? "" : entity.getNote(),
             TIME_FORMATTER.format(entity.getUpdatedAt()),

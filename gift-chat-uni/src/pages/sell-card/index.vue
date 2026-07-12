@@ -268,7 +268,7 @@ function buildSellCardDraft(transaction: TransactionItem) {
     `Face value: ${balanceText.value || '0'} ${form.cardCountry} x${form.quantity}`,
     `Type: ${form.cardType}`,
     `Speed: ${form.speed}`,
-    `Rate: ${transaction.businessRate ? `$1 = ${transaction.businessRate} ${transaction.currencyCode}` : activeRate.value?.rate || '-'}`,
+    `Rate: ${transaction.businessRate ? `$1 ≈ ${transaction.businessRate} ${transaction.currencyCode}` : activeRate.value?.rate || '-'}`,
     `Settlement: ${transaction.payoutAmount}`,
     form.cardData ? `Card data: ${form.cardData}` : '',
     form.voucherImageUrl ? 'Voucher: Image attached below' : ''

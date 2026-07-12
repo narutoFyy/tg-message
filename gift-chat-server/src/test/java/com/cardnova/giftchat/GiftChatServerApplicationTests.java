@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -324,6 +325,24 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.email").value(email))
             .andExpect(jsonPath("$.data.roleCode").value("USER"))
             .andExpect(jsonPath("$.data.nextRoute").value("/pages/support/index"));
+    }
+
+    @Test
+    void ordinaryUserCanLoginWithUsernameEmailOrFormattedPhone() throws Exception {
+        for (String identifier : List.of("cardnova_user", "DEMO@CARDNOVA.APP", "00 234-801-234-5678")) {
+            mockMvc.perform(post("/api/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                        {
+                          "identifier": "%s",
+                          "password": "demo12345",
+                          "countryCode": "NG"
+                        }
+                        """.formatted(identifier)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("cardnova_user"))
+                .andExpect(jsonPath("$.data.countryCode").value("NG"));
+        }
     }
 
     @Test
@@ -718,7 +737,7 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.countryCode").value("NG"))
             .andExpect(jsonPath("$.data.currencyCode").value("NGN"))
             .andExpect(jsonPath("$.data.localCurrencyPerUsd").value("1500"))
-            .andExpect(jsonPath("$.data.displayRate").value("$1 = ₦1500"));
+            .andExpect(jsonPath("$.data.displayRate").value("$1 ≈ ₦1500"));
 
         mockMvc.perform(post("/api/admin/currency-rates")
                 .header("Authorization", bearer(userToken))
@@ -1329,6 +1348,23 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void recentCompletedTransactionsAreRealAndPrivacySafe() throws Exception {
+        String userToken = loginToken("cardnova_user");
+
+        mockMvc.perform(get("/api/transactions/recent-completed")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data[*].displayName", hasItem("g***r")))
+            .andExpect(jsonPath("$.data[*].cardName", hasItem("Razer Gold")))
+            .andExpect(jsonPath("$.data[*].payoutAmount", hasItem("NGN 53200")))
+            .andExpect(jsonPath("$.data[0].completedAt").isString())
+            .andExpect(jsonPath("$.data[0].orderNo").doesNotExist())
+            .andExpect(jsonPath("$.data[0].username").doesNotExist());
+
+    }
+
+    @Test
     void transactionStatusCanAdvanceButNotReopenCompletedTrade() throws Exception {
         String user1Token = loginToken("cardnova_user");
 
@@ -1440,7 +1476,7 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.cardName").value("Test Card"))
             .andExpect(jsonPath("$.data.currencyCode").value("NGN"))
             .andExpect(jsonPath("$.data.localPayoutPerUsd").value("999.99"))
-            .andExpect(jsonPath("$.data.rate").value("$1 = ₦999.99"));
+            .andExpect(jsonPath("$.data.rate").value("$1 ≈ ₦999.99"));
 
         mockMvc.perform(post("/api/admin/rates")
                 .header("Authorization", bearer(adminToken))

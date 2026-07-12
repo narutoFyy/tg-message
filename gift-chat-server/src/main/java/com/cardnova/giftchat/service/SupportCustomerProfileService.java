@@ -153,6 +153,10 @@ public class SupportCustomerProfileService {
             order.getCardName(),
             order.getFaceValue(),
             order.getPayoutAmount(),
+            decimal(order.getBaseAmountUsd()),
+            decimal(order.getLocalAmount()),
+            value(order.getCurrencyCode()),
+            decimal(order.getBusinessRateSnapshot()),
             order.getStatusCode().toLowerCase(),
             counterpart == null ? assignedAgent : counterpart.getUsername(),
             counterpart == null ? assignedAgent : counterpart.getUsername(),
@@ -267,5 +271,9 @@ public class SupportCustomerProfileService {
 
     private String value(String value) {
         return value == null ? "" : value;
+    }
+
+    private String decimal(BigDecimal amount) {
+        return amount == null ? "" : amount.stripTrailingZeros().toPlainString();
     }
 }

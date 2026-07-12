@@ -1,6 +1,6 @@
 INSERT INTO app_user (id, username, email, phone, password_hash, role_code, status_code, invite_code, referred_by_user_id, created_at, updated_at)
 VALUES
-('user-1', 'cardnova_user', 'demo@cardnova.app', '+86 13800138000', '{noop}demo12345', 'USER', 'ACTIVE', 'CARDNOVA1', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-1', 'cardnova_user', 'demo@cardnova.app', '+234 801 234 5678', '{noop}demo12345', 'USER', 'ACTIVE', 'CARDNOVA1', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('user-2', 'gift_hunter', NULL, '+234 809 000 1234', '{noop}demo12345', 'USER', 'ACTIVE', 'GIFTHUNT2', 'user-1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('user-3', 'tradewithmina', NULL, '+44 7400 221199', '{noop}demo12345', 'USER', 'ACTIVE', 'TRADEMIN3', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('user-4', 'spam_rate_88', NULL, '+86 135 0000 2222', '{noop}demo12345', 'USER', 'BLOCKED', 'SPAMRATE4', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

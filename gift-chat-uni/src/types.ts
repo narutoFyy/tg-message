@@ -4,6 +4,9 @@ export interface RateItem {
   cardCode?: string | null
   region: string
   rate: string
+  currencyCode?: string
+  localPayoutPerUsd?: string
+  displayRate?: string
   status: 'active' | 'paused'
   updatedAt: string
 }
@@ -136,6 +139,10 @@ export interface TransactionItem {
   cardName: string
   faceValue: string
   payoutAmount: string
+  baseAmountUsd?: string
+  localAmount?: string
+  currencyCode?: string
+  businessRate?: string
   status: 'pending' | 'processing' | 'completed' | 'disputed' | 'canceled'
   counterpartyName: string
   counterpartyUsername: string
@@ -165,6 +172,11 @@ export interface LotteryPrizeItem {
   id: string
   name: string
   prizeType: 'cash' | 'physical' | string
+  baseAmountUsd: string
+  localAmount: string
+  currencyCode: string
+  displayAmount: string
+  exchangeRate: string
   weight: number
   imageUrl: string
   enabled: boolean
@@ -189,8 +201,11 @@ export interface LotteryDrawResult {
 }
 
 export interface CountryCodeRule {
+  code: string
   countryCode: string
   countryName: string
+  currencyCode: string
+  currencySymbol: string
   minLocalLength: number
   maxLocalLength: number
   enabled: boolean
@@ -209,6 +224,11 @@ export interface LotteryRecordItem {
   vipLevel: string
   prizeName: string
   prizeType: string
+  baseAmountUsd: string
+  localAmount: string
+  currencyCode: string
+  displayAmount: string
+  exchangeRate: string
   periodType: string
   periodKey: string
   fulfillmentStatus: string
@@ -326,6 +346,7 @@ export interface BroadcastItem {
 
 export interface BalanceSummary {
   scope: 'self' | 'own' | 'all'
+  currencyCode: string
   availableTotal: string
   pendingTotal: string
   withdrawnTotal: string
@@ -566,6 +587,10 @@ export interface SessionUser {
   phone?: string
   avatarUrl?: string
   inviteCode?: string
+  countryCode?: string
+  countryName?: string
+  currencyCode?: string
+  currencySymbol?: string
   roleCode?: 'USER' | 'AGENT' | 'ADMIN'
   accessToken?: string
   expiresAt?: string
@@ -608,4 +633,18 @@ export interface RegistrationBonusConfigItem {
 export interface CountryOption {
   code: string
   name: string
+}
+
+export interface CurrencyExchangeRateItem {
+  id: string
+  countryCode: string
+  countryName: string
+  currencyCode: string
+  currencySymbol: string
+  localCurrencyPerUsd: string
+  displayRate: string
+  enabled: boolean
+  note: string
+  updatedAt: string
+  updatedBy: string
 }

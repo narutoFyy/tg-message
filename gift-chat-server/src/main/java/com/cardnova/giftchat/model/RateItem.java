@@ -5,6 +5,8 @@ public record RateItem(
     String cardName,
     String cardCode,
     String region,
+    String currencyCode,
+    String localPayoutPerUsd,
     String rate,
     String status,
     String updatedAt

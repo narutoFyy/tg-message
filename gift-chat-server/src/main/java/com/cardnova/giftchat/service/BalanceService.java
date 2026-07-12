@@ -70,8 +70,9 @@ public class BalanceService {
         }
 
         List<String> userIds = users.stream().map(UserEntity::getId).toList();
+        String currencyCode = commonCurrency(users);
         if (userIds.isEmpty()) {
-            return new BalanceSummary(scope, money(BigDecimal.ZERO), money(BigDecimal.ZERO), money(BigDecimal.ZERO), 0);
+            return new BalanceSummary(scope, currencyCode, money(BigDecimal.ZERO), money(BigDecimal.ZERO), money(BigDecimal.ZERO), 0);
         }
 
         List<TradeOrderEntity> orders = tradeOrderRepository.findByOwnerUser_IdIn(userIds);
@@ -79,11 +80,11 @@ public class BalanceService {
 
         BigDecimal completed = orders.stream()
             .filter(order -> "COMPLETED".equalsIgnoreCase(order.getStatusCode()))
-            .map(order -> amountFromText(order.getPayoutAmount()))
+            .map(this::orderAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal pending = orders.stream()
             .filter(order -> PENDING_STATUSES.contains(order.getStatusCode().toUpperCase()))
-            .map(order -> amountFromText(order.getPayoutAmount()))
+            .map(this::orderAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal withdrawn = withdrawals.stream()
             .filter(withdrawal -> "COMPLETED".equalsIgnoreCase(withdrawal.getStatusCode()))
@@ -94,7 +95,20 @@ public class BalanceService {
         BigDecimal registrationBonuses = registrationBonusService.availableBonusesForUsers(userIds);
 
         BigDecimal available = completed.add(rewards).add(registrationBonuses).subtract(withdrawn).max(BigDecimal.ZERO);
-        return new BalanceSummary(scope, money(available), money(pending), money(withdrawn), users.size());
+        return new BalanceSummary(scope, currencyCode, money(available), money(pending), money(withdrawn), users.size());
+    }
+
+    private BigDecimal orderAmount(TradeOrderEntity order) {
+        return order.getLocalAmount() == null ? amountFromText(order.getPayoutAmount()) : order.getLocalAmount();
+    }
+
+    private String commonCurrency(List<UserEntity> users) {
+        List<String> currencies = users.stream()
+            .map(UserEntity::getCurrencyCode)
+            .filter(currency -> currency != null && !currency.isBlank())
+            .distinct()
+            .toList();
+        return currencies.size() == 1 ? currencies.get(0) : "";
     }
 
     private BigDecimal amountFromText(String value) {

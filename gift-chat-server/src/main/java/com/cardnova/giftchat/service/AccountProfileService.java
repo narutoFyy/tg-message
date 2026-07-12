@@ -17,17 +17,20 @@ public class AccountProfileService {
     private final UploadAssetRepository uploadAssetRepository;
     private final UserRepository userRepository;
     private final JwtService jwtService;
+    private final CountryCodeService countryCodeService;
 
     public AccountProfileService(
         CurrentUserService currentUserService,
         UploadAssetRepository uploadAssetRepository,
         UserRepository userRepository,
-        JwtService jwtService
+        JwtService jwtService,
+        CountryCodeService countryCodeService
     ) {
         this.currentUserService = currentUserService;
         this.uploadAssetRepository = uploadAssetRepository;
         this.userRepository = userRepository;
         this.jwtService = jwtService;
+        this.countryCodeService = countryCodeService;
     }
 
     public LoginResponse currentProfile() {
@@ -53,6 +56,7 @@ public class AccountProfileService {
     }
 
     public LoginResponse toSession(UserEntity user) {
+        var country = countryCodeService.findCountry(user.getCountryCode()).orElse(null);
         return new LoginResponse(
             jwtService.issueAccessToken(user),
             user.getUsername(),
@@ -60,6 +64,10 @@ public class AccountProfileService {
             user.getPhone(),
             user.getAvatarUrl() == null ? "" : user.getAvatarUrl(),
             user.getInviteCode() == null ? "" : user.getInviteCode(),
+            country == null ? "" : country.code(),
+            country == null ? "" : country.countryName(),
+            country == null ? "" : country.currencyCode(),
+            country == null ? "" : country.currencySymbol(),
             user.getRoleCode(),
             nextRoute(user),
             jwtService.getAccessTokenExpiry().toString()

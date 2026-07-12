@@ -128,6 +128,7 @@ async function handleSubmit() {
       return
     }
     const session = await store.register({
+      countryCode: selectedCountry.value.code,
       username,
       email: email || undefined,
       phone: `${selectedCountry.value.countryCode}${phone}`,
@@ -147,6 +148,8 @@ async function loadCountryCodes() {
     const enabled = rules.filter((rule) => rule.enabled)
     if (enabled.length) {
       countryCodes.value = enabled
+      const selectedIndex = enabled.findIndex((rule) => rule.code === store.state.selectedCountryCode)
+      selectedCountryIndex.value = selectedIndex >= 0 ? selectedIndex : 0
     }
   } catch {
     countryCodes.value = fallbackCountryCodeRules
@@ -155,6 +158,7 @@ async function loadCountryCodes() {
 
 function handleCountryChange(event: { detail: { value: number | string } }) {
   selectedCountryIndex.value = Number(event.detail.value || 0)
+  store.setCountry(selectedCountry.value.code)
 }
 
 function goLogin() {

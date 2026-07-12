@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "lottery_prize")
@@ -25,6 +26,9 @@ public class LotteryPrizeEntity {
 
     @Column(name = "image_url", length = 255)
     private String imageUrl;
+
+    @Column(name = "base_amount_usd", precision = 18, scale = 6)
+    private BigDecimal baseAmountUsd;
 
     @Column(nullable = false)
     private boolean enabled;
@@ -77,6 +81,9 @@ public class LotteryPrizeEntity {
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
     }
+
+    public BigDecimal getBaseAmountUsd() { return baseAmountUsd; }
+    public void setBaseAmountUsd(BigDecimal baseAmountUsd) { this.baseAmountUsd = baseAmountUsd; }
 
     public boolean isEnabled() {
         return enabled;

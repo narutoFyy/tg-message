@@ -148,7 +148,9 @@ public class WithdrawalService {
             assignedAgent,
             bankAccount,
             record,
-            record.getPrize().getName(),
+            record.getLocalAmount() == null
+                ? record.getPrize().getName()
+                : record.getCurrencyCode() + " " + record.getLocalAmount().stripTrailingZeros().toPlainString(),
             bankAccount.getCountry(),
             bankAccount.getAccountName(),
             bankAccount.getBankName(),

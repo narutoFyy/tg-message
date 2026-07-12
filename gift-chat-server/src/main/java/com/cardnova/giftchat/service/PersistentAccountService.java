@@ -18,7 +18,7 @@ import java.util.UUID;
 @Service
 public class PersistentAccountService {
 
-    private static final String INVALID_LOGIN_MESSAGE = "Invalid identifier or password";
+    private static final String INVALID_LOGIN_MESSAGE = "Invalid account, password, or country";
 
     private final UserRepository userRepository;
     private final JwtService jwtService;
@@ -63,7 +63,7 @@ public class PersistentAccountService {
     }
 
     @Transactional
-    public LoginResponse login(String identifier, String password) {
+    public LoginResponse login(String identifier, String password, String countryCode) {
         String normalizedIdentifier = requireTrimmed(identifier, "Identifier is required");
         String normalizedPassword = requireTrimmed(password, "Password is required");
         String clientIp = clientIp();
@@ -80,6 +80,14 @@ public class PersistentAccountService {
 
             if (!passwordService.matches(normalizedPassword, user.getPasswordHash())) {
                 throw invalidLogin();
+            }
+
+            if ("USER".equalsIgnoreCase(user.getRoleCode())) {
+                ensureCountryBinding(user);
+                String requestedCountry = countryCodeService.requireCountry(countryCode).code();
+                if (!requestedCountry.equals(user.getCountryCode())) {
+                    throw invalidLogin();
+                }
             }
 
             loginRateLimitService.recordSuccess(normalizedIdentifier, clientIp);
@@ -101,7 +109,8 @@ public class PersistentAccountService {
         String username = requireTrimmed(request.username(), "Username is required");
         String password = requireTrimmed(request.password(), "Password is required");
         String email = normalizeNullable(request.email());
-        String phone = countryCodeService.normalizeRegistrationPhone(request.phone());
+        var country = countryCodeService.requireCountry(request.countryCode());
+        String phone = countryCodeService.normalizeRegistrationPhone(request.phone(), country.code());
 
         if (!StringUtils.hasText(email) && !StringUtils.hasText(phone)) {
             throw new IllegalArgumentException("Email or phone is required");
@@ -125,6 +134,10 @@ public class PersistentAccountService {
         entity.setPasswordHash(passwordService.hash(password));
         entity.setRoleCode("USER");
         entity.setStatusCode("ACTIVE");
+        entity.setCountryCode(country.code());
+        entity.setCurrencyCode(country.currencyCode());
+        entity.setCountryBindingStatus("BOUND");
+        entity.setCountryBoundAt(LocalDateTime.now());
         entity.setInviteCode(referralRewardService.generateInviteCode(username));
         UserEntity referrer = referralRewardService.resolveReferrer(request.inviteCode());
         if (referrer != null) {
@@ -184,6 +197,26 @@ public class PersistentAccountService {
         return userRepository.findByUsername(identifier)
             .or(() -> userRepository.findByEmail(identifier))
             .or(() -> userRepository.findByPhone(identifier));
+    }
+
+    private void ensureCountryBinding(UserEntity user) {
+        if ("BOUND".equalsIgnoreCase(user.getCountryBindingStatus())
+            && StringUtils.hasText(user.getCountryCode())
+            && StringUtils.hasText(user.getCurrencyCode())) {
+            return;
+        }
+        var resolved = countryCodeService.resolvePhoneCountry(user.getPhone());
+        if (resolved.isEmpty()) {
+            user.setCountryBindingStatus("UNRESOLVED");
+            userRepository.save(user);
+            throw invalidLogin();
+        }
+        var country = resolved.get();
+        user.setCountryCode(country.code());
+        user.setCurrencyCode(country.currencyCode());
+        user.setCountryBindingStatus("BOUND");
+        user.setCountryBoundAt(LocalDateTime.now());
+        userRepository.save(user);
     }
 
     private String normalizeNullable(String value) {

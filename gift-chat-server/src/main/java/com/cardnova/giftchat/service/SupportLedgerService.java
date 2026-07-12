@@ -72,7 +72,7 @@ public class SupportLedgerService {
 
         String scope = "ADMIN".equalsIgnoreCase(currentUser.getRoleCode()) ? "all" : "own";
         return new SupportLedgerReport(
-            new BalanceSummary(scope, money(available), money(pending), money(withdrawn), customers.size()),
+            new BalanceSummary(scope, "", money(available), money(pending), money(withdrawn), customers.size()),
             customers
         );
     }

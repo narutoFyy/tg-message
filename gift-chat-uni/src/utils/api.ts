@@ -9,6 +9,7 @@ import type {
   ChatMessage,
   ChatMessageSync,
   CountryCodeRule,
+  CurrencyExchangeRateItem,
   FriendProfile,
   FriendRequest,
   HiddenRecordItem,
@@ -417,14 +418,16 @@ export function createTransaction(payload: {
   return request<TransactionItem>('/transactions', 'POST', payload)
 }
 
-export function loginWithPassword(identifier: string, password: string) {
+export function loginWithPassword(identifier: string, password: string, countryCode: string) {
   return request<SessionUser>('/auth/login', 'POST', {
     identifier,
-    password
+    password,
+    countryCode
   })
 }
 
 export function registerAccount(payload: {
+  countryCode: string
   username: string
   email?: string
   phone?: string
@@ -451,6 +454,7 @@ export function createRate(payload: {
   cardCode?: string | null
   region: string
   rate: string
+  localPayoutPerUsd?: number
 }) {
   return request<RateItem>('/admin/rates', 'POST', payload).then(normalizeRateItem)
 }
@@ -464,6 +468,7 @@ export function updateRate(rateId: string, payload: {
   cardCode?: string | null
   region: string
   rate: string
+  localPayoutPerUsd?: number
 }) {
   return request<RateItem>(`/admin/rates/${rateId}`, 'POST', payload).then(normalizeRateItem)
 }
@@ -475,8 +480,25 @@ export function deleteRate(rateId: string) {
 function normalizeRateItem(rate: RateItem) {
   return {
     ...rate,
-    rate: normalizeRateText(rate.rate)
+    rate: normalizeRateText(rate.displayRate || rate.rate)
   }
+}
+
+export function fetchMyCurrencyExchangeRate() {
+  return request<CurrencyExchangeRateItem>('/currency-rates/me')
+}
+
+export function fetchAdminCurrencyExchangeRates() {
+  return request<CurrencyExchangeRateItem[]>('/admin/currency-rates')
+}
+
+export function updateAdminCurrencyExchangeRate(payload: {
+  countryCode: string
+  localCurrencyPerUsd: number
+  enabled: boolean
+  note?: string
+}) {
+  return request<CurrencyExchangeRateItem>('/admin/currency-rates', 'POST', payload)
 }
 
 function normalizeRateText(value: string) {

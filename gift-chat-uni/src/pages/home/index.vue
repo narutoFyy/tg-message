@@ -93,8 +93,8 @@
           <text class="section-title">Selling reward</text>
         </view>
         <view class="reward-core">
-          <text class="reward-value">NGN 500</text>
-          <text class="reward-text">Sell at least NGN 20,000 worth of cards to claim the daily reward.</text>
+          <text class="reward-value">{{ store.state.currentUser?.currencyCode || 'USD' }} wallet</text>
+          <text class="reward-text">Eligible rewards and completed sales are credited in your bound account currency.</text>
           <button class="primary-button reward-button" @click="dismissTaskModal">Got it</button>
         </view>
       </view>
@@ -178,7 +178,14 @@ function normalizeRateRegion(region: string) {
     GH: 'GH',
     GHANA: 'GH',
     '233': 'GH',
-    '\u52a0\u7eb3': 'GH'
+    '\u52a0\u7eb3': 'GH',
+    KE: 'KE',
+    KENYA: 'KE',
+    '254': 'KE',
+    US: 'US',
+    USA: 'US',
+    UNITEDSTATES: 'US',
+    '1': 'US'
   }
   return regionAliases[normalized] || normalized
 }

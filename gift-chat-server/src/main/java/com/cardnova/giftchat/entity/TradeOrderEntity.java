@@ -9,6 +9,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "trade_order")
@@ -40,6 +41,18 @@ public class TradeOrderEntity {
 
     @Column(name = "payout_amount", nullable = false, length = 32)
     private String payoutAmount;
+
+    @Column(name = "base_amount_usd", precision = 18, scale = 6)
+    private BigDecimal baseAmountUsd;
+
+    @Column(name = "local_amount", precision = 18, scale = 2)
+    private BigDecimal localAmount;
+
+    @Column(name = "currency_code", length = 3)
+    private String currencyCode;
+
+    @Column(name = "business_rate_snapshot", precision = 18, scale = 6)
+    private BigDecimal businessRateSnapshot;
 
     @Column(name = "status_code", nullable = false, length = 32)
     private String statusCode;
@@ -132,6 +145,15 @@ public class TradeOrderEntity {
     public void setPayoutAmount(String payoutAmount) {
         this.payoutAmount = payoutAmount;
     }
+
+    public BigDecimal getBaseAmountUsd() { return baseAmountUsd; }
+    public void setBaseAmountUsd(BigDecimal baseAmountUsd) { this.baseAmountUsd = baseAmountUsd; }
+    public BigDecimal getLocalAmount() { return localAmount; }
+    public void setLocalAmount(BigDecimal localAmount) { this.localAmount = localAmount; }
+    public String getCurrencyCode() { return currencyCode; }
+    public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
+    public BigDecimal getBusinessRateSnapshot() { return businessRateSnapshot; }
+    public void setBusinessRateSnapshot(BigDecimal businessRateSnapshot) { this.businessRateSnapshot = businessRateSnapshot; }
 
     public String getStatusCode() {
         return statusCode;

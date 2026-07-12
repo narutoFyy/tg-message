@@ -20,6 +20,26 @@
         </view>
       </view>
 
+      <view class="general-rate-panel">
+        <view class="panel-heading list-heading">
+          <view>
+            <text class="section-title">通用货币汇率（钱包 / 转盘）</text>
+            <text class="panel-note">美元是统一参考单位；这里维护 1 USD 可兑换的当地币数量。</text>
+          </view>
+          <button class="text-button" @click="loadGeneralRates">刷新</button>
+        </view>
+        <view class="general-rate-grid">
+          <view v-for="rate in generalRates" :key="rate.countryCode" class="general-rate-row">
+            <view>
+              <text class="rate-name">{{ rate.countryName }} · {{ rate.currencyCode }}</text>
+              <text class="rate-meta">{{ rate.displayRate }} · {{ rate.enabled ? '已启用' : '已停用' }}</text>
+            </view>
+            <input v-model.trim="generalRateInputs[rate.countryCode]" class="field-input general-rate-input" type="number" :disabled="rate.countryCode === 'US'" />
+            <button class="ghost-button action-button" @click="saveGeneralRate(rate)">保存</button>
+          </view>
+        </view>
+      </view>
+
       <view class="rate-workspace">
         <view class="editor-panel">
           <view class="panel-heading">
@@ -68,8 +88,8 @@
             </view>
           </picker>
 
-          <text class="field-label field-gap">汇率</text>
-          <input v-model.trim="form.rate" class="field-input" placeholder="例如：NGN 999 / $1" />
+          <text class="field-label field-gap">礼品卡回收汇率（当地币 / 1 USD）</text>
+          <input v-model.trim="form.rate" class="field-input" type="number" placeholder="例如：999" />
 
           <button class="primary-button submit-button" @click="submitRate">{{ editingId ? '更新汇率' : '创建汇率' }}</button>
           <text v-if="notice" class="form-notice">{{ notice }}</text>
@@ -168,7 +188,8 @@
 import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref } from 'vue'
 import { useAppStore } from '@/store/app'
-import type { RateItem } from '@/types'
+import type { CurrencyExchangeRateItem, RateItem } from '@/types'
+import { fetchAdminCurrencyExchangeRates, updateAdminCurrencyExchangeRate } from '@/utils/api'
 import { cardLogoFor, uiIcons } from '@/utils/art'
 import { findGiftCardByCode, findGiftCardByName, giftCardCatalog, matchesGiftCardSearch } from '@/utils/gift-card-catalog'
 
@@ -182,6 +203,8 @@ const cardMode = ref<CardMode>('preset')
 const selectorOpen = ref(false)
 const cardSearch = ref('')
 const pendingCardCode = ref('')
+const generalRates = ref<CurrencyExchangeRateItem[]>([])
+const generalRateInputs = reactive<Record<string, string>>({})
 
 const form = reactive({
   cardName: '',
@@ -210,13 +233,19 @@ async function submitRate() {
     notice.value = '请输入汇率。'
     return
   }
+  const localPayoutPerUsd = Number(form.rate)
+  if (!Number.isFinite(localPayoutPerUsd) || localPayoutPerUsd <= 0) {
+    notice.value = '汇率必须大于 0。'
+    return
+  }
 
   try {
     const payload = {
       cardName,
       cardCode: cardMode.value === 'preset' ? form.cardCode : null,
       region: form.region || defaultRegionCode(),
-      rate: form.rate
+      rate: form.rate,
+      localPayoutPerUsd
     }
     if (editingId.value) {
       await store.updateRate(editingId.value, payload)
@@ -271,7 +300,7 @@ function startEdit(rate: RateItem) {
   form.cardCode = preset?.code || null
   form.cardName = preset?.name || rate.cardName
   form.region = resolveRegionCode(rate.region)
-  form.rate = rate.rate
+  form.rate = rate.localPayoutPerUsd || rate.rate.replace(/[^0-9.]/g, '')
   notice.value = `正在编辑 ${rate.cardName}。`
   uni.pageScrollTo({ scrollTop: 0, duration: 200 })
 }
@@ -301,7 +330,9 @@ function resolveRegionCode(region: string) {
     NG: 'NG', NIGERIA: 'NG', '234': 'NG', 尼日利亚: 'NG',
     IN: 'IN', INDIA: 'IN', '91': 'IN', 印度: 'IN',
     CM: 'CM', CAMEROON: 'CM', '237': 'CM', 喀麦隆: 'CM',
-    GH: 'GH', GHANA: 'GH', '233': 'GH', 加纳: 'GH'
+    GH: 'GH', GHANA: 'GH', '233': 'GH', 加纳: 'GH',
+    KE: 'KE', KENYA: 'KE', '254': 'KE',
+    US: 'US', USA: 'US', UNITEDSTATES: 'US', '1': 'US'
   }
   return aliases[normalized] || defaultRegionCode()
 }
@@ -348,17 +379,54 @@ function goAdminConsole() { uni.redirectTo({ url: '/pages/admin-console/index' }
 function goSupportChat() { uni.redirectTo({ url: '/pages/support-chat-v2/index' }) }
 function goUserHome() { uni.redirectTo({ url: '/pages/home/index' }) }
 
+async function loadGeneralRates() {
+  try {
+    generalRates.value = await fetchAdminCurrencyExchangeRates()
+    generalRates.value.forEach((rate) => { generalRateInputs[rate.countryCode] = rate.localCurrencyPerUsd })
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : '通用货币汇率加载失败'
+  }
+}
+
+async function saveGeneralRate(rate: CurrencyExchangeRateItem) {
+  const value = Number(generalRateInputs[rate.countryCode])
+  if (!Number.isFinite(value) || value <= 0) {
+    notice.value = '通用货币汇率必须大于 0。'
+    return
+  }
+  try {
+    const updated = await updateAdminCurrencyExchangeRate({
+      countryCode: rate.countryCode,
+      localCurrencyPerUsd: value,
+      enabled: rate.enabled,
+      note: rate.note
+    })
+    const index = generalRates.value.findIndex((item) => item.countryCode === updated.countryCode)
+    if (index >= 0) generalRates.value.splice(index, 1, updated)
+    generalRateInputs[updated.countryCode] = updated.localCurrencyPerUsd
+    notice.value = `${updated.countryName} 通用汇率已更新。`
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : '通用货币汇率更新失败'
+  }
+}
+
 onShow(() => {
   if (!requireAdmin()) return
   store.refreshRates().catch((error) => {
     notice.value = error instanceof Error ? error.message : '汇率加载失败'
   })
+  loadGeneralRates()
 })
 </script>
 
 <style scoped lang="scss">
 .admin-rate-page { background: #f7f7f8; color: #111111; }
 .page-stack { display: flex; flex-direction: column; gap: 20rpx; }
+.general-rate-panel { padding: 26rpx; border: 1rpx solid #d9dde3; background: #ffffff; }
+.general-rate-grid { margin-top: 18rpx; display: grid; gap: 12rpx; }
+.general-rate-row { display: grid; grid-template-columns: minmax(0, 1fr) 220rpx auto; align-items: center; gap: 14rpx; padding: 14rpx 0; border-bottom: 1rpx solid #e7e8eb; }
+.general-rate-row:last-child { border-bottom: 0; }
+.general-rate-input { height: 68rpx; }
 .admin-top-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rpx; overflow: hidden; border: 1rpx solid #d9dde3; background: #d9dde3; }
 .nav-button { margin: 0; min-height: 74rpx; padding: 16rpx 12rpx; border: 0; border-radius: 0; background: #ffffff; color: #111111; box-shadow: none; font-size: 24rpx; font-weight: 700; line-height: 1.2; }
 .nav-button.active { background: #002fa7; color: #ffffff; }

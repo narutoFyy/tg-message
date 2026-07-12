@@ -25,7 +25,7 @@
       <view class="draw-sidebar">
         <view class="status-section"><text class="section-title">Draw status</text><text class="status-copy">{{ eligibilityText }}</text></view>
         <view v-if="lastPrize" class="result-section">
-          <text class="eyebrow">Result saved</text><text class="result-prize">{{ lastPrize }}</text><text class="muted">This prize is now recorded on your account.</text>
+          <text class="eyebrow">Result saved</text><text class="result-prize">{{ lastPrize }}</text><text class="muted">This prize is saved in {{ accountCurrencyCode }} and will not change with future rates.</text>
           <button class="primary-button withdrawal-button" @click="openLatestClaim">Claim prize</button>
         </view>
         <view class="prize-section">
@@ -47,7 +47,7 @@
       <view v-if="!lotteryRecords.length" class="empty-winners"><text class="muted">Your lottery prizes will appear here.</text></view>
       <view v-for="record in lotteryRecords" :key="record.id" class="claim-row">
         <view class="claim-copy">
-          <view class="claim-title-line"><text class="claim-prize">{{ record.prizeName }}</text><text :class="['status-pill', claimStatus(record) === 'completed' ? 'active' : 'warning']">{{ claimStatus(record) }}</text></view>
+          <view class="claim-title-line"><text class="claim-prize">{{ record.displayAmount || record.prizeName }}</text><text :class="['status-pill', claimStatus(record) === 'completed' ? 'active' : 'warning']">{{ claimStatus(record) }}</text></view>
           <text class="claim-meta">{{ record.prizeType === 'cash' ? 'Cash prize withdrawal' : 'Physical prize delivery' }} / {{ record.drawnAt }}</text>
           <text v-if="claimOrderNo(record)" class="claim-meta">Order {{ claimOrderNo(record) }}</text>
         </view>
@@ -97,19 +97,24 @@
 import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
-import { createLotteryFulfillment, fetchMyBankAccount, requestLotteryWithdrawal } from '@/utils/api'
-import type { BankAccountItem, LotteryRecordItem } from '@/types'
+import { createLotteryFulfillment, fetchLotteryPrizes, fetchMyBankAccount, requestLotteryWithdrawal } from '@/utils/api'
+import type { BankAccountItem, LotteryPrizeItem, LotteryRecordItem } from '@/types'
 const store = useAppStore(); const spinning = ref(false); const rotation = ref(0); const lastPrize = ref(''); const lastRecordId = ref(''); const lastPrizeType = ref('cash')
 const claimDialogOpen = ref(false); const claimSubmitting = ref(false); const claimNotice = ref(''); const activeRecordId = ref(''); const activePrizeName = ref(''); const activePrizeType = ref('cash'); const bankAccount = ref<BankAccountItem | null>(null)
 const bankForm = reactive({ country: '', accountName: '', bankName: '', accountNumber: '' })
 const deliveryForm = reactive({ recipientName: '', phone: '', country: '', addressLine: '' })
-const featuredPrizes = [
-  { name: 'NGN 100', note: 'Cash prize', image: '' },
-  { name: 'NGN 200', note: 'Cash prize', image: '' },
-  { name: 'NGN 500', note: 'Cash prize', image: '' },
-  { name: 'NGN 1,000', note: 'Maximum cash prize', image: '' }
-]
-const wheelPrizes = ['NGN 100', 'NGN 200', 'NGN 500', 'NGN 1,000', 'NGN 100', 'NGN 200', 'NGN 500', 'NGN 1,000']
+const prizeCatalog = ref<LotteryPrizeItem[]>([])
+const accountCurrencyCode = computed(() => store.state.currentUser?.currencyCode || 'USD')
+const featuredPrizes = computed(() => prizeCatalog.value.filter((prize) => prize.enabled).map((prize) => ({
+  name: prize.displayAmount || prize.name,
+  note: prize.prizeType === 'cash' ? `${prize.baseAmountUsd || '0'} USD reference` : 'Physical prize',
+  image: prize.imageUrl
+})))
+const wheelPrizes = computed(() => {
+  const cash = prizeCatalog.value.filter((prize) => prize.enabled && prize.prizeType === 'cash').map((prize) => prize.displayAmount || prize.name)
+  if (!cash.length) return Array(8).fill('Prize') as string[]
+  return cash.length >= 8 ? cash.slice(0, 8) : [...cash, ...cash.slice(0, 8 - cash.length)]
+})
 const spinDurationMs = 4000
 onShow(() => {
   store.refreshLotteryEligibility().catch(() => undefined)
@@ -117,6 +122,7 @@ onShow(() => {
   store.refreshLotteryRecords().catch(() => undefined)
   store.refreshLotteryFulfillments().catch(() => undefined)
   store.refreshWithdrawals().catch(() => undefined)
+  fetchLotteryPrizes().then((prizes) => { prizeCatalog.value = prizes }).catch(() => { prizeCatalog.value = [] })
   refreshBankAccount()
 })
 const eligibility = computed(() => store.state.lotteryEligibility)
@@ -124,15 +130,15 @@ const recentWinners = computed(() => store.state.lotteryWinners.slice(0, 6))
 const lotteryRecords = computed(() => store.state.lotteryRecords)
 const eligibilityText = computed(() => { if (!eligibility.value) return 'Checking your draw chance.'; if (eligibility.value.eligible) return 'You have a draw chance available.'; return eligibility.value.message || 'No draw chance available.' })
 const spinHint = computed(() => { if (!eligibility.value) return ''; if (eligibility.value.eligible) return 'The server determines the final prize.'; return eligibility.value.nextAvailableAt ? `Next: ${eligibility.value.nextAvailableAt}` : 'Upgrade VIP or wait for reset.' })
-function wheelPrizeImage(prize: string) { return featuredPrizes.find((item) => item.name === prize)?.image || '' }
-function labelStyle(index: number, prize: string) { const sliceAngle = 360 / wheelPrizes.length; const angle = index * sliceAngle + sliceAngle / 2; const distance = wheelPrizeImage(prize) ? 176 : 185; return `transform: rotate(${angle}deg) translateY(-${distance}rpx) rotate(-${angle}deg);` }
+function wheelPrizeImage(prize: string) { return featuredPrizes.value.find((item) => item.name === prize)?.image || '' }
+function labelStyle(index: number, prize: string) { const sliceAngle = 360 / wheelPrizes.value.length; const angle = index * sliceAngle + sliceAngle / 2; const distance = wheelPrizeImage(prize) ? 176 : 185; return `transform: rotate(${angle}deg) translateY(-${distance}rpx) rotate(-${angle}deg);` }
 function prizeKey(prize: string) {
   const cashValue = prize.replace(/[^\d]/g, '')
   return cashValue ? `cash-${cashValue}` : prize.trim().toLowerCase()
 }
 function targetRotationForPrize(prizeName: string) {
-  const targetIndex = wheelPrizes.findIndex((prize) => prizeKey(prize) === prizeKey(prizeName)); if (targetIndex < 0) return rotation.value + 1800
-  const sliceAngle = 360 / wheelPrizes.length; const targetCenterAngle = targetIndex * sliceAngle + sliceAngle / 2; const targetBaseRotation = -targetCenterAngle
+  const targetIndex = wheelPrizes.value.findIndex((prize) => prizeKey(prize) === prizeKey(prizeName)); if (targetIndex < 0) return rotation.value + 1800
+  const sliceAngle = 360 / wheelPrizes.value.length; const targetCenterAngle = targetIndex * sliceAngle + sliceAngle / 2; const targetBaseRotation = -targetCenterAngle
   const minRotation = rotation.value + 5 * 360; const maxRotation = rotation.value + 15 * 360; const kMin = Math.ceil((minRotation - targetBaseRotation) / 360); const kMax = Math.floor((maxRotation - targetBaseRotation) / 360)
   const k = kMin + Math.floor(Math.random() * (kMax - kMin + 1)); const jitter = (Math.random() - 0.5) * sliceAngle * 0.3
   return targetBaseRotation + k * 360 + jitter
@@ -142,8 +148,8 @@ async function handleSpin() {
   if (spinning.value || !eligibility.value?.eligible) return
   spinning.value = true; lastPrize.value = ''; lastRecordId.value = ''
   try {
-    const result = await store.spinLottery(); rotation.value = targetRotationForPrize(result.prize.name); await waitForSpin()
-    lastPrize.value = result.prize.name; lastRecordId.value = result.recordId; lastPrizeType.value = result.prize.prizeType
+    const result = await store.spinLottery(); const displayPrize = result.prize.displayAmount || result.prize.name; rotation.value = targetRotationForPrize(displayPrize); await waitForSpin()
+    lastPrize.value = displayPrize; lastRecordId.value = result.recordId; lastPrizeType.value = result.prize.prizeType
     await store.refreshLotteryRecords().catch(() => undefined)
     openClaimDetails(result.recordId, result.prize.name, result.prize.prizeType)
   }
@@ -156,7 +162,7 @@ function claimOrderNo(record: LotteryRecordItem) { return cashOrderFor(record)?.
 function claimStatus(record: LotteryRecordItem) { return cashOrderFor(record)?.status || physicalOrderFor(record)?.status || (record.fulfillmentStatus === 'fulfilled' ? 'completed' : 'unclaimed') }
 function canClaim(record: LotteryRecordItem) { return record.fulfillmentStatus === 'pending' && !cashOrderFor(record) && !physicalOrderFor(record) }
 function openLatestClaim() { if (lastRecordId.value) openClaimDetails(lastRecordId.value, lastPrize.value, lastPrizeType.value) }
-function openClaim(record: LotteryRecordItem) { openClaimDetails(record.id, record.prizeName, record.prizeType) }
+function openClaim(record: LotteryRecordItem) { openClaimDetails(record.id, record.displayAmount || record.prizeName, record.prizeType) }
 async function openClaimDetails(recordId: string, prizeName: string, prizeType: string) {
   activeRecordId.value = recordId; activePrizeName.value = prizeName; activePrizeType.value = prizeType; claimNotice.value = ''; claimDialogOpen.value = true
   if (prizeType === 'cash') await refreshBankAccount()

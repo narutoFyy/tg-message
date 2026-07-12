@@ -9,6 +9,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "gift_card_rate")
@@ -28,6 +29,12 @@ public class GiftCardRateEntity {
 
     @Column(name = "rate_value", nullable = false, length = 64)
     private String rateValue;
+
+    @Column(name = "currency_code", length = 3)
+    private String currencyCode;
+
+    @Column(name = "local_payout_per_usd", precision = 18, scale = 6)
+    private BigDecimal localPayoutPerUsd;
 
     @Column(name = "status_code", nullable = false, length = 32)
     private String statusCode;
@@ -77,6 +84,22 @@ public class GiftCardRateEntity {
 
     public void setRateValue(String rateValue) {
         this.rateValue = rateValue;
+    }
+
+    public String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public void setCurrencyCode(String currencyCode) {
+        this.currencyCode = currencyCode;
+    }
+
+    public BigDecimal getLocalPayoutPerUsd() {
+        return localPayoutPerUsd;
+    }
+
+    public void setLocalPayoutPerUsd(BigDecimal localPayoutPerUsd) {
+        this.localPayoutPerUsd = localPayoutPerUsd;
     }
 
     public String getStatusCode() {

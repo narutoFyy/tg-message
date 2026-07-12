@@ -16,7 +16,7 @@
         <image class="card-icon" :src="cardLogoFor(activeRate?.cardCode, activeRate?.cardName || 'Razer Gold')" mode="aspectFit" />
         <view class="card-copy">
           <text class="card-name">{{ form.cardName }}</text>
-          <text class="muted">Settles in {{ form.settlementCountry }}</text>
+          <text class="muted">Settles in {{ accountCountryName }} ({{ accountCurrencyCode }})</text>
         </view>
         <button class="change-button" @click="chooseCard">Change</button>
       </view>
@@ -124,6 +124,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { uploadImage } from '@/utils/api'
 import { cardLogoFor, uiIcons } from '@/utils/art'
+import type { TransactionItem } from '@/types'
 
 const store = useAppStore()
 const notice = ref('')
@@ -137,7 +138,7 @@ const cardCountries = ['AUD', 'USD', 'EUR', 'GBP']
 const form = reactive({
   cardName: 'Razer Gold',
   cardCountry: 'AUD',
-  settlementCountry: store.state.selectedCountryCode,
+  settlementCountry: store.state.currentUser?.countryCode || store.state.selectedCountryCode,
   quantity: 1,
   cardType: 'Physical',
   speed: 'Fast',
@@ -145,7 +146,12 @@ const form = reactive({
   voucherImageUrl: ''
 })
 
-const activeRate = computed(() => store.state.rates.find((rate) => rate.id === rateId.value) || store.state.rates[0])
+const accountCountryCode = computed(() => store.state.currentUser?.countryCode || store.state.selectedCountryCode)
+const accountCountryName = computed(() => store.state.currentUser?.countryName || store.selectedCountry().name)
+const accountCurrencyCode = computed(() => store.state.currentUser?.currencyCode || 'USD')
+const accountCurrencySymbol = computed(() => store.state.currentUser?.currencySymbol || accountCurrencyCode.value)
+const accountRates = computed(() => store.state.rates.filter((rate) => rate.region === accountCountryCode.value))
+const activeRate = computed(() => accountRates.value.find((rate) => rate.id === rateId.value) || accountRates.value[0])
 
 onLoad((query) => {
   rateId.value = typeof query?.rateId === 'string' ? query.rateId : ''
@@ -153,6 +159,7 @@ onLoad((query) => {
 
 onShow(async () => {
   await store.bootstrap()
+  form.settlementCountry = accountCountryCode.value
   if (activeRate.value) {
     form.cardName = activeRate.value.cardName
     form.settlementCountry = activeRate.value.region
@@ -160,6 +167,8 @@ onShow(async () => {
 })
 
 const numericRate = computed(() => {
+  const structuredRate = Number(activeRate.value?.localPayoutPerUsd || '0')
+  if (structuredRate > 0) return structuredRate
   const value = activeRate.value?.rate || ''
   const digits = value.match(/[\d.]+(?=\s*$)|[\d.]+/g)
   return Number(digits?.[digits.length - 1] || '0')
@@ -167,15 +176,9 @@ const numericRate = computed(() => {
 
 const settlementAmount = computed(() => {
   const total = Number(balanceText.value || '0') * form.quantity * numericRate.value
-  return `${currencyCode(form.settlementCountry)} ${total.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+  const separator = accountCurrencySymbol.value.length > 1 ? ' ' : ''
+  return `${accountCurrencySymbol.value}${separator}${total.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
 })
-
-function currencyCode(country: string) {
-  if (country === 'IN') return 'INR'
-  if (country === 'CM') return 'XAF'
-  if (country === 'GH') return 'GHS'
-  return 'NGN'
-}
 
 function setAmount(amount: number) {
   balanceText.value = String(amount)
@@ -195,7 +198,7 @@ function chooseCardCountry() {
 }
 
 function chooseCard() {
-  const rates = store.state.rates.filter((rate) => rate.region === store.state.selectedCountryCode)
+  const rates = accountRates.value
   if (!rates.length) {
     notice.value = 'No rates are available for this country.'
     return
@@ -244,7 +247,7 @@ async function confirmSell() {
       voucherImageUrl: form.voucherImageUrl || undefined,
       sendChatMessage: false
     })
-    uni.setStorageSync('pending-support-draft', buildSellCardDraft(transaction.orderNo))
+    uni.setStorageSync('pending-support-draft', buildSellCardDraft(transaction))
     if (form.voucherImageUrl) {
       uni.setStorageSync('pending-support-image', form.voucherImageUrl)
     } else {
@@ -256,17 +259,17 @@ async function confirmSell() {
   }
 }
 
-function buildSellCardDraft(orderNo: string) {
+function buildSellCardDraft(transaction: TransactionItem) {
   return [
-    `Sell order ${orderNo}`,
+    `Sell order ${transaction.orderNo}`,
     `Card: ${form.cardName}`,
     `Country: ${form.cardCountry}`,
-    `Settlement country: ${form.settlementCountry}`,
+    `Settlement country: ${accountCountryName.value}`,
     `Face value: ${balanceText.value || '0'} ${form.cardCountry} x${form.quantity}`,
     `Type: ${form.cardType}`,
     `Speed: ${form.speed}`,
-    `Rate: ${activeRate.value?.rate || '-'}`,
-    `Settlement: ${settlementAmount.value}`,
+    `Rate: ${transaction.businessRate ? `$1 = ${transaction.businessRate} ${transaction.currencyCode}` : activeRate.value?.rate || '-'}`,
+    `Settlement: ${transaction.payoutAmount}`,
     form.cardData ? `Card data: ${form.cardData}` : '',
     form.voucherImageUrl ? 'Voucher: Image attached below' : ''
   ].filter(Boolean).join('\n')

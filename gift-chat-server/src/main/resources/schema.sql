@@ -10,9 +10,15 @@ CREATE TABLE IF NOT EXISTS app_user (
     avatar_url VARCHAR(255),
     invite_code VARCHAR(32) UNIQUE,
     referred_by_user_id VARCHAR(36),
+    country_code VARCHAR(2),
+    currency_code VARCHAR(3),
+    country_binding_status VARCHAR(16),
+    country_bound_at TIMESTAMP,
+    country_bound_by VARCHAR(36),
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
-    CONSTRAINT fk_app_user_referred_by FOREIGN KEY (referred_by_user_id) REFERENCES app_user (id)
+    CONSTRAINT fk_app_user_referred_by FOREIGN KEY (referred_by_user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_app_user_country_bound_by FOREIGN KEY (country_bound_by) REFERENCES app_user (id)
 );
 
 CREATE TABLE IF NOT EXISTS gift_card_rate (
@@ -21,6 +27,8 @@ CREATE TABLE IF NOT EXISTS gift_card_rate (
     card_code VARCHAR(64),
     region_code VARCHAR(32) NOT NULL,
     rate_value VARCHAR(64) NOT NULL,
+    currency_code VARCHAR(3),
+    local_payout_per_usd DECIMAL(18, 6),
     status_code VARCHAR(32) NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     updated_by VARCHAR(36),
@@ -40,6 +48,19 @@ CREATE TABLE IF NOT EXISTS support_conversation (
     CONSTRAINT fk_support_customer FOREIGN KEY (customer_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_support_agent FOREIGN KEY (assigned_agent_id) REFERENCES app_user (id),
     CONSTRAINT fk_support_welcome_agent FOREIGN KEY (welcome_message_agent_id) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS currency_exchange_rate (
+    id VARCHAR(36) PRIMARY KEY,
+    country_code VARCHAR(2) NOT NULL UNIQUE,
+    currency_code VARCHAR(3) NOT NULL,
+    local_currency_per_usd DECIMAL(18, 6) NOT NULL,
+    enabled BOOLEAN NOT NULL,
+    note VARCHAR(255),
+    updated_by VARCHAR(36),
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_currency_rate_updated_by FOREIGN KEY (updated_by) REFERENCES app_user (id)
 );
 
 CREATE TABLE IF NOT EXISTS support_message (
@@ -118,6 +139,10 @@ CREATE TABLE IF NOT EXISTS trade_order (
     card_name VARCHAR(128) NOT NULL,
     face_value VARCHAR(32) NOT NULL,
     payout_amount VARCHAR(32) NOT NULL,
+    base_amount_usd DECIMAL(18, 6),
+    local_amount DECIMAL(18, 2),
+    currency_code VARCHAR(3),
+    business_rate_snapshot DECIMAL(18, 6),
     status_code VARCHAR(32) NOT NULL,
     note VARCHAR(255),
     voucher_image_url VARCHAR(255),
@@ -393,6 +418,7 @@ CREATE TABLE IF NOT EXISTS lottery_prize (
     prize_type VARCHAR(32) NOT NULL,
     weight_value INT NOT NULL,
     image_url VARCHAR(255),
+    base_amount_usd DECIMAL(18, 6),
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     sort_order INT NOT NULL,
     created_at TIMESTAMP NOT NULL,
@@ -410,6 +436,10 @@ CREATE TABLE IF NOT EXISTS lottery_draw_record (
     fulfillment_status VARCHAR(32) NOT NULL,
     processed_by VARCHAR(36),
     processed_at TIMESTAMP,
+    base_amount_usd DECIMAL(18, 6),
+    local_amount DECIMAL(18, 2),
+    currency_code VARCHAR(3),
+    exchange_rate_snapshot DECIMAL(18, 6),
     CONSTRAINT fk_lottery_draw_user FOREIGN KEY (user_id) REFERENCES app_user (id),
     CONSTRAINT fk_lottery_draw_prize FOREIGN KEY (prize_id) REFERENCES lottery_prize (id),
     CONSTRAINT fk_lottery_draw_processed_by FOREIGN KEY (processed_by) REFERENCES app_user (id),

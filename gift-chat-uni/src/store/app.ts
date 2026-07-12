@@ -4,6 +4,7 @@ import type {
   BalanceSummary,
   ChatMessage,
   CountryOption,
+  CurrencyExchangeRateItem,
   FriendProfile,
   FriendRequest,
   HiddenRecordItem,
@@ -54,6 +55,7 @@ import {
   fetchFriendRequests,
   fetchFriends,
   fetchCurrentAccount,
+  fetchMyCurrencyExchangeRate,
   fetchHiddenRecords,
   fetchLotteryEligibility,
   fetchLotteryFulfillments,
@@ -102,10 +104,12 @@ import { safeRouteForRole } from '@/utils/routeGuard'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { supportedCountryOptions } from '@/data/supported-countries'
 
+const initialUser = getInitialUser()
+
 const state = reactive({
-  currentUser: getInitialUser(),
+  currentUser: initialUser,
   countries: supportedCountryOptions as CountryOption[],
-  selectedCountryCode: 'NG',
+  selectedCountryCode: initialUser?.countryCode || 'NG',
   rates: [] as RateItem[],
   friends: [] as FriendProfile[],
   friendRequests: [] as FriendRequest[],
@@ -128,6 +132,7 @@ const state = reactive({
   broadcasts: [] as BroadcastItem[],
   registrationBonusRecord: null as RegistrationBonusRecordItem | null,
   balanceSummary: null as BalanceSummary | null,
+  currencyExchangeRate: null as CurrencyExchangeRateItem | null,
   activeSupportCustomerProfile: null as SupportCustomerProfile | null,
   supportCustomerProfileLoading: false,
   supportCustomerProfileCache: {} as Record<string, SupportCustomerProfile>,
@@ -368,6 +373,9 @@ export function useAppStore() {
   }
 
   async function bootstrap() {
+    if (state.currentUser?.roleCode === 'USER' && state.currentUser.countryCode) {
+      state.selectedCountryCode = state.currentUser.countryCode
+    }
     try {
       const previousActiveFriend = state.activeFriendUsername
       const previousSupportConversationId = state.supportConversationId
@@ -428,6 +436,9 @@ export function useAppStore() {
       state.hiddenRecords = hiddenRecords
       state.friendRequests = friendRequests
       refreshBalanceSummary().catch(() => {})
+      if (state.currentUser?.roleCode === 'USER') {
+        fetchMyCurrencyExchangeRate().then((rate) => { state.currencyExchangeRate = rate }).catch(() => {})
+      }
       refreshSupportLedger().catch(() => {})
       state.supportConversationId = normalizedSupport.some((conversation) => conversation.conversationId === previousSupportConversationId)
         ? previousSupportConversationId
@@ -465,6 +476,11 @@ export function useAppStore() {
   }
 
   function chooseCountry() {
+    if (state.currentUser?.roleCode === 'USER' && state.currentUser.countryCode) {
+      state.selectedCountryCode = state.currentUser.countryCode
+      uni.showToast({ title: `Country bound to ${state.currentUser.countryName || selectedCountry().name}`, icon: 'none' })
+      return
+    }
     uni.showActionSheet({
       itemList: state.countries.map((country) => country.name),
       success(result) {
@@ -477,14 +493,16 @@ export function useAppStore() {
   }
 
   async function login(identifier: string, password: string) {
-    const session = await loginWithPassword(identifier, password)
+    const session = await loginWithPassword(identifier, password, state.selectedCountryCode)
     state.currentUser = session
+    if (session.roleCode === 'USER' && session.countryCode) state.selectedCountryCode = session.countryCode
     setSessionToken(session.accessToken)
     setStoredSessionUser(session)
     return session
   }
 
   async function register(payload: {
+    countryCode: string
     username: string
     email?: string
     phone?: string
@@ -493,6 +511,7 @@ export function useAppStore() {
   }) {
     const session = await registerAccount(payload)
     state.currentUser = session
+    if (session.countryCode) state.selectedCountryCode = session.countryCode
     setSessionToken(session.accessToken)
     setStoredSessionUser(session)
     return session
@@ -544,7 +563,7 @@ export function useAppStore() {
     }
   }
 
-  async function addRate(payload: { cardName: string; cardCode?: string | null; region: string; rate: string }) {
+  async function addRate(payload: { cardName: string; cardCode?: string | null; region: string; rate: string; localPayoutPerUsd?: number }) {
     const rate = await createRateRequest(payload)
     state.rates.unshift(rate)
     return rate
@@ -559,7 +578,7 @@ export function useAppStore() {
     return updated
   }
 
-  async function updateRate(rateId: string, payload: { cardName: string; cardCode?: string | null; region: string; rate: string }) {
+  async function updateRate(rateId: string, payload: { cardName: string; cardCode?: string | null; region: string; rate: string; localPayoutPerUsd?: number }) {
     const updated = await updateRateRequest(rateId, payload)
     const index = state.rates.findIndex((item) => item.id === rateId)
     if (index >= 0) {

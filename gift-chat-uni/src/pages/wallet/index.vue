@@ -77,8 +77,9 @@ onShow(() => {
 const completedTrades = computed(() => store.state.transactions.filter((item) => item.status === 'completed'))
 const registrationBonus = computed(() => store.state.registrationBonusRecord)
 
-const availableBalance = computed(() => `NGN ${store.state.balanceSummary?.availableTotal || '0.00'}`)
-const pendingBalance = computed(() => `NGN ${store.state.balanceSummary?.pendingTotal || '0.00'}`)
+const walletCurrency = computed(() => store.state.balanceSummary?.currencyCode || store.state.currentUser?.currencyCode || 'USD')
+const availableBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.availableTotal || '0.00'}`)
+const pendingBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.pendingTotal || '0.00'}`)
 
 function goTransactions() {
   uni.redirectTo({ url: '/pages/transactions/index' })

@@ -4,9 +4,11 @@ import com.cardnova.giftchat.api.ForbiddenException;
 import com.cardnova.giftchat.config.AuthSafetyConfig;
 import com.cardnova.giftchat.entity.LotteryDrawRecordEntity;
 import com.cardnova.giftchat.entity.LotteryPrizeEntity;
+import com.cardnova.giftchat.entity.GiftCardRateEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.repository.LotteryDrawRecordRepository;
 import com.cardnova.giftchat.repository.LotteryPrizeRepository;
+import com.cardnova.giftchat.repository.GiftCardRateRepository;
 import com.cardnova.giftchat.repository.RegistrationBonusRecordRepository;
 import com.cardnova.giftchat.repository.ReferralRewardRepository;
 import com.cardnova.giftchat.repository.UserRepository;
@@ -32,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -46,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.ArrayList;
+import java.math.BigDecimal;
 import java.util.List;
 import java.time.LocalDateTime;
 import java.util.concurrent.CompletableFuture;
@@ -85,6 +89,9 @@ class GiftChatServerApplicationTests {
 
     @Autowired
     private LotteryDrawRecordRepository lotteryDrawRecordRepository;
+
+    @Autowired
+    private GiftCardRateRepository giftCardRateRepository;
 
     @Test
     void healthEndpointIsPublic() throws Exception {
@@ -128,7 +135,8 @@ class GiftChatServerApplicationTests {
                 .content("""
                     {
                       "identifier": "demo@cardnova.app",
-                      "password": "demo12345"
+                      "password": "demo12345",
+                      "countryCode": "NG"
                     }
                     """))
             .andExpect(status().isOk())
@@ -149,7 +157,7 @@ class GiftChatServerApplicationTests {
                     }
                     """.formatted(UUID.randomUUID().toString().replace("-", ""))))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message").value("Invalid identifier or password"));
+            .andExpect(jsonPath("$.message").value("Invalid account, password, or country"));
 
         mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -160,7 +168,7 @@ class GiftChatServerApplicationTests {
                     }
                     """))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message").value("Invalid identifier or password"));
+            .andExpect(jsonPath("$.message").value("Invalid account, password, or country"));
     }
 
     @Test
@@ -177,7 +185,7 @@ class GiftChatServerApplicationTests {
                         }
                         """.formatted(identifier)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Invalid identifier or password"));
+                .andExpect(jsonPath("$.message").value("Invalid account, password, or country"));
         }
 
         mockMvc.perform(post("/api/auth/login")
@@ -217,6 +225,33 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.roleCode").value("ADMIN"))
             .andExpect(jsonPath("$.data.nextRoute").value("/pages/admin-console/index"));
+    }
+
+    @Test
+    void ordinaryUserLoginRequiresBoundCountryButStaffBypassIt() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "identifier": "cardnova_user",
+                      "password": "demo12345",
+                      "countryCode": "IN"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Invalid account, password, or country"));
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "identifier": "support_luna",
+                      "password": "demo12345",
+                      "countryCode": "US"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.roleCode").value("AGENT"));
     }
 
     @Test
@@ -278,6 +313,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "countryCode": "NG",
                       "username": "%s",
                       "email": "%s",
                       "password": "demo12345"
@@ -298,6 +334,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "countryCode": "IN",
                       "username": "india_phone_%s",
                       "phone": "+919876543210",
                       "password": "demo12345"
@@ -310,6 +347,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "countryCode": "IN",
                       "username": "bad_india_%s",
                       "phone": "+91987654321",
                       "password": "demo12345"
@@ -323,12 +361,15 @@ class GiftChatServerApplicationTests {
     void loginAndRegistrationCountryOptionsAreAligned() throws Exception {
         mockMvc.perform(get("/api/country-codes"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data", hasSize(5)))
+            .andExpect(jsonPath("$.data", hasSize(6)))
             .andExpect(jsonPath("$.data[0].countryCode").value("+234"))
             .andExpect(jsonPath("$.data[1].countryCode").value("+91"))
             .andExpect(jsonPath("$.data[2].countryCode").value("+237"))
             .andExpect(jsonPath("$.data[3].countryCode").value("+233"))
             .andExpect(jsonPath("$.data[4].countryCode").value("+254"))
+            .andExpect(jsonPath("$.data[5].code").value("US"))
+            .andExpect(jsonPath("$.data[5].countryCode").value("+1"))
+            .andExpect(jsonPath("$.data[5].currencyCode").value("USD"))
             .andExpect(content().string(not(containsString("China"))))
             .andExpect(content().string(not(containsString("+86"))));
 
@@ -337,6 +378,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "countryCode": "KE",
                       "username": "kenya_phone_%s",
                       "phone": "+254712345678",
                       "password": "demo12345"
@@ -349,6 +391,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "countryCode": "NG",
                       "username": "china_phone_%s",
                       "phone": "+8613800138000",
                       "password": "demo12345"
@@ -553,6 +596,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "countryCode": "NG",
                       "username": "%s",
                       "email": "%s",
                       "password": "demo12345",
@@ -579,6 +623,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "countryCode": "NG",
                       "username": "%s",
                       "email": "%s",
                       "password": "demo12345",
@@ -660,6 +705,48 @@ class GiftChatServerApplicationTests {
             .andExpect(content().string(containsString("Apple / iTunes")))
             .andExpect(content().string(containsString("APPLE_ITUNES")))
             .andExpect(content().string(containsString("American Express")));
+    }
+
+    @Test
+    void currencyRatesAreSeparateFromGiftCardPayoutRates() throws Exception {
+        String userToken = loginToken("cardnova_user");
+        String adminToken = loginToken("admin_mia");
+
+        mockMvc.perform(get("/api/currency-rates/me")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.countryCode").value("NG"))
+            .andExpect(jsonPath("$.data.currencyCode").value("NGN"))
+            .andExpect(jsonPath("$.data.localCurrencyPerUsd").value("1500"))
+            .andExpect(jsonPath("$.data.displayRate").value("$1 = ₦1500"));
+
+        mockMvc.perform(post("/api/admin/currency-rates")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "countryCode": "NG",
+                      "localCurrencyPerUsd": 1510,
+                      "enabled": true,
+                      "note": "unauthorized"
+                    }
+                    """))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/currency-rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "countryCode": "NG",
+                      "localCurrencyPerUsd": 1510,
+                      "enabled": true,
+                      "note": "manual test rate"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.localCurrencyPerUsd").value("1510"))
+            .andExpect(jsonPath("$.data.updatedBy").value("admin_mia"));
     }
 
     @Test
@@ -794,7 +881,8 @@ class GiftChatServerApplicationTests {
                 .content("""
                     {
                       "identifier": "cardnova_user",
-                      "password": "demo12345"
+                      "password": "demo12345",
+                      "countryCode": "NG"
                     }
                     """))
             .andExpect(status().isOk());
@@ -1349,7 +1437,10 @@ class GiftChatServerApplicationTests {
                     }
                     """))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.cardName").value("Test Card"));
+            .andExpect(jsonPath("$.data.cardName").value("Test Card"))
+            .andExpect(jsonPath("$.data.currencyCode").value("NGN"))
+            .andExpect(jsonPath("$.data.localPayoutPerUsd").value("999.99"))
+            .andExpect(jsonPath("$.data.rate").value("$1 = ₦999.99"));
 
         mockMvc.perform(post("/api/admin/rates")
                 .header("Authorization", bearer(adminToken))
@@ -1440,6 +1531,74 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(content().string(containsString("Sell order")))
             .andExpect(content().string(containsString("Razer Gold")));
+    }
+
+    @Test
+    void sellOrderUsesServerRateAndKeepsSnapshotAfterRateChanges() throws Exception {
+        String userToken = loginToken("cardnova_user");
+        MvcResult createResult = mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Razer Gold",
+                      "cardCountry": "USD",
+                      "settlementCountry": "US",
+                      "faceValue": 10,
+                      "quantity": 2,
+                      "rate": "1",
+                      "settlementAmount": "FORGED 1",
+                      "cardType": "Digital",
+                      "speed": "Fast",
+                      "sendChatMessage": false
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.baseAmountUsd").value("20"))
+            .andExpect(jsonPath("$.data.localAmount").value("21531.2"))
+            .andExpect(jsonPath("$.data.currencyCode").value("NGN"))
+            .andExpect(jsonPath("$.data.businessRate").value("1076.56"))
+            .andExpect(jsonPath("$.data.payoutAmount").value("₦21531.2"))
+            .andReturn();
+
+        JsonNode created = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data");
+        String orderId = created.path("id").asText();
+        GiftCardRateEntity rate = giftCardRateRepository.findById("rate-3").orElseThrow();
+        BigDecimal originalRate = rate.getLocalPayoutPerUsd();
+        try {
+            rate.setLocalPayoutPerUsd(new BigDecimal("999.000000"));
+            giftCardRateRepository.saveAndFlush(rate);
+
+            mockMvc.perform(get("/api/transactions/{transactionId}", orderId)
+                    .header("Authorization", bearer(userToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.localAmount").value("21531.2"))
+                .andExpect(jsonPath("$.data.businessRate").value("1076.56"));
+        } finally {
+            rate.setLocalPayoutPerUsd(originalRate);
+            giftCardRateRepository.saveAndFlush(rate);
+        }
+    }
+
+    @Test
+    void lotteryCashDrawStoresCurrencySnapshot() throws Exception {
+        String token = registerToken("lottery_snapshot_" + UUID.randomUUID().toString().substring(0, 8));
+        MvcResult result = mockMvc.perform(post("/api/lottery/spin")
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.prize.baseAmountUsd").isNotEmpty())
+            .andExpect(jsonPath("$.data.prize.localAmount").isNotEmpty())
+            .andExpect(jsonPath("$.data.prize.currencyCode").value("NGN"))
+            .andExpect(jsonPath("$.data.prize.exchangeRate").isNotEmpty())
+            .andReturn();
+
+        JsonNode draw = objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+        String recordId = draw.path("recordId").asText();
+        LotteryDrawRecordEntity record = lotteryDrawRecordRepository.findById(recordId).orElseThrow();
+        assertNotNull(record.getBaseAmountUsd());
+        assertNotNull(record.getLocalAmount());
+        assertEquals("NGN", record.getCurrencyCode());
+        assertEquals(0, new BigDecimal(draw.path("prize").path("exchangeRate").asText()).compareTo(record.getExchangeRateSnapshot()));
     }
 
     @Test
@@ -1895,7 +2054,7 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦100", "₦200", "₦500", "₦1000").contains(prizeName));
+        assertTrue(List.of("₦100", "₦200", "₦500", "₦1000", "₦2000", "₦3000", "₦5000").contains(prizeName));
 
         mockMvc.perform(post("/api/lottery/spin")
                 .header("Authorization", bearer(userToken)))
@@ -1918,7 +2077,7 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦100", "₦200", "₦500", "₦1000").contains(forcedPrizeName));
+        assertTrue(List.of("₦100", "₦200", "₦500", "₦1000", "₦2000", "₦3000", "₦5000").contains(forcedPrizeName));
     }
 
     @Test
@@ -2330,7 +2489,8 @@ class GiftChatServerApplicationTests {
                 .content("""
                     {
                       "identifier": "%s",
-                      "password": "demo12345"
+                      "password": "demo12345",
+                      "countryCode": "NG"
                     }
                     """.formatted(identifier)))
             .andExpect(status().isOk())
@@ -2440,6 +2600,7 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "countryCode": "NG",
                       "username": "%s",
                       "email": "%s@example.com",
                       "password": "demo12345"
@@ -2457,11 +2618,12 @@ class GiftChatServerApplicationTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
+                      "countryCode": "%s",
                       "username": "%s",
                       "phone": "%s",
                       "password": "demo12345"
                     }
-                    """.formatted(username, phone)))
+                    """.formatted(countryForPhone(phone), username, phone)))
             .andExpect(status().isOk())
             .andReturn();
 
@@ -2475,6 +2637,16 @@ class GiftChatServerApplicationTests {
             digits += UUID.randomUUID().toString().replaceAll("[^0-9]", "");
         }
         return digits.substring(0, length);
+    }
+
+    private String countryForPhone(String phone) {
+        String normalized = phone.replaceAll("[^0-9+]", "");
+        if (normalized.startsWith("+91")) return "IN";
+        if (normalized.startsWith("+233")) return "GH";
+        if (normalized.startsWith("+237")) return "CM";
+        if (normalized.startsWith("+254")) return "KE";
+        if (normalized.startsWith("+1")) return "US";
+        return "NG";
     }
 
     private void createWithdrawal(String token, String accountName, String accountNumber) throws Exception {

@@ -44,6 +44,21 @@ public class UserEntity {
     @Column(name = "referred_by_user_id", length = 36)
     private String referredByUserId;
 
+    @Column(name = "country_code", length = 2)
+    private String countryCode;
+
+    @Column(name = "currency_code", length = 3)
+    private String currencyCode;
+
+    @Column(name = "country_binding_status", length = 16)
+    private String countryBindingStatus;
+
+    @Column(name = "country_bound_at")
+    private LocalDateTime countryBoundAt;
+
+    @Column(name = "country_bound_by", length = 36)
+    private String countryBoundBy;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -136,6 +151,46 @@ public class UserEntity {
 
     public void setReferredByUserId(String referredByUserId) {
         this.referredByUserId = referredByUserId;
+    }
+
+    public String getCountryCode() {
+        return countryCode;
+    }
+
+    public void setCountryCode(String countryCode) {
+        this.countryCode = countryCode;
+    }
+
+    public String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public void setCurrencyCode(String currencyCode) {
+        this.currencyCode = currencyCode;
+    }
+
+    public String getCountryBindingStatus() {
+        return countryBindingStatus;
+    }
+
+    public void setCountryBindingStatus(String countryBindingStatus) {
+        this.countryBindingStatus = countryBindingStatus;
+    }
+
+    public LocalDateTime getCountryBoundAt() {
+        return countryBoundAt;
+    }
+
+    public void setCountryBoundAt(LocalDateTime countryBoundAt) {
+        this.countryBoundAt = countryBoundAt;
+    }
+
+    public String getCountryBoundBy() {
+        return countryBoundBy;
+    }
+
+    public void setCountryBoundBy(String countryBoundBy) {
+        this.countryBoundBy = countryBoundBy;
     }
 
     public LocalDateTime getCreatedAt() {

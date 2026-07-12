@@ -3,6 +3,7 @@ package com.cardnova.giftchat.service;
 import com.cardnova.giftchat.entity.LotteryDrawRecordEntity;
 import com.cardnova.giftchat.entity.LotteryEligibilityResetEntity;
 import com.cardnova.giftchat.entity.LotteryPrizeEntity;
+import com.cardnova.giftchat.entity.CurrencyExchangeRateEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.model.LotteryDrawResult;
 import com.cardnova.giftchat.model.LotteryEligibility;
@@ -19,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -36,7 +39,6 @@ public class LotteryService {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter DAY_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final Set<String> FULFILLMENT_STATUSES = Set.of("PENDING", "PROCESSING", "FULFILLED", "CANCELED");
-    private static final Set<String> DRAWABLE_PRIZE_NAMES = Set.of("₦100", "₦200", "₦500", "₦1000");
 
     private final LotteryPrizeRepository lotteryPrizeRepository;
     private final LotteryDrawRecordRepository lotteryDrawRecordRepository;
@@ -44,6 +46,8 @@ public class LotteryService {
     private final CurrentUserService currentUserService;
     private final VipService vipService;
     private final UserRepository userRepository;
+    private final CurrencyExchangeRateService currencyExchangeRateService;
+    private final CountryCodeService countryCodeService;
     private final SecureRandom random = new SecureRandom();
 
     public LotteryService(
@@ -52,7 +56,9 @@ public class LotteryService {
         LotteryEligibilityResetRepository lotteryEligibilityResetRepository,
         CurrentUserService currentUserService,
         VipService vipService,
-        UserRepository userRepository
+        UserRepository userRepository,
+        CurrencyExchangeRateService currencyExchangeRateService,
+        CountryCodeService countryCodeService
     ) {
         this.lotteryPrizeRepository = lotteryPrizeRepository;
         this.lotteryDrawRecordRepository = lotteryDrawRecordRepository;
@@ -60,6 +66,8 @@ public class LotteryService {
         this.currentUserService = currentUserService;
         this.vipService = vipService;
         this.userRepository = userRepository;
+        this.currencyExchangeRateService = currencyExchangeRateService;
+        this.countryCodeService = countryCodeService;
     }
 
     public LotteryEligibility currentEligibility() {
@@ -86,12 +94,19 @@ public class LotteryService {
         record.setPeriodKey(eligibility.periodKey());
         record.setDrawnAt(now);
         record.setFulfillmentStatus("PENDING");
+        if ("CASH".equalsIgnoreCase(prize.getPrizeType()) && prize.getBaseAmountUsd() != null) {
+            CurrencyExchangeRateEntity rate = currencyExchangeRateService.requireEnabledRate(currentUser.getCountryCode());
+            record.setBaseAmountUsd(prize.getBaseAmountUsd());
+            record.setExchangeRateSnapshot(rate.getLocalCurrencyPerUsd());
+            record.setLocalAmount(prize.getBaseAmountUsd().multiply(rate.getLocalCurrencyPerUsd()).setScale(2, RoundingMode.HALF_UP));
+            record.setCurrencyCode(currentUser.getCurrencyCode());
+        }
 
         try {
             LotteryDrawRecordEntity saved = lotteryDrawRecordRepository.saveAndFlush(record);
             return new LotteryDrawResult(
                 eligibilityFor(currentUser, now),
-                toPrizeItem(prize),
+                toPrizeItem(prize, currentUser),
                 saved.getId(),
                 TIME_FORMATTER.format(saved.getDrawnAt())
             );
@@ -115,8 +130,9 @@ public class LotteryService {
     }
 
     public List<LotteryPrizeItem> prizes() {
+        UserEntity currentUser = currentUserService.getCurrentUser();
         return lotteryPrizeRepository.findAllByOrderBySortOrderAsc().stream()
-            .map(this::toPrizeItem)
+            .map(prize -> toPrizeItem(prize, currentUser))
             .toList();
     }
 
@@ -224,7 +240,7 @@ public class LotteryService {
 
     private LotteryPrizeEntity choosePrize() {
         List<LotteryPrizeEntity> prizes = lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
-            .filter(prize -> DRAWABLE_PRIZE_NAMES.contains(prize.getName()))
+            .filter(prize -> "CASH".equalsIgnoreCase(prize.getPrizeType()))
             .toList();
         if (prizes.isEmpty()) {
             throw new IllegalArgumentException("No drawable lottery prize is enabled");
@@ -244,11 +260,17 @@ public class LotteryService {
         return prizes.get(prizes.size() - 1);
     }
 
-    private LotteryPrizeItem toPrizeItem(LotteryPrizeEntity prize) {
+    private LotteryPrizeItem toPrizeItem(LotteryPrizeEntity prize, UserEntity user) {
+        MoneyView money = moneyView(prize, user);
         return new LotteryPrizeItem(
             prize.getId(),
             prize.getName(),
             prize.getPrizeType().toLowerCase(Locale.ROOT),
+            money.baseAmountUsd(),
+            money.localAmount(),
+            money.currencyCode(),
+            money.displayAmount(),
+            money.exchangeRate(),
             prize.getWeightValue(),
             value(prize.getImageUrl()),
             prize.isEnabled(),
@@ -257,12 +279,18 @@ public class LotteryService {
     }
 
     private LotteryRecordItem toRecordItem(LotteryDrawRecordEntity record) {
+        String displayAmount = displayAmount(record.getCurrencyCode(), record.getLocalAmount());
         return new LotteryRecordItem(
             record.getId(),
             record.getUser().getUsername(),
             record.getVipLevel(),
             record.getPrize().getName(),
             record.getPrize().getPrizeType().toLowerCase(Locale.ROOT),
+            decimal(record.getBaseAmountUsd()),
+            decimal(record.getLocalAmount()),
+            value(record.getCurrencyCode()),
+            displayAmount.isBlank() ? record.getPrize().getName() : displayAmount,
+            decimal(record.getExchangeRateSnapshot()),
             record.getPeriodType().toLowerCase(Locale.ROOT),
             record.getPeriodKey(),
             record.getFulfillmentStatus().toLowerCase(Locale.ROOT),
@@ -323,6 +351,43 @@ public class LotteryService {
 
     private String value(String value) {
         return value == null ? "" : value;
+    }
+
+    private MoneyView moneyView(LotteryPrizeEntity prize, UserEntity user) {
+        if (!"CASH".equalsIgnoreCase(prize.getPrizeType()) || prize.getBaseAmountUsd() == null) {
+            return new MoneyView("", "", "", prize.getName(), "");
+        }
+        String countryCode = "USER".equalsIgnoreCase(user.getRoleCode()) ? user.getCountryCode() : "US";
+        CurrencyExchangeRateEntity rate = currencyExchangeRateService.requireEnabledRate(countryCode);
+        BigDecimal localAmount = prize.getBaseAmountUsd().multiply(rate.getLocalCurrencyPerUsd()).setScale(2, RoundingMode.HALF_UP);
+        String currencyCode = countryCodeService.requireCountry(countryCode).currencyCode();
+        return new MoneyView(
+            decimal(prize.getBaseAmountUsd()),
+            decimal(localAmount),
+            currencyCode,
+            displayAmount(currencyCode, localAmount),
+            decimal(rate.getLocalCurrencyPerUsd())
+        );
+    }
+
+    private String displayAmount(String currencyCode, BigDecimal amount) {
+        if (!StringUtils.hasText(currencyCode) || amount == null) {
+            return "";
+        }
+        String symbol = countryCodeService.rules().stream()
+            .filter(country -> currencyCode.equalsIgnoreCase(country.currencyCode()))
+            .map(country -> country.currencySymbol())
+            .findFirst()
+            .orElse(currencyCode);
+        String separator = symbol.length() > 1 ? " " : "";
+        return symbol + separator + amount.stripTrailingZeros().toPlainString();
+    }
+
+    private String decimal(BigDecimal amount) {
+        return amount == null ? "" : amount.stripTrailingZeros().toPlainString();
+    }
+
+    private record MoneyView(String baseAmountUsd, String localAmount, String currencyCode, String displayAmount, String exchangeRate) {
     }
 
     private record Period(String type, String key) {

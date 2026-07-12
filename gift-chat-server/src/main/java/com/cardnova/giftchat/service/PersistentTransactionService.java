@@ -6,6 +6,7 @@ import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.FriendshipEntity;
 import com.cardnova.giftchat.entity.TradeOrderEntity;
 import com.cardnova.giftchat.entity.UserEntity;
+import com.cardnova.giftchat.entity.GiftCardRateEntity;
 import com.cardnova.giftchat.model.TransactionItem;
 import com.cardnova.giftchat.repository.BlacklistEntryRepository;
 import com.cardnova.giftchat.repository.FriendshipRepository;
@@ -19,6 +20,8 @@ import org.springframework.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -42,6 +45,8 @@ public class PersistentTransactionService {
     private final ReferralRewardService referralRewardService;
     private final VipService vipService;
     private final UserHiddenRecordService userHiddenRecordService;
+    private final PersistentRateService persistentRateService;
+    private final CountryCodeService countryCodeService;
 
     public PersistentTransactionService(
         TradeOrderRepository tradeOrderRepository,
@@ -54,7 +59,9 @@ public class PersistentTransactionService {
         SupportConversationRepository supportConversationRepository,
         ReferralRewardService referralRewardService,
         VipService vipService,
-        UserHiddenRecordService userHiddenRecordService
+        UserHiddenRecordService userHiddenRecordService,
+        PersistentRateService persistentRateService,
+        CountryCodeService countryCodeService
     ) {
         this.tradeOrderRepository = tradeOrderRepository;
         this.currentUserService = currentUserService;
@@ -67,6 +74,8 @@ public class PersistentTransactionService {
         this.referralRewardService = referralRewardService;
         this.vipService = vipService;
         this.userHiddenRecordService = userHiddenRecordService;
+        this.persistentRateService = persistentRateService;
+        this.countryCodeService = countryCodeService;
     }
 
     public List<TransactionItem> getTransactions() {
@@ -149,7 +158,13 @@ public class PersistentTransactionService {
         }
 
         String faceValue = formatFaceValue(request.faceValue(), request.cardCountry(), request.quantity());
-        String note = sellOrderNote(request);
+        GiftCardRateEntity rate = persistentRateService.requireActiveRate(request.cardName(), currentUser.getCountryCode());
+        BigDecimal baseAmountUsd = BigDecimal.valueOf(request.faceValue())
+            .multiply(BigDecimal.valueOf(request.quantity()))
+            .setScale(6, RoundingMode.HALF_UP);
+        BigDecimal localAmount = baseAmountUsd.multiply(rate.getLocalPayoutPerUsd()).setScale(2, RoundingMode.HALF_UP);
+        var country = countryCodeService.requireCountry(currentUser.getCountryCode());
+        String note = sellOrderNote(request, rate.getLocalPayoutPerUsd());
 
         TradeOrderEntity entity = new TradeOrderEntity();
         entity.setId(UUID.randomUUID().toString());
@@ -159,7 +174,11 @@ public class PersistentTransactionService {
         entity.setFriendship(null);
         entity.setCardName(request.cardName().trim());
         entity.setFaceValue(faceValue);
-        entity.setPayoutAmount(request.settlementAmount().trim());
+        entity.setPayoutAmount(formatLocalAmount(country.currencySymbol(), localAmount));
+        entity.setBaseAmountUsd(baseAmountUsd);
+        entity.setLocalAmount(localAmount);
+        entity.setCurrencyCode(country.currencyCode());
+        entity.setBusinessRateSnapshot(rate.getLocalPayoutPerUsd());
         entity.setStatusCode("PENDING");
         entity.setNote(note);
         entity.setVoucherImageUrl(normalizeNullable(request.voucherImageUrl()));
@@ -225,6 +244,10 @@ public class PersistentTransactionService {
             order.getCardName(),
             order.getFaceValue(),
             order.getPayoutAmount(),
+            decimal(order.getBaseAmountUsd()),
+            decimal(order.getLocalAmount()),
+            order.getCurrencyCode() == null ? "" : order.getCurrencyCode(),
+            decimal(order.getBusinessRateSnapshot()),
             order.getStatusCode().toLowerCase(),
             counterpart.getUsername(),
             counterpart.getUsername(),
@@ -395,16 +418,16 @@ public class PersistentTransactionService {
         return amount + " " + cardCountry.trim() + " x" + quantity;
     }
 
-    private String sellOrderNote(CreateSellOrderRequest request) {
+    private String sellOrderNote(CreateSellOrderRequest request, BigDecimal businessRate) {
         StringBuilder note = new StringBuilder();
         note.append("Sell card order. Type: ")
             .append(request.cardType().trim())
             .append(", speed: ")
             .append(request.speed().trim())
             .append(", settlement country: ")
-            .append(request.settlementCountry().trim())
+            .append(countryCodeService.requireCountry(currentUserService.getCurrentUser().getCountryCode()).countryName())
             .append(", rate: ")
-            .append(request.rate().trim());
+            .append(decimal(businessRate));
         if (StringUtils.hasText(request.cardData())) {
             note.append(", card data: ").append(request.cardData().trim());
         }
@@ -428,12 +451,20 @@ public class PersistentTransactionService {
             order.getOrderNo(),
             order.getCardName(),
             request.cardCountry().trim(),
-            request.settlementCountry().trim(),
+            countryCodeService.requireCountry(order.getOwnerUser().getCountryCode()).countryName(),
             order.getFaceValue(),
             request.cardType().trim(),
             request.speed().trim(),
-            request.rate().trim(),
+            decimal(order.getBusinessRateSnapshot()),
             order.getPayoutAmount()
         ).trim();
+    }
+
+    private String decimal(BigDecimal amount) {
+        return amount == null ? "" : amount.stripTrailingZeros().toPlainString();
+    }
+
+    private String formatLocalAmount(String symbol, BigDecimal amount) {
+        return symbol + (symbol.length() > 1 ? " " : "") + amount.stripTrailingZeros().toPlainString();
     }
 }

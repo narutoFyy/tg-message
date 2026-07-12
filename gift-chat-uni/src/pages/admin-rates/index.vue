@@ -150,7 +150,7 @@
 
         <view class="selector-search">
           <input v-model.trim="cardSearch" class="search-input" placeholder="搜索名称或别名" focus />
-          <text class="result-count">{{ filteredCards.length }} / {{ giftCardCatalog.length }}</text>
+          <text class="result-count">{{ filteredCards.length }} / {{ giftCardCatalog.length }} · 滚动选择</text>
         </view>
 
         <scroll-view scroll-y class="card-option-list">
@@ -484,15 +484,18 @@ onShow(() => {
 .action-button { min-width: 92rpx; margin: 0; padding: 10rpx 14rpx; border-radius: 0; font-size: 20rpx; }
 .danger-action { border-color: #e4002b; color: #e4002b; }
 .selector-mask { position: fixed; inset: 0; z-index: 100; padding: 30rpx; display: flex; align-items: center; justify-content: center; box-sizing: border-box; background: rgba(17, 17, 17, 0.48); }
-.selector-dialog { width: min(680rpx, 560px); max-height: min(840rpx, 82vh); display: flex; flex-direction: column; border: 1rpx solid #111111; background: #ffffff; }
-.selector-head { padding: 24rpx; display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; border-bottom: 1rpx solid #d9dde3; }
+.selector-dialog { width: min(680rpx, 560px); height: min(840rpx, 82vh); max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; border: 1rpx solid #111111; background: #ffffff; }
+.selector-head { flex: 0 0 auto; padding: 24rpx; display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; border-bottom: 1rpx solid #d9dde3; }
 .dialog-title { font-size: 30rpx; }
 .icon-button { width: 62rpx; height: 62rpx; margin: 0; padding: 16rpx; display: flex; border: 1rpx solid #d9dde3; border-radius: 0; background: #ffffff; box-shadow: none; }
 .icon-button image { width: 100%; height: 100%; }
-.selector-search { padding: 18rpx 24rpx; display: flex; align-items: center; gap: 14rpx; border-bottom: 1rpx solid #d9dde3; }
+.selector-search { flex: 0 0 auto; padding: 18rpx 24rpx; display: flex; align-items: center; gap: 14rpx; border-bottom: 1rpx solid #d9dde3; }
 .search-input { min-width: 0; height: 68rpx; padding: 0 16rpx; flex: 1; box-sizing: border-box; border: 1rpx solid #cfd4dc; font-size: 23rpx; }
 .result-count { color: #667085; font-size: 20rpx; font-variant-numeric: tabular-nums; }
-.card-option-list { min-height: 260rpx; flex: 1; }
+.card-option-list { height: 0; min-height: 0; flex: 1 1 auto; overflow-y: scroll; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #98a2b3 #f7f7f8; }
+.card-option-list::-webkit-scrollbar { width: 10rpx; }
+.card-option-list::-webkit-scrollbar-track { background: #f7f7f8; }
+.card-option-list::-webkit-scrollbar-thumb { border: 2rpx solid #f7f7f8; background: #98a2b3; }
 .card-option { width: 100%; min-height: 88rpx; margin: 0; padding: 13rpx 24rpx; display: flex; align-items: center; border: 0; border-bottom: 1rpx solid #e7e9ed; border-radius: 0; background: #ffffff; box-shadow: none; text-align: left; }
 .card-option.selected { background: #eef3ff; box-shadow: inset 4rpx 0 0 #002fa7; }
 .option-logo { width: 56rpx; height: 56rpx; }
@@ -503,7 +506,7 @@ onShow(() => {
 .selection-mark.checked { border: 7rpx solid #002fa7; background: #ffffff; }
 .selector-empty { padding: 50rpx 24rpx; text-align: center; }
 .manual-link { width: auto; margin-top: 20rpx; border-radius: 0; }
-.selector-footer { padding: 18rpx 24rpx; display: grid; grid-template-columns: 1fr 1fr; gap: 12rpx; border-top: 1rpx solid #d9dde3; }
+.selector-footer { flex: 0 0 auto; padding: 18rpx 24rpx; display: grid; grid-template-columns: 1fr 1fr; gap: 12rpx; border-top: 1rpx solid #d9dde3; background: #ffffff; }
 .footer-button { width: 100%; margin: 0; border-radius: 0; }
 
 @media (max-width: 900px) {
@@ -521,6 +524,6 @@ onShow(() => {
   .rate-value { text-align: left; }
   .rate-actions { width: 100%; justify-content: flex-start; }
   .selector-mask { padding: 0; align-items: flex-end; }
-  .selector-dialog { width: 100%; max-height: 88vh; border-right: 0; border-bottom: 0; border-left: 0; }
+  .selector-dialog { width: 100%; height: 88vh; max-height: 88vh; border-right: 0; border-bottom: 0; border-left: 0; }
 }
 </style>

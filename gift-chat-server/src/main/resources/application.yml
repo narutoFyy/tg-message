@@ -11,8 +11,8 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:}
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: 50MB
+    max-request-size: 50MB
   jpa:
     hibernate:
       ddl-auto: validate
@@ -44,6 +44,7 @@ app:
   upload:
     image-dir: ${APP_UPLOAD_IMAGE_DIR:uploads/images}
     voice-dir: ${APP_UPLOAD_VOICE_DIR:uploads/voices}
+    video-dir: ${APP_UPLOAD_VIDEO_DIR:${APP_UPLOAD_IMAGE_DIR:uploads/images}/../videos}
     public-base-url: ${APP_UPLOAD_PUBLIC_BASE_URL:}
   video:
     vendor: ${APP_VIDEO_VENDOR:trtc}

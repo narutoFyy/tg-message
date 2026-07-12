@@ -7,6 +7,7 @@ public record BroadcastItem(
     String scope,
     String messageType,
     String content,
+    String mediaUrl,
     int deliveredCount,
     String countryCodes,
     String searchKeyword,

@@ -79,13 +79,20 @@ public class BroadcastService {
 
         String scope = normalizeScope(currentUser, request.scope());
         String messageType = normalizeMessageType(request.messageType());
-        String content = request.content().trim();
+        BroadcastContent broadcastContent = normalizeContent(messageType, request.content(), request.mediaUrl());
         BroadcastFilters filters = normalizeFilters(request);
         List<SupportConversationEntity> targets = resolveTargets(currentUser, scope, filters);
 
         String senderRole = "ADMIN".equalsIgnoreCase(currentUser.getRoleCode()) ? "ADMIN" : "SUPPORT";
         targets.forEach(conversation -> {
-            persistentSupportService.appendStaffMessage(conversation, currentUser, senderRole, messageType, content);
+            persistentSupportService.appendStaffMessage(
+                conversation,
+                currentUser,
+                senderRole,
+                messageType,
+                broadcastContent.caption(),
+                broadcastContent.mediaUrl()
+            );
             notificationService.notifyUser(
                 conversation.getCustomerUser(),
                 currentUser,
@@ -103,7 +110,8 @@ public class BroadcastService {
         entity.setSenderRole(currentUser.getRoleCode().toUpperCase());
         entity.setScopeCode(scope.toUpperCase());
         entity.setMessageType(messageType.toUpperCase());
-        entity.setContent(content);
+        entity.setContent(broadcastContent.caption());
+        entity.setMediaUrl(broadcastContent.mediaUrl());
         entity.setDeliveredCount(targets.size());
         entity.setCountryCodes(String.join(",", filters.countryCodes()));
         entity.setSearchKeyword(filters.keyword());
@@ -188,10 +196,35 @@ public class BroadcastService {
 
     private String normalizeMessageType(String messageType) {
         String normalized = messageType.trim().toLowerCase();
-        if (!List.of("text", "image", "voice", "link", "gif").contains(normalized)) {
+        if (!List.of("text", "image", "video", "voice", "link", "gif").contains(normalized)) {
             throw new IllegalArgumentException("Unsupported broadcast message type");
         }
         return normalized;
+    }
+
+    private BroadcastContent normalizeContent(String messageType, String content, String mediaUrl) {
+        String normalizedContent = content == null ? "" : content.trim();
+        String normalizedMediaUrl = mediaUrl == null ? "" : mediaUrl.trim();
+        if ("image".equals(messageType) || "video".equals(messageType)) {
+            if ("image".equals(messageType) && !StringUtils.hasText(normalizedMediaUrl) && looksLikeMediaUrl(normalizedContent)) {
+                return new BroadcastContent("", normalizedContent);
+            }
+            if (!StringUtils.hasText(normalizedMediaUrl)) {
+                throw new IllegalArgumentException("Broadcast media is required");
+            }
+            return new BroadcastContent(normalizedContent, normalizedMediaUrl);
+        }
+        if (!StringUtils.hasText(normalizedContent)) {
+            throw new IllegalArgumentException("Broadcast content is required");
+        }
+        return new BroadcastContent(normalizedContent, "");
+    }
+
+    private boolean looksLikeMediaUrl(String value) {
+        return value.startsWith("/uploads/")
+            || value.startsWith("http://")
+            || value.startsWith("https://")
+            || value.startsWith("data:");
     }
 
     private BroadcastItem toItem(BroadcastMessageEntity entity) {
@@ -202,6 +235,7 @@ public class BroadcastService {
             entity.getScopeCode().toLowerCase(),
             entity.getMessageType().toLowerCase(),
             entity.getContent(),
+            entity.getMediaUrl() == null ? "" : entity.getMediaUrl(),
             entity.getDeliveredCount(),
             entity.getCountryCodes() == null ? "" : entity.getCountryCodes(),
             entity.getSearchKeyword() == null ? "" : entity.getSearchKeyword(),
@@ -212,5 +246,8 @@ public class BroadcastService {
     }
 
     private record BroadcastFilters(List<String> countryCodes, String keyword, List<String> targetConversationIds) {
+    }
+
+    private record BroadcastContent(String caption, String mediaUrl) {
     }
 }

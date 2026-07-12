@@ -293,6 +293,7 @@ CREATE TABLE IF NOT EXISTS broadcast_message (
     scope_code VARCHAR(32) NOT NULL,
     message_type VARCHAR(32) NOT NULL,
     content TEXT NOT NULL,
+    media_url VARCHAR(512),
     delivered_count INT NOT NULL,
     country_codes VARCHAR(255),
     search_keyword VARCHAR(128),

@@ -1,4 +1,4 @@
-const UPLOAD_PATH_PATTERN = /\/uploads\/(images|voices)\//
+const UPLOAD_PATH_PATTERN = /\/uploads\/(images|voices|videos)\//
 
 export function resolveMediaUrl(url: string) {
   const value = (url || '').trim()

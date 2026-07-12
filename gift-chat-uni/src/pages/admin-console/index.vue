@@ -209,9 +209,35 @@
       <view v-if="activeTab === 'broadcast'" class="panel">
         <text class="section-title">Admin broadcast</text>
         <view style="height: 18rpx"></view>
-        <view class="assign-row">
-          <input v-model="broadcastForm.content" class="field-input assign-input" placeholder="Message all users..." />
-          <button class="primary-button mini-button" @click="submitBroadcast">Send</button>
+        <view class="broadcast-compose">
+          <textarea
+            v-model="broadcastForm.content"
+            class="field-input broadcast-caption-input"
+            :placeholder="broadcastForm.mediaUrl ? 'Optional caption for this media...' : 'Message all users...'"
+          />
+          <view class="broadcast-media-actions">
+            <button class="ghost-button mini-button" :disabled="broadcastForm.uploading" @click="chooseAdminBroadcastImage">Choose image</button>
+            <button class="ghost-button mini-button" :disabled="broadcastForm.uploading" @click="chooseAdminBroadcastVideo">Choose video</button>
+            <button v-if="broadcastForm.mediaUrl" class="ghost-button mini-button danger-soft" @click="clearAdminBroadcastMedia()">Remove media</button>
+            <button class="primary-button mini-button" :disabled="broadcastForm.uploading" @click="submitBroadcast">
+              {{ broadcastForm.uploading ? 'Uploading...' : 'Send' }}
+            </button>
+          </view>
+          <view v-if="broadcastForm.mediaUrl" class="broadcast-media-preview">
+            <image
+              v-if="broadcastForm.messageType === 'image'"
+              class="broadcast-preview-image"
+              :src="resolveMediaUrl(broadcastForm.mediaUrl)"
+              mode="aspectFit"
+            />
+            <video
+              v-else-if="broadcastForm.messageType === 'video'"
+              class="broadcast-preview-video"
+              :src="resolveMediaUrl(broadcastForm.mediaUrl)"
+              controls
+            />
+            <text class="row-meta">{{ broadcastForm.mediaName || broadcastForm.messageType }}</text>
+          </view>
         </view>
         <view style="height: 14rpx"></view>
         <view class="broadcast-type-row">
@@ -219,7 +245,7 @@
             v-for="type in broadcastTypes"
             :key="type"
             :class="['ghost-button', 'mini-button', broadcastForm.messageType === type && 'active-soft']"
-            @click="broadcastForm.messageType = type"
+            @click="setAdminBroadcastType(type)"
           >
             {{ type }}
           </button>
@@ -337,6 +363,8 @@
             <text class="row-meta">{{ item.messageType }} / delivered {{ item.deliveredCount }} / {{ item.createdAt }}</text>
             <text class="row-meta">filters: {{ item.countryCodes || 'all countries' }} / {{ item.searchKeyword || 'no keyword' }} / {{ item.targetMode }}</text>
             <text v-if="item.targetUsernames" class="row-meta">targets: {{ item.targetUsernames }}</text>
+            <image v-if="item.messageType === 'image' && item.mediaUrl" class="broadcast-record-image" :src="resolveMediaUrl(item.mediaUrl)" mode="aspectFit" />
+            <video v-if="item.messageType === 'video' && item.mediaUrl" class="broadcast-record-video" :src="resolveMediaUrl(item.mediaUrl)" controls />
             <text class="row-meta">{{ item.content }}</text>
           </view>
         </view>
@@ -575,6 +603,7 @@
 import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref } from 'vue'
 import { cardLogoFor } from '@/utils/art'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 import type {
   AdminDirectConversationItem,
   AdminUserItem,
@@ -627,7 +656,9 @@ import {
   updateRegistrationBonusConfig,
   updateTransactionStatus,
   updateLotteryFulfillmentStatus,
-  updateWithdrawalStatus
+  updateWithdrawalStatus,
+  uploadImage,
+  uploadVideo
 } from '@/utils/api'
 import { useAppStore } from '@/store/app'
 
@@ -665,7 +696,7 @@ const registrationBonusDrafts = reactive<Record<string, {
   enabled: boolean
   note: string
 }>>({})
-const broadcastTypes = ['text', 'image', 'voice', 'gif', 'link'] as const
+const broadcastTypes = ['text', 'image', 'video', 'voice', 'gif', 'link'] as const
 const adminBroadcastCountryOptions = ['+234', '+91', '+237', '+233', '+254']
 const lotteryStatuses = ['pending', 'processing', 'fulfilled', 'canceled']
 const vipRules = [
@@ -678,6 +709,9 @@ const vipRules = [
 const broadcastForm = reactive({
   content: '',
   messageType: 'text' as BroadcastItem['messageType'],
+  mediaUrl: '',
+  mediaName: '',
+  uploading: false,
   keyword: '',
   countryCodes: [] as string[]
 })
@@ -900,17 +934,24 @@ async function saveRegistrationBonusConfig(config: RegistrationBonusConfigItem) 
 async function submitBroadcast() {
   try {
     const content = broadcastForm.content.trim()
-    if (!content) return
+    const isMedia = broadcastForm.messageType === 'image' || broadcastForm.messageType === 'video'
+    if (isMedia && !broadcastForm.mediaUrl) {
+      notice.value = 'Choose an image or video before sending.'
+      return
+    }
+    if (!isMedia && !content) return
     const confirmed = await confirmAdminBroadcast(content)
     if (!confirmed) return
     await createBroadcast({
       scope: 'all',
       content,
       messageType: broadcastForm.messageType,
+      mediaUrl: broadcastForm.mediaUrl || undefined,
       countryCodes: broadcastForm.countryCodes,
       keyword: broadcastForm.keyword.trim()
     })
     broadcastForm.content = ''
+    clearAdminBroadcastMedia()
     broadcastForm.keyword = ''
     notice.value = 'Broadcast sent.'
     await refreshAll()
@@ -926,7 +967,7 @@ function confirmAdminBroadcast(content: string) {
   return new Promise<boolean>((resolve) => {
     uni.showModal({
       title: 'Confirm broadcast',
-      content: `Countries: ${countryText}\nKeyword: ${keywordText}\nTargets: ${countText}\nMessage: ${content}`,
+      content: `Countries: ${countryText}\nKeyword: ${keywordText}\nTargets: ${countText}\nMedia: ${broadcastForm.mediaUrl ? broadcastForm.messageType : 'none'}\nMessage: ${content || '(no caption)'}`,
       confirmText: 'Send',
       cancelText: 'Cancel',
       success(result) {
@@ -937,6 +978,59 @@ function confirmAdminBroadcast(content: string) {
       }
     })
   })
+}
+
+function setAdminBroadcastType(type: BroadcastItem['messageType']) {
+  broadcastForm.messageType = type
+  if (type !== 'image' && type !== 'video') {
+    clearAdminBroadcastMedia(false)
+  }
+}
+
+function chooseAdminBroadcastImage() {
+  uni.chooseImage({
+    count: 1,
+    sizeType: ['compressed'],
+    sourceType: ['album', 'camera'],
+    success(result) {
+      const filePath = result.tempFilePaths[0]
+      if (filePath) uploadAdminBroadcastMedia('image', filePath, 'Broadcast image')
+    }
+  })
+}
+
+function chooseAdminBroadcastVideo() {
+  uni.chooseVideo({
+    sourceType: ['album', 'camera'],
+    compressed: false,
+    success(result) {
+      if (result.tempFilePath) uploadAdminBroadcastMedia('video', result.tempFilePath, 'Broadcast video')
+    }
+  })
+}
+
+async function uploadAdminBroadcastMedia(type: 'image' | 'video', filePath: string, fallbackName: string) {
+  broadcastForm.uploading = true
+  notice.value = `Uploading ${type}...`
+  try {
+    const asset = type === 'image' ? await uploadImage(filePath) : await uploadVideo(filePath)
+    broadcastForm.messageType = type
+    broadcastForm.mediaUrl = asset.publicUrl
+    broadcastForm.mediaName = asset.originalName || fallbackName
+    notice.value = `${type === 'image' ? 'Image' : 'Video'} ready.`
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : `${fallbackName} upload failed`
+  } finally {
+    broadcastForm.uploading = false
+  }
+}
+
+function clearAdminBroadcastMedia(resetType = true) {
+  broadcastForm.mediaUrl = ''
+  broadcastForm.mediaName = ''
+  if (resetType && (broadcastForm.messageType === 'image' || broadcastForm.messageType === 'video')) {
+    broadcastForm.messageType = 'text'
+  }
 }
 
 const adminBroadcastTargetCount = computed(() => {
@@ -1430,6 +1524,63 @@ async function assignConversation(conversationId: string) {
   color: #101820;
   line-height: 1.15;
   word-break: break-word;
+}
+
+.broadcast-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.broadcast-caption-input {
+  width: 100%;
+  min-height: 150rpx;
+  padding: 18rpx;
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+
+.broadcast-media-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.broadcast-media-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10rpx;
+  padding: 14rpx;
+  border: 1rpx solid #d9dde3;
+  border-radius: 12rpx;
+  background: #f7f9fb;
+}
+
+.broadcast-preview-image,
+.broadcast-record-image {
+  width: min(520rpx, 100%);
+  height: 300rpx;
+  background: #eef1f4;
+}
+
+.broadcast-preview-video,
+.broadcast-record-video {
+  width: min(640rpx, 100%);
+  height: 360rpx;
+  background: #111111;
+}
+
+.broadcast-record-image,
+.broadcast-record-video {
+  display: block;
+  margin: 12rpx 0;
+}
+
+.danger-soft {
+  color: #b42318;
+  border-color: #f0b7b2;
+  background: #fff3f2;
 }
 
 .admin-order-identity {

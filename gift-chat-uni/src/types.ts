@@ -334,8 +334,9 @@ export interface BroadcastItem {
   senderUsername: string
   senderRole: 'agent' | 'admin'
   scope: 'own' | 'all'
-  messageType: 'text' | 'image' | 'voice' | 'gif' | 'link'
+  messageType: 'text' | 'image' | 'video' | 'voice' | 'gif' | 'link'
   content: string
+  mediaUrl: string
   deliveredCount: number
   countryCodes: string
   searchKeyword: string

@@ -2,6 +2,7 @@ package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.model.ChatMessage;
 import com.cardnova.giftchat.model.ChatMessageReply;
+import com.cardnova.giftchat.model.MessageAttachment;
 import com.cardnova.giftchat.model.RealtimeFanoutEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -10,6 +11,7 @@ import org.springframework.web.socket.WebSocketSession;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -100,6 +102,42 @@ public class RealtimeChatService {
         String failedReason,
         ChatMessageReply replyTo
     ) {
+        broadcast(
+            channelKey,
+            senderUserId,
+            selfAuthor,
+            otherAuthor,
+            messageType,
+            content,
+            messageId,
+            createdAt,
+            clientMessageId,
+            serverSeq,
+            deliveryStatus,
+            deliveredAt,
+            failedReason,
+            replyTo,
+            List.of()
+        );
+    }
+
+    public void broadcast(
+        String channelKey,
+        String senderUserId,
+        String selfAuthor,
+        String otherAuthor,
+        String messageType,
+        String content,
+        String messageId,
+        String createdAt,
+        String clientMessageId,
+        Long serverSeq,
+        String deliveryStatus,
+        String deliveredAt,
+        String failedReason,
+        ChatMessageReply replyTo,
+        List<MessageAttachment> attachments
+    ) {
         ChatMessage payload = new ChatMessage(
             messageId,
             otherAuthor,
@@ -112,7 +150,7 @@ public class RealtimeChatService {
             deliveryStatus == null || deliveryStatus.isBlank() ? "delivered" : deliveryStatus.toLowerCase(),
             deliveredAt == null ? "" : deliveredAt,
             failedReason == null ? "" : failedReason,
-            java.util.List.of(),
+            attachments == null ? List.of() : attachments,
             replyTo
         );
         broadcastAuthorAwareLocal(channelKey, senderUserId, selfAuthor, otherAuthor, payload);

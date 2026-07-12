@@ -52,6 +52,7 @@ It now includes:
 - Uploads
   - `POST /api/uploads/images`
   - `POST /api/uploads/voices`
+  - `POST /api/uploads/videos`
 - Blacklist
   - `GET /api/blacklist`
   - `POST /api/blacklist`

@@ -36,16 +36,31 @@ public class MessageAttachmentService {
             return;
         }
 
-        UploadAssetEntity asset = uploadAssetRepository.findByPublicUrl(content.trim()).orElse(null);
+        create(ownerType, messageId, normalizedType, content.trim());
+    }
+
+    public void createFromUrl(String ownerType, String messageId, String attachmentType, String url) {
+        String normalizedType = normalizeStoredAttachmentType(attachmentType);
+        if (normalizedType.isEmpty() || !StringUtils.hasText(url)) {
+            return;
+        }
+        if (!messageAttachmentRepository.findByOwnerMessageTypeAndOwnerMessageIdOrderBySortOrderAsc(ownerType, messageId).isEmpty()) {
+            return;
+        }
+        create(ownerType, messageId, normalizedType, url.trim());
+    }
+
+    private void create(String ownerType, String messageId, String attachmentType, String url) {
+        UploadAssetEntity asset = uploadAssetRepository.findByPublicUrl(url).orElse(null);
 
         LocalDateTime now = LocalDateTime.now();
         MessageAttachmentEntity entity = new MessageAttachmentEntity();
         entity.setId(UUID.randomUUID().toString());
         entity.setOwnerMessageType(ownerType);
         entity.setOwnerMessageId(messageId);
-        entity.setAttachmentType(normalizedType);
+        entity.setAttachmentType(attachmentType);
         entity.setAsset(asset);
-        entity.setUrl(content.trim());
+        entity.setUrl(url);
         entity.setThumbnailUrl("");
         entity.setMimeType(asset == null ? "" : asset.getMimeType());
         entity.setOriginalName(asset == null ? "" : asset.getOriginalName());
@@ -109,6 +124,14 @@ public class MessageAttachmentService {
             case "GIF" -> "GIF";
             case "VOICE" -> "VOICE";
             case "VIDEO" -> "CALL";
+            default -> "";
+        };
+    }
+
+    private String normalizeStoredAttachmentType(String attachmentType) {
+        String normalized = attachmentType == null ? "" : attachmentType.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "IMAGE", "GIF", "VOICE", "VIDEO", "FILE", "CALL" -> normalized;
             default -> "";
         };
     }

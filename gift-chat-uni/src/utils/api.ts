@@ -357,6 +357,7 @@ export function createBroadcast(payload: {
   scope: 'own' | 'all'
   content: string
   messageType: BroadcastItem['messageType']
+  mediaUrl?: string
   countryCodes?: string[]
   keyword?: string
   targetConversationIds?: string[]
@@ -684,6 +685,10 @@ export function uploadImage(filePath: string) {
 
 export function uploadVoice(filePath: string) {
   return uploadFile('/uploads/voices', filePath)
+}
+
+export function uploadVideo(filePath: string) {
+  return uploadFile('/uploads/videos', filePath)
 }
 
 function uploadFile(url: string, filePath: string) {

@@ -33,6 +33,9 @@ public class BroadcastMessageEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "media_url", length = 512)
+    private String mediaUrl;
+
     @Column(name = "delivered_count", nullable = false)
     private int deliveredCount;
 
@@ -97,6 +100,14 @@ public class BroadcastMessageEntity {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getMediaUrl() {
+        return mediaUrl;
+    }
+
+    public void setMediaUrl(String mediaUrl) {
+        this.mediaUrl = mediaUrl;
     }
 
     public int getDeliveredCount() {

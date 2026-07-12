@@ -11,11 +11,14 @@
         <text class="reply-preview-line">{{ replyPreviewText }}</text>
       </view>
       <MediaMessage
-        v-if="message.type === 'image' || message.type === 'gif'"
-        :src="message.content"
-        :media-type="message.type"
+        v-if="isImageAttachment"
+        :src="mediaSource"
+        :media-type="imageMediaType"
         @preview="$emit('preview', $event)"
       />
+      <view v-else-if="isVideoAttachment" class="video-message">
+        <video class="media-native-video" :src="mediaSource" controls />
+      </view>
       <view v-else-if="message.type === 'voice'" class="voice-chip" @click="$emit('playVoice', message.content)">
         <text>{{ voiceLabel }}</text>
       </view>
@@ -37,6 +40,8 @@
         @enter="$emit('enterCall', message)"
       />
       <text v-else class="message-text">{{ message.content }}</text>
+
+      <text v-if="mediaCaption" class="media-caption">{{ mediaCaption }}</text>
 
       <text v-if="translation" class="translation-text">{{ translation }}</text>
 
@@ -60,6 +65,7 @@ import CallMessageCard from './CallMessageCard.vue'
 import MediaMessage from './MediaMessage.vue'
 import MessageDeliveryStatus from './MessageDeliveryStatus.vue'
 import type { ChatMessage, VideoSessionItem } from '@/types'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const props = withDefaults(defineProps<{
   message: ChatMessage
@@ -105,8 +111,21 @@ const emit = defineEmits<{
 }>()
 
 const defaultCallTitle = 'Video call'
+const mediaAttachment = computed(() => props.message.attachments?.find((attachment) =>
+  attachment.type === 'image' || attachment.type === 'gif' || attachment.type === 'video'
+) || null)
+const isImageAttachment = computed(() => props.message.type === 'image' || props.message.type === 'gif')
+const imageMediaType = computed<'image' | 'gif'>(() => props.message.type === 'gif' ? 'gif' : 'image')
+const isVideoAttachment = computed(() => props.message.type === 'video' && mediaAttachment.value?.type === 'video')
+const mediaSource = computed(() => resolveMediaUrl(mediaAttachment.value?.url || props.message.content))
+const mediaCaption = computed(() => {
+  if (!isImageAttachment.value && !isVideoAttachment.value) return ''
+  const content = props.message.content.trim()
+  const attachmentUrl = mediaAttachment.value?.url?.trim() || ''
+  return content && content !== attachmentUrl ? content : ''
+})
 const bubbleKindClass = computed(() => {
-  if (props.message.type === 'image' || props.message.type === 'gif') return 'media-bubble'
+  if (isImageAttachment.value || isVideoAttachment.value) return 'media-bubble'
   if (props.message.type === 'video') return 'call-bubble'
   return ''
 })
@@ -285,6 +304,31 @@ function emitMessageMenu(event: Event) {
   padding: 5px 8px 6px;
   background: rgba(255, 255, 255, 0.86);
   border-radius: 0 0 8px 8px;
+}
+
+.video-message {
+  width: min(520px, 72vw);
+  max-width: 100%;
+  background: #111111;
+}
+
+.media-native-video {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  max-height: 520px;
+  background: #111111;
+}
+
+.media-caption {
+  display: block;
+  max-width: min(520px, 72vw);
+  padding: 9px 11px 2px;
+  color: #28332d;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .msg-time {

@@ -351,10 +351,32 @@ public class PersistentSupportService {
         String messageType,
         String content
     ) {
+        return appendStaffMessage(conversation, sender, senderRole, messageType, content, "");
+    }
+
+    @Transactional
+    public ChatMessage appendStaffMessage(
+        SupportConversationEntity conversation,
+        UserEntity sender,
+        String senderRole,
+        String messageType,
+        String content,
+        String mediaUrl
+    ) {
         String normalizedRole = senderRole == null ? "SUPPORT" : senderRole.trim().toUpperCase();
         SupportMessageEntity saved = appendMessageEntity(conversation, sender, normalizedRole, messageType, content, "", null);
-        messageAttachmentService.createFromMessageContent("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent());
+        if (StringUtils.hasText(mediaUrl)) {
+            messageAttachmentService.createFromUrl("SUPPORT", saved.getId(), saved.getMessageType(), mediaUrl);
+        } else {
+            messageAttachmentService.createFromMessageContent("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent());
+        }
         String author = "ADMIN".equals(normalizedRole) ? "support" : normalizedRole.toLowerCase();
+        List<com.cardnova.giftchat.model.MessageAttachment> attachments = messageAttachmentService.attachmentsFor(
+            "SUPPORT",
+            saved.getId(),
+            saved.getMessageType(),
+            saved.getContent()
+        );
 
         realtimeChatService.broadcast(
             RealtimeChatService.supportChannel(conversation.getId()),
@@ -370,7 +392,8 @@ public class PersistentSupportService {
             saved.getDeliveryStatus(),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
             saved.getFailedReason(),
-            replyToChatMessage(saved)
+            replyToChatMessage(saved),
+            attachments
         );
 
         return new ChatMessage(
@@ -385,7 +408,7 @@ public class PersistentSupportService {
             normalizeDeliveryStatus(saved.getDeliveryStatus()),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
             saved.getFailedReason() == null ? "" : saved.getFailedReason(),
-            messageAttachmentService.attachmentsFor("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent()),
+            attachments,
             replyToChatMessage(saved)
         );
     }

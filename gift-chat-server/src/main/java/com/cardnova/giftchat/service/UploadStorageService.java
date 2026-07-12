@@ -27,6 +27,7 @@ public class UploadStorageService {
 
     private static final long MAX_IMAGE_BYTES = 5L * 1024L * 1024L;
     private static final long MAX_VOICE_BYTES = 10L * 1024L * 1024L;
+    private static final long MAX_VIDEO_BYTES = 50L * 1024L * 1024L;
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/webp", "image/gif");
     private static final Set<String> ALLOWED_VOICE_TYPES = Set.of(
         "audio/mpeg",
@@ -38,12 +39,18 @@ public class UploadStorageService {
         "audio/webm",
         "audio/amr"
     );
+    private static final Set<String> ALLOWED_VIDEO_TYPES = Set.of(
+        "video/mp4",
+        "video/webm",
+        "video/quicktime"
+    );
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final UploadAssetRepository uploadAssetRepository;
     private final CurrentUserService currentUserService;
     private final Path imageDir;
     private final Path voiceDir;
+    private final Path videoDir;
     private final String publicBaseUrl;
 
     public UploadStorageService(
@@ -51,12 +58,14 @@ public class UploadStorageService {
         CurrentUserService currentUserService,
         @Value("${app.upload.image-dir}") String imageDir,
         @Value("${app.upload.voice-dir}") String voiceDir,
+        @Value("${app.upload.video-dir}") String videoDir,
         @Value("${app.upload.public-base-url}") String publicBaseUrl
     ) {
         this.uploadAssetRepository = uploadAssetRepository;
         this.currentUserService = currentUserService;
         this.imageDir = Paths.get(imageDir).toAbsolutePath().normalize();
         this.voiceDir = Paths.get(voiceDir).toAbsolutePath().normalize();
+        this.videoDir = Paths.get(videoDir).toAbsolutePath().normalize();
         this.publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.trim();
     }
 
@@ -66,6 +75,10 @@ public class UploadStorageService {
 
     public UploadAssetItem saveVoice(MultipartFile file) {
         return saveAsset(file, ALLOWED_VOICE_TYPES, "Voice", voiceDir, "voices", MAX_VOICE_BYTES);
+    }
+
+    public UploadAssetItem saveVideo(MultipartFile file) {
+        return saveAsset(file, ALLOWED_VIDEO_TYPES, "Video", videoDir, "videos", MAX_VIDEO_BYTES);
     }
 
     private UploadAssetItem saveAsset(
@@ -132,6 +145,13 @@ public class UploadStorageService {
         }
 
         String detected = detectFromHeader(header, readBytes);
+        String declared = file.getContentType() == null ? "" : file.getContentType().trim().toLowerCase(Locale.ROOT);
+        if ("audio/mp4".equals(detected) && ("video/mp4".equals(declared) || "video/quicktime".equals(declared))) {
+            return declared;
+        }
+        if ("audio/webm".equals(detected) && "video/webm".equals(declared)) {
+            return declared;
+        }
         if (StringUtils.hasText(detected)) {
             return detected;
         }
@@ -206,6 +226,9 @@ public class UploadStorageService {
             case "audio/wav", "audio/x-wav" -> "wav";
             case "audio/webm" -> "webm";
             case "audio/amr" -> "amr";
+            case "video/mp4" -> "mp4";
+            case "video/webm" -> "webm";
+            case "video/quicktime" -> "mov";
             default -> fallback;
         };
     }

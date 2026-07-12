@@ -1821,6 +1821,130 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void mediaBroadcastPersistsAttachmentAndOptionalCaption() throws Exception {
+        String adminToken = loginToken("admin_mia");
+        String userToken = loginToken("gift_hunter");
+        byte[] mp4Header = new byte[] {
+            0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+            0x69, 0x73, 0x6F, 0x6D, 0x00, 0x00, 0x00, 0x00
+        };
+        MockMultipartFile video = new MockMultipartFile(
+            "file",
+            "rate-update.mp4",
+            "video/mp4",
+            mp4Header
+        );
+        MvcResult uploadResult = mockMvc.perform(multipart("/api/uploads/videos")
+                .file(video)
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String mediaUrl = objectMapper.readTree(uploadResult.getResponse().getContentAsString())
+            .at("/data/publicUrl")
+            .asText();
+        String caption = "Video rate update " + UUID.randomUUID();
+
+        mockMvc.perform(post("/api/broadcasts")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "scope": "all",
+                      "content": "%s",
+                      "messageType": "video",
+                      "mediaUrl": "%s"
+                    }
+                    """.formatted(caption, mediaUrl)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.messageType").value("video"))
+            .andExpect(jsonPath("$.data.content").value(caption))
+            .andExpect(jsonPath("$.data.mediaUrl").value(mediaUrl));
+
+        MvcResult conversationsResult = mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode matchingMessage = objectMapper.readTree(conversationsResult.getResponse().getContentAsString())
+            .path("data")
+            .findValues("messages")
+            .stream()
+            .flatMap(messages -> {
+                List<JsonNode> values = new ArrayList<>();
+                messages.forEach(values::add);
+                return values.stream();
+            })
+            .filter(message -> caption.equals(message.path("content").asText()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Broadcast video message missing"));
+
+        assertEquals("video", matchingMessage.path("type").asText());
+        assertEquals("video", matchingMessage.path("attachments").path(0).path("type").asText());
+        assertEquals(mediaUrl, matchingMessage.path("attachments").path(0).path("url").asText());
+
+        byte[] pngHeaderOnly = new byte[] {
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D
+        };
+        MockMultipartFile image = new MockMultipartFile("file", "rate.png", "image/png", pngHeaderOnly);
+        MvcResult imageUploadResult = mockMvc.perform(multipart("/api/uploads/images")
+                .file(image)
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String imageUrl = objectMapper.readTree(imageUploadResult.getResponse().getContentAsString())
+            .at("/data/publicUrl")
+            .asText();
+        String imageCaption = "Image rate update " + UUID.randomUUID();
+
+        mockMvc.perform(post("/api/broadcasts")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "scope": "all",
+                      "content": "%s",
+                      "messageType": "image",
+                      "mediaUrl": "%s"
+                    }
+                    """.formatted(imageCaption, imageUrl)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.messageType").value("image"))
+            .andExpect(jsonPath("$.data.mediaUrl").value(imageUrl));
+
+        MvcResult imageConversationsResult = mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode imageMessage = objectMapper.readTree(imageConversationsResult.getResponse().getContentAsString())
+            .path("data")
+            .findValues("messages")
+            .stream()
+            .flatMap(messages -> {
+                List<JsonNode> values = new ArrayList<>();
+                messages.forEach(values::add);
+                return values.stream();
+            })
+            .filter(messageNode -> imageCaption.equals(messageNode.path("content").asText()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Broadcast image message missing"));
+        assertEquals("image", imageMessage.path("attachments").path(0).path("type").asText());
+        assertEquals(imageUrl, imageMessage.path("attachments").path(0).path("url").asText());
+
+        mockMvc.perform(post("/api/broadcasts")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "scope": "all",
+                      "content": "",
+                      "messageType": "image"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Broadcast media is required"));
+    }
+
+    @Test
     void broadcastScopeIsEnforcedByRole() throws Exception {
         String agentToken = loginToken("support_luna");
         String adminToken = loginToken("admin_mia");
@@ -2371,6 +2495,28 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.mimeType").value("image/png"))
             .andExpect(jsonPath("$.data.publicUrl", containsString(".png")));
+    }
+
+    @Test
+    void uploadVideoValidatesContainerAndMimeType() throws Exception {
+        String adminToken = loginToken("admin_mia");
+        byte[] mp4Header = new byte[] {
+            0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+            0x69, 0x73, 0x6F, 0x6D, 0x00, 0x00, 0x00, 0x00
+        };
+        MockMultipartFile video = new MockMultipartFile(
+            "file",
+            "broadcast.mp4",
+            "video/mp4",
+            mp4Header
+        );
+
+        mockMvc.perform(multipart("/api/uploads/videos")
+                .file(video)
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.mimeType").value("video/mp4"))
+            .andExpect(jsonPath("$.data.publicUrl", containsString("/uploads/videos/")));
     }
 
     @Test

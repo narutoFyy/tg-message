@@ -6,8 +6,9 @@ import java.util.List;
 
 public record CreateBroadcastRequest(
     @NotBlank String scope,
-    @NotBlank String content,
+    String content,
     @NotBlank String messageType,
+    String mediaUrl,
     List<String> countryCodes,
     String keyword,
     List<String> targetConversationIds

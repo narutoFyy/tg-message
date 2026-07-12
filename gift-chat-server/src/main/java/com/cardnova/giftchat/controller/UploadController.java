@@ -33,4 +33,10 @@ public class UploadController {
         currentUserService.getCurrentUser();
         return ApiResponse.success("voice_uploaded", uploadStorageService.saveVoice(file));
     }
+
+    @PostMapping("/videos")
+    public ApiResponse<UploadAssetItem> uploadVideo(@RequestPart("file") MultipartFile file) {
+        currentUserService.getCurrentUser();
+        return ApiResponse.success("video_uploaded", uploadStorageService.saveVideo(file));
+    }
 }

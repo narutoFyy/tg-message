@@ -1069,6 +1069,7 @@ export function useAppStore() {
     scope: 'own' | 'all'
     content: string
     messageType: BroadcastItem['messageType']
+    mediaUrl?: string
     countryCodes?: string[]
     keyword?: string
     targetConversationIds?: string[]

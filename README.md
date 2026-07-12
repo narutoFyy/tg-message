@@ -14,7 +14,7 @@ Xcard Gift Chat is a gift-card rate, order, wallet, and one-to-one customer-serv
 - User login/register routing by role.
 - Gift-card rate list, sell-card order draft, voucher image attachment, and order messaging to support.
 - Wallet, withdrawal request, loan request, transaction and profile pages.
-- Customer-service one-to-one IM with text, image, GIF, voice, read status, unread handling, reconnect heartbeat, and media fallback UI.
+- Customer-service one-to-one IM with text, image, GIF, voice, read status, unread handling, reconnect heartbeat, and media fallback UI; administrator/support broadcasts can send one image or video with an optional caption.
 - Support workbench with customer list, active conversation, customer profile, orders, loans, withdrawals, notes, and language toggle.
 - Support-sent Chinese text can be translated to English before sending to customers.
 - TRTC video call entry and call-status UI.
@@ -110,6 +110,7 @@ If frontend and backend are served by the same domain or gateway, proxy these pa
 - `/ws/**`
 - `/uploads/images/**`
 - `/uploads/voices/**`
+- `/uploads/videos/**`
 
 If frontend calls backend directly on `8087`, confirm the server firewall allows public access to `8087`.
 
@@ -121,6 +122,7 @@ Important backend environment variables:
 
 - `APP_UPLOAD_IMAGE_DIR`: local image upload directory.
 - `APP_UPLOAD_VOICE_DIR`: local voice upload directory.
+- `APP_UPLOAD_VIDEO_DIR`: optional video upload directory; defaults beside `APP_UPLOAD_IMAGE_DIR`.
 - `APP_UPLOAD_PUBLIC_BASE_URL`: empty for same-domain `/uploads/...` URLs, or the public backend origin for split-port deployment.
 - `APP_VIDEO_VENDOR=trtc`
 - `APP_VIDEO_TRTC_SDK_APP_ID`
@@ -139,7 +141,7 @@ Before customer delivery, confirm:
 - Support-sent Chinese text reaches the customer as English when translation is enabled.
 - Sent messages show one check; read messages show two checks on the same horizontal line with the timestamp.
 - Image/GIF previews keep the original aspect ratio and do not crop the right edge.
-- Server can serve `/uploads/images/**` and `/uploads/voices/**` with HTTP 200.
+- Server can serve `/uploads/images/**`, `/uploads/voices/**`, and `/uploads/videos/**` with HTTP 200.
 - Browser console has no WebSocket, upload, or mixed-content errors.
 
 ## Notes

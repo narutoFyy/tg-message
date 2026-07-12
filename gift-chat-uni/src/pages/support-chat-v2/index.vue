@@ -554,7 +554,32 @@
           <text class="broadcast-title">群发消息</text>
           <text class="broadcast-close" @click="closeBroadcastPanel">×</text>
         </view>
-        <textarea v-model="broadcastDraft" class="broadcast-textarea" placeholder="输入群发内容" />
+        <textarea
+          v-model="broadcastDraft"
+          class="broadcast-textarea"
+          :placeholder="broadcastMediaUrl ? '可选：输入图片或视频说明文字' : '输入群发内容'"
+        />
+        <view class="broadcast-media-actions">
+          <button class="mini-btn" :disabled="broadcastUploading" @click="chooseSupportBroadcastImage">选择图片</button>
+          <button class="mini-btn" :disabled="broadcastUploading" @click="chooseSupportBroadcastVideo">选择视频</button>
+          <button v-if="broadcastMediaUrl" class="mini-btn danger" @click="clearSupportBroadcastMedia">移除附件</button>
+          <text v-if="broadcastUploading" class="broadcast-uploading">正在上传...</text>
+        </view>
+        <view v-if="broadcastMediaUrl" class="broadcast-media-preview">
+          <image
+            v-if="broadcastMediaType === 'image'"
+            class="broadcast-preview-image"
+            :src="resolveMediaUrl(broadcastMediaUrl)"
+            mode="aspectFit"
+          />
+          <video
+            v-else
+            class="broadcast-preview-video"
+            :src="resolveMediaUrl(broadcastMediaUrl)"
+            controls
+          />
+          <text class="broadcast-preview-name">{{ broadcastMediaName || (broadcastMediaType === 'image' ? '图片' : '视频') }}</text>
+        </view>
         <input v-model="broadcastKeyword" class="broadcast-input" placeholder="搜索备注、用户名、手机号、银行账户" />
         <view class="country-filter-row">
           <button
@@ -585,7 +610,7 @@
         </scroll-view>
         <view class="broadcast-actions">
           <button class="mini-btn" @click="closeBroadcastPanel">取消</button>
-          <button class="mini-btn primary" @click="submitFilteredBroadcast">发送</button>
+          <button class="mini-btn primary" :disabled="broadcastUploading" @click="submitFilteredBroadcast">发送</button>
         </view>
       </view>
     </view>
@@ -610,7 +635,7 @@ import { useAppStore } from '@/store/app'
 import ChatMessageBubble from '@/components/chat/ChatMessageBubble.vue'
 import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPreview.vue'
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
-import { fetchAgents, translateToChinese, uploadImage } from '@/utils/api'
+import { fetchAgents, translateToChinese, uploadImage, uploadVideo } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { cardLogoFor, uiIcons } from '@/utils/art'
@@ -632,6 +657,10 @@ let supportSearchSerial = 0
 const showBroadcastPanel = ref(false)
 const broadcastDraft = ref('')
 const broadcastKeyword = ref('')
+const broadcastMediaUrl = ref('')
+const broadcastMediaName = ref('')
+const broadcastMediaType = ref<'image' | 'video'>('image')
+const broadcastUploading = ref(false)
 const broadcastCountryOptions = ['+234', '+91', '+237', '+233', '+254']
 const broadcastCountryCodes = ref<string[]>([])
 const broadcastSelectedConversationIds = ref<string[]>([])
@@ -1116,7 +1145,7 @@ function copyableMessageContent(message: ChatMessage) {
   if (message.type === 'image') return '[图片]'
   if (message.type === 'gif') return '[GIF]'
   if (message.type === 'voice') return '[语音]'
-  if (message.type === 'video') return '[视频通话]'
+  if (message.type === 'video') return isVideoFileMessage(message) ? '[视频]' : '[视频通话]'
   return message.content || ''
 }
 
@@ -1359,7 +1388,7 @@ function getLastMessage(conv: SupportConversationItem) {
   if (last.type === 'image') return '[图片]'
   if (last.type === 'gif') return '[GIF]'
   if (last.type === 'voice') return '[语音]'
-  if (last.type === 'video') return '[视频通话]'
+  if (last.type === 'video') return isVideoFileMessage(last) ? '[视频]' : '[视频通话]'
   return last.content.length > 20 ? `${last.content.slice(0, 20)}...` : last.content
 }
 
@@ -1581,6 +1610,10 @@ function translateVisibleIncomingMessages() {
           translatingIds.delete(message.id)
         })
     })
+}
+
+function isVideoFileMessage(message: ChatMessage) {
+  return message.attachments?.some(attachment => attachment.type === 'video') || false
 }
 
 async function changeLotteryFulfillmentStatus(orderId: string, status: LotteryFulfillmentItem['status']) {
@@ -2075,7 +2108,7 @@ function chooseBrowserImageOnce(kind: ComposerAttachmentKind) {
 
 async function submitFilteredBroadcast() {
   const content = broadcastDraft.value.trim()
-  if (!content) {
+  if (!content && !broadcastMediaUrl.value) {
     uni.showToast({ title: '请输入群发内容', icon: 'none' })
     return
   }
@@ -2087,7 +2120,8 @@ async function submitFilteredBroadcast() {
     const broadcast = await store.createBroadcast({
       scope: 'own',
       content,
-      messageType: 'text',
+      messageType: broadcastMediaUrl.value ? broadcastMediaType.value : 'text',
+      mediaUrl: broadcastMediaUrl.value || undefined,
       countryCodes: broadcastCountryCodes.value,
       keyword: broadcastKeyword.value.trim(),
       targetConversationIds: selectedTargets.length > 0 ? selectedTargets : undefined
@@ -2096,6 +2130,7 @@ async function submitFilteredBroadcast() {
       draft.value = ''
     }
     broadcastDraft.value = ''
+    clearSupportBroadcastMedia()
     broadcastKeyword.value = ''
     broadcastSelectedConversationIds.value = []
     closeBroadcastPanel()
@@ -2113,7 +2148,7 @@ function confirmSupportBroadcast(content: string, selectedTargets: string[]) {
   return new Promise<boolean>((resolve) => {
     uni.showModal({
       title: '确认群发',
-      content: `国家码：${countries}\n关键词：${keyword}\n客户数：${targetCount}\n内容：${content}`,
+      content: `国家码：${countries}\n关键词：${keyword}\n客户数：${targetCount}\n媒体：${broadcastMediaUrl.value ? (broadcastMediaType.value === 'image' ? '图片' : '视频') : '无'}\n内容：${content || '（无说明文字）'}`,
       confirmText: '发送',
       cancelText: '取消',
       success(result) {
@@ -2124,6 +2159,48 @@ function confirmSupportBroadcast(content: string, selectedTargets: string[]) {
       }
     })
   })
+}
+
+function chooseSupportBroadcastImage() {
+  uni.chooseImage({
+    count: 1,
+    sizeType: ['compressed'],
+    sourceType: ['album', 'camera'],
+    success(result) {
+      const filePath = result.tempFilePaths[0]
+      if (filePath) uploadSupportBroadcastMedia('image', filePath)
+    }
+  })
+}
+
+function chooseSupportBroadcastVideo() {
+  uni.chooseVideo({
+    sourceType: ['album', 'camera'],
+    compressed: false,
+    success(result) {
+      if (result.tempFilePath) uploadSupportBroadcastMedia('video', result.tempFilePath)
+    }
+  })
+}
+
+async function uploadSupportBroadcastMedia(type: 'image' | 'video', filePath: string) {
+  broadcastUploading.value = true
+  try {
+    const asset = type === 'image' ? await uploadImage(filePath) : await uploadVideo(filePath)
+    broadcastMediaType.value = type
+    broadcastMediaUrl.value = asset.publicUrl
+    broadcastMediaName.value = asset.originalName || (type === 'image' ? '群发图片' : '群发视频')
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '附件上传失败', icon: 'none' })
+  } finally {
+    broadcastUploading.value = false
+  }
+}
+
+function clearSupportBroadcastMedia() {
+  broadcastMediaUrl.value = ''
+  broadcastMediaName.value = ''
+  broadcastMediaType.value = 'image'
 }
 
 async function startVideoCall() {
@@ -2715,6 +2792,44 @@ function previewImage(url: string) {
   background: #f8faf8;
   color: #1f2d24;
   box-sizing: border-box;
+}
+
+.broadcast-media-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.broadcast-uploading,
+.broadcast-preview-name {
+  color: #68766c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.broadcast-media-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(90, 123, 89, 0.18);
+  border-radius: 8px;
+  background: #f7f9fb;
+}
+
+.broadcast-preview-image,
+.broadcast-preview-video {
+  width: min(100%, 420px);
+  height: 230px;
+  background: #101820;
+}
+
+.mini-btn.danger {
+  border-color: #e6aaa5;
+  background: #fff1f0;
+  color: #b42318;
 }
 
 .broadcast-textarea {

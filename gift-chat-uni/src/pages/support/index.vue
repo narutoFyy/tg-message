@@ -254,7 +254,7 @@ function copyableMessageContent(message: ChatMessage) {
   if (message.type === 'image') return '[Image]'
   if (message.type === 'gif') return '[GIF]'
   if (message.type === 'voice') return '[Voice]'
-  if (message.type === 'video') return '[Video call]'
+  if (message.type === 'video') return isVideoFileMessage(message) ? '[Video]' : '[Video call]'
   return message.content || ''
 }
 
@@ -592,7 +592,7 @@ function lastMessageText(item: { messages: ChatMessage[] }) {
   if (last.type === 'image') return 'Image'
   if (last.type === 'gif') return 'GIF'
   if (last.type === 'voice') return 'Voice'
-  if (last.type === 'video') return 'Video call'
+  if (last.type === 'video') return isVideoFileMessage(last) ? 'Video' : 'Video call'
   return last.content.length > 28 ? `${last.content.slice(0, 28)}...` : last.content
 }
 
@@ -1009,6 +1009,10 @@ function showNotice(message: string) {
     icon: 'none',
     duration: 1800
   })
+}
+
+function isVideoFileMessage(message: ChatMessage) {
+  return message.attachments?.some(attachment => attachment.type === 'video') || false
 }
 </script>
 

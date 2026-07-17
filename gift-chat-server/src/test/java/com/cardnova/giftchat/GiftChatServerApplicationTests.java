@@ -2601,7 +2601,7 @@ class GiftChatServerApplicationTests {
     @Test
     void uploadImageRejectsOversizedFiles() throws Exception {
         String userToken = loginToken("cardnova_user");
-        byte[] oversizedPng = new byte[5 * 1024 * 1024 + 1];
+        byte[] oversizedPng = new byte[15 * 1024 * 1024 + 1];
         oversizedPng[0] = (byte) 0x89;
         oversizedPng[1] = 0x50;
         oversizedPng[2] = 0x4E;

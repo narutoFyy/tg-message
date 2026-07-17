@@ -95,13 +95,14 @@
           <text class="section-index">03</text>
           <text class="section-title">Proof of card</text>
         </view>
-        <view :class="['upload-row', form.voucherImageUrl && 'upload-ready']" @click="uploadVoucher">
-          <view class="upload-mark"></view>
+        <view :class="['upload-row', form.voucherImageUrl && 'upload-ready', uploading && 'uploading']" @click="uploadVoucher">
+          <image v-if="form.voucherImageUrl" class="upload-preview" :src="form.voucherImageUrl" mode="aspectFill" />
+          <view v-else class="upload-mark"></view>
           <view class="upload-copy-wrap">
-            <text class="upload-title">{{ form.voucherImageUrl ? 'Image attached' : 'Attach card image' }}</text>
-            <text class="muted">{{ form.voucherImageUrl ? 'Tap to replace the image' : 'Choose one clear image from your device' }}</text>
+            <text class="upload-title">{{ uploading ? 'Uploading image' : form.voucherImageUrl ? 'Image attached' : 'Attach card image' }}</text>
+            <text class="muted">{{ uploading ? 'Please wait...' : form.voucherImageUrl ? 'Tap to replace the image' : 'Choose one clear image from your device' }}</text>
           </view>
-          <text class="field-action">{{ form.voucherImageUrl ? 'Replace' : 'Choose' }}</text>
+          <text class="field-action">{{ uploading ? 'Uploading' : form.voucherImageUrl ? 'Replace' : 'Choose' }}</text>
         </view>
       </view>
 
@@ -128,6 +129,7 @@ import type { TransactionItem } from '@/types'
 
 const store = useAppStore()
 const notice = ref('')
+const uploading = ref(false)
 const rateId = ref('')
 const balanceText = ref('100')
 const quickAmounts = [50, 100, 200, 500]
@@ -216,6 +218,9 @@ function chooseCard() {
 }
 
 async function uploadVoucher() {
+  if (uploading.value) return
+  uploading.value = true
+  notice.value = ''
   try {
     const result = await chooseImageOnce()
     if (!result) return
@@ -224,6 +229,8 @@ async function uploadVoucher() {
     notice.value = 'Photo uploaded.'
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Upload failed'
+  } finally {
+    uploading.value = false
   }
 }
 
@@ -276,11 +283,21 @@ function buildSellCardDraft(transaction: TransactionItem) {
 }
 
 function chooseImageOnce() {
-  return new Promise<string | null>((resolve, reject) => {
+  return new Promise<string | File | null>((resolve, reject) => {
     uni.chooseImage({
       count: 1,
+      sizeType: ['compressed'],
+      sourceType: ['album', 'camera'],
       success(result) {
-        resolve(result.tempFilePaths?.[0] || null)
+        const files = Array.isArray(result.tempFiles) ? result.tempFiles : result.tempFiles ? [result.tempFiles] : []
+        const firstFile = files[0]
+        if (typeof File !== 'undefined' && firstFile instanceof File) {
+          resolve(firstFile)
+          return
+        }
+        const paths = Array.isArray(result.tempFilePaths) ? result.tempFilePaths : [result.tempFilePaths]
+        const objectPath = firstFile && 'path' in firstFile ? firstFile.path : ''
+        resolve(objectPath || paths[0] || null)
       },
       fail(error) {
         reject(error)
@@ -297,7 +314,9 @@ function goBack() {
 <style scoped lang="scss">
 .sell-page {
   min-height: 100vh;
-  padding-bottom: 190rpx;
+  min-height: 100dvh;
+  padding-bottom: calc(190rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(190rpx + env(safe-area-inset-bottom));
   background: #f7f7f8;
 }
 
@@ -534,6 +553,9 @@ function goBack() {
   width: 100%;
   height: auto;
   min-height: 66rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1.25;
   white-space: normal;
 }
@@ -552,6 +574,19 @@ function goBack() {
   border-style: solid;
   border-color: #137a4e;
   background: #eaf6f0;
+}
+
+.uploading {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.upload-preview {
+  width: 72rpx;
+  height: 72rpx;
+  flex: 0 0 auto;
+  border: 1rpx solid #a9d8bf;
+  background: #ffffff;
 }
 
 .upload-mark {
@@ -608,7 +643,9 @@ function goBack() {
   left: 0;
   right: 0;
   bottom: 0;
+  min-height: calc(126rpx + constant(safe-area-inset-bottom));
   min-height: calc(126rpx + env(safe-area-inset-bottom));
+  padding: 18rpx max(28rpx, calc((100vw - 960px) / 2)) calc(18rpx + constant(safe-area-inset-bottom));
   padding: 18rpx max(28rpx, calc((100vw - 960px) / 2)) calc(18rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
   display: flex;
@@ -618,6 +655,11 @@ function goBack() {
   background: #ffffff;
   border-top: 1rpx solid #c8c9cf;
   z-index: 20;
+}
+
+.settlement-bar > view {
+  min-width: 0;
+  flex: 1;
 }
 
 .settlement-label,
@@ -638,6 +680,7 @@ function goBack() {
 }
 
 .confirm-button {
+  flex: 0 0 auto;
   min-width: 220rpx;
   height: 78rpx;
   padding: 0 22rpx;
@@ -648,6 +691,78 @@ function goBack() {
   font-size: 27rpx;
   font-weight: 700;
   line-height: 78rpx;
+}
+
+@media (max-width: 480px) {
+  .sell-page {
+    padding-left: calc(20rpx + constant(safe-area-inset-left));
+    padding-left: calc(20rpx + env(safe-area-inset-left));
+    padding-right: calc(20rpx + constant(safe-area-inset-right));
+    padding-right: calc(20rpx + env(safe-area-inset-right));
+  }
+
+  .sell-head {
+    align-items: flex-start;
+    gap: 16rpx;
+  }
+
+  .rate-reference {
+    max-width: 220rpx;
+    font-size: 21rpx;
+  }
+
+  .card-picker {
+    margin-top: 20rpx;
+  }
+
+  .form-section {
+    margin-top: 20rpx;
+    padding: 22rpx 20rpx 24rpx;
+  }
+
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .amount-row {
+    gap: 8rpx;
+  }
+
+  .amount-chip,
+  .step-button,
+  .segment-button {
+    padding-left: 8rpx;
+    padding-right: 8rpx;
+  }
+
+  .upload-row {
+    padding: 14rpx;
+    gap: 12rpx;
+  }
+
+  .settlement-bar {
+    gap: 14rpx;
+    padding-left: calc(20rpx + constant(safe-area-inset-left));
+    padding-left: calc(20rpx + env(safe-area-inset-left));
+    padding-right: calc(20rpx + constant(safe-area-inset-right));
+    padding-right: calc(20rpx + env(safe-area-inset-right));
+  }
+
+  .settlement-label {
+    font-size: 19rpx;
+  }
+
+  .settlement-value {
+    font-size: 30rpx;
+  }
+
+  .confirm-button {
+    min-width: 190rpx;
+    height: 72rpx;
+    padding: 0 18rpx;
+    font-size: 25rpx;
+    line-height: 72rpx;
+  }
 }
 
 @media (max-width: 420px) {

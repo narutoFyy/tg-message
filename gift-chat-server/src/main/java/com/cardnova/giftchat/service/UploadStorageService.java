@@ -25,7 +25,7 @@ import java.util.UUID;
 @Transactional
 public class UploadStorageService {
 
-    private static final long MAX_IMAGE_BYTES = 5L * 1024L * 1024L;
+    private static final long MAX_IMAGE_BYTES = 15L * 1024L * 1024L;
     private static final long MAX_VOICE_BYTES = 10L * 1024L * 1024L;
     private static final long MAX_VIDEO_BYTES = 50L * 1024L * 1024L;
     private static final Set<String> ALLOWED_IMAGE_TYPES = Set.of("image/png", "image/jpeg", "image/webp", "image/gif");

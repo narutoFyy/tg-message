@@ -44,7 +44,13 @@ page {
 
 .page-shell {
   min-height: 100vh;
-  padding: 32rpx 28rpx calc(152rpx + env(safe-area-inset-bottom));
+  min-height: 100dvh;
+  padding: calc(32rpx + constant(safe-area-inset-top)) 28rpx calc(152rpx + constant(safe-area-inset-bottom));
+  padding: calc(32rpx + env(safe-area-inset-top)) 28rpx calc(152rpx + env(safe-area-inset-bottom));
+  padding-left: calc(28rpx + constant(safe-area-inset-left));
+  padding-left: calc(28rpx + env(safe-area-inset-left));
+  padding-right: calc(28rpx + constant(safe-area-inset-right));
+  padding-right: calc(28rpx + env(safe-area-inset-right));
   box-sizing: border-box;
 }
 

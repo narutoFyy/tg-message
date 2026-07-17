@@ -98,6 +98,16 @@ function readErrorMessage(body: unknown, fallback: string) {
   return fallback
 }
 
+function toClientError(error: unknown, fallback: string) {
+  if (error instanceof Error) return error
+  if (error && typeof error === 'object') {
+    const value = error as { errMsg?: unknown; message?: unknown }
+    const message = String(value.errMsg || value.message || '').replace(/^uploadFile:fail\s*/i, '').trim()
+    if (message) return new Error(message)
+  }
+  return new Error(fallback)
+}
+
 function request<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', data?: Record<string, unknown>) {
   const token = getAccessToken()
 
@@ -686,8 +696,8 @@ export function cancelTransaction(transactionId: string, payload: { reason: stri
   return request<TransactionItem>(`/transactions/${transactionId}/cancel`, 'POST', payload)
 }
 
-export function uploadImage(filePath: string) {
-  return uploadFile('/uploads/images', filePath)
+export function uploadImage(source: string | File) {
+  return uploadFile('/uploads/images', source)
 }
 
 export function uploadVoice(filePath: string) {
@@ -698,14 +708,18 @@ export function uploadVideo(filePath: string) {
   return uploadFile('/uploads/videos', filePath)
 }
 
-function uploadFile(url: string, filePath: string) {
+function uploadFile(url: string, source: string | File) {
   const token = getAccessToken()
+  const browserFile = typeof File !== 'undefined' && source instanceof File
 
   return new Promise<UploadAsset>((resolve, reject) => {
     uni.uploadFile({
       url: `${normalizeApiBase(API_BASE_URL)}${url}`,
-      filePath,
+      ...(browserFile
+        ? { files: [{ name: 'file', file: source as File }] }
+        : { filePath: source as string }),
       name: 'file',
+      timeout: 120000,
       header: {
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
@@ -717,12 +731,13 @@ function uploadFile(url: string, filePath: string) {
             return
           }
           resolve(normalizeUploadAsset((body as ApiEnvelope<UploadAsset>).data))
-        } catch (error) {
-          reject(error)
+        } catch {
+          const suffix = response.statusCode ? ` (HTTP ${response.statusCode})` : ''
+          reject(new Error(`Upload failed${suffix}`))
         }
       },
       fail(error) {
-        reject(error)
+        reject(toClientError(error, 'Upload failed. Check your connection and try again.'))
       }
     })
   })

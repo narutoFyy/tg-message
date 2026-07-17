@@ -2,6 +2,14 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <meta name="theme-color" content="#211512" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Xcard" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="/static/pwa/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/static/pwa/icons/apple-touch-icon.png" />
     <script>
       var coverSupport = 'CSS' in window && typeof CSS.supports === 'function' && (CSS.supports('top: env(a)') ||
         CSS.supports('top: constant(a)'))
@@ -9,7 +17,7 @@
         '<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0' +
         (coverSupport ? ', viewport-fit=cover' : '') + '" />')
     </script>
-    <title></title>
+    <title>Xcard</title>
     <!--preload-links-->
     <!--app-context-->
   </head>

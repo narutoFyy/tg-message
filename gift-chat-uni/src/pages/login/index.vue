@@ -44,6 +44,7 @@
 
           <text v-if="notice" class="form-notice">{{ notice }}</text>
           <button class="primary-button submit-button" @click="handleSubmit">Sign in</button>
+          <button class="ios-install-button" @click="installIosProfile">Install Xcard on iPhone</button>
           <text class="policy">By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.</text>
         </view>
       </view>
@@ -96,6 +97,14 @@ function goRegister() {
 
 function pickCountry() {
   store.chooseCountry()
+}
+
+function installIosProfile() {
+  if (typeof window !== 'undefined') {
+    window.location.assign('/api/install/ios-profile')
+    return
+  }
+  uni.showToast({ title: 'Open Xcard in Safari to install', icon: 'none' })
 }
 </script>
 
@@ -218,6 +227,25 @@ function pickCountry() {
 .submit-button {
   width: 100%;
   margin-top: 28rpx;
+}
+
+.ios-install-button {
+  width: 100%;
+  min-height: 78rpx;
+  margin-top: 14rpx;
+  padding: 16rpx 24rpx;
+  box-sizing: border-box;
+  border: 1rpx solid #cfe4fb;
+  border-radius: 6rpx;
+  background: #eaf4ff;
+  color: #002fa7;
+  font-size: 25rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ios-install-button::after {
+  border: 0;
 }
 
 .policy {

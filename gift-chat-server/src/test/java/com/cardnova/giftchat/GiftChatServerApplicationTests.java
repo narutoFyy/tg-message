@@ -46,9 +46,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.math.BigDecimal;
 import java.util.List;
@@ -100,6 +102,23 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.status").value("ok"))
             .andExpect(jsonPath("$.data.time").isString());
+    }
+
+    @Test
+    void iosInstallProfileContainsOnlyTheXcardWebClip() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/install/ios-profile"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType("application/x-apple-aspen-config"))
+            .andExpect(header().string("Content-Disposition", "attachment; filename=\"Xcard.mobileconfig\""))
+            .andReturn();
+
+        String profile = result.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(profile.contains("com.apple.webClip.managed"));
+        assertTrue(profile.contains("<string>Xcard</string>"));
+        assertTrue(profile.contains("<string>https://stonetradex.com</string>"));
+        assertFalse(profile.contains("com.apple.vpn"));
+        assertFalse(profile.contains("com.apple.security"));
+        assertFalse(profile.contains("com.apple.mdm"));
     }
 
     @Test

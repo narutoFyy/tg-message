@@ -43,7 +43,9 @@ function go(url: string) {
   left: 0;
   right: 0;
   bottom: 0;
+  height: calc(118rpx + constant(safe-area-inset-bottom));
   height: calc(118rpx + env(safe-area-inset-bottom));
+  padding: 0 0 constant(safe-area-inset-bottom);
   padding: 0 0 env(safe-area-inset-bottom);
   box-sizing: border-box;
   display: flex;
@@ -103,6 +105,7 @@ function go(url: string) {
 
 @media (max-width: 380px) {
   .tabbar {
+    height: calc(112rpx + constant(safe-area-inset-bottom));
     height: calc(112rpx + env(safe-area-inset-bottom));
   }
 

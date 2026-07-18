@@ -1022,7 +1022,12 @@ function isVideoFileMessage(message: ChatMessage) {
   display: flex;
   height: 100vh;
   min-height: 100vh;
-  padding-bottom: calc(152rpx + env(safe-area-inset-bottom));
+  height: 100dvh;
+  min-height: 100dvh;
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: calc(118rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(118rpx + env(safe-area-inset-bottom));
   background: linear-gradient(145deg, #d8edbf 0%, #b9ddab 42%, #85bea9 100%);
   overflow: hidden;
   width: 100%;
@@ -1720,7 +1725,8 @@ function isVideoFileMessage(message: ChatMessage) {
 
 @media (max-width: 768px) {
   .chat-container {
-    padding-bottom: calc(146rpx + env(safe-area-inset-bottom));
+    padding-bottom: calc(118rpx + constant(safe-area-inset-bottom));
+    padding-bottom: calc(118rpx + env(safe-area-inset-bottom));
   }
 
   .header-left {
@@ -1789,6 +1795,13 @@ function isVideoFileMessage(message: ChatMessage) {
   .send-btn {
     padding: 9px 14px;
     font-size: 13px;
+  }
+}
+
+@media (max-width: 380px) {
+  .chat-container {
+    padding-bottom: calc(112rpx + constant(safe-area-inset-bottom));
+    padding-bottom: calc(112rpx + env(safe-area-inset-bottom));
   }
 }
 </style>

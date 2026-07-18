@@ -6,13 +6,17 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 @RestController
 public class IosInstallController {
 
     private static final MediaType MOBILE_CONFIG_MEDIA_TYPE =
         MediaType.parseMediaType("application/x-apple-aspen-config");
+
+    private static final String ICON_BASE64 = loadIconBase64();
 
     private static final String MOBILE_CONFIG = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -24,6 +28,8 @@ public class IosInstallController {
                 <dict>
                     <key>FullScreen</key>
                     <true/>
+                    <key>Icon</key>
+                    <data>%s</data>
                     <key>IsRemovable</key>
                     <true/>
                     <key>Label</key>
@@ -64,7 +70,18 @@ public class IosInstallController {
             <integer>1</integer>
         </dict>
         </plist>
-        """;
+        """.formatted(ICON_BASE64);
+
+    private static String loadIconBase64() {
+        try (var input = IosInstallController.class.getResourceAsStream("/ios/xcard-icon.png")) {
+            if (input == null) {
+                throw new IllegalStateException("iOS install icon resource is missing");
+            }
+            return Base64.getEncoder().encodeToString(input.readAllBytes());
+        } catch (IOException exception) {
+            throw new IllegalStateException("Unable to load iOS install icon resource", exception);
+        }
+    }
 
     @GetMapping({"/api/install/ios-profile", "/install/xcard.mobileios"})
     public ResponseEntity<byte[]> downloadProfile() {

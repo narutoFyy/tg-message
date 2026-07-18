@@ -52,6 +52,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.math.BigDecimal;
 import java.util.List;
 import java.time.LocalDateTime;
@@ -116,6 +117,9 @@ class GiftChatServerApplicationTests {
         assertTrue(profile.contains("com.apple.webClip.managed"));
         assertTrue(profile.contains("<string>Xcard</string>"));
         assertTrue(profile.contains("<string>https://stonetradex.com</string>"));
+        assertTrue(profile.contains("<key>Icon</key>"));
+        String iconData = profile.substring(profile.indexOf("<data>") + 6, profile.indexOf("</data>"));
+        assertTrue(Base64.getDecoder().decode(iconData).length > 1000);
         assertFalse(profile.contains("com.apple.vpn"));
         assertFalse(profile.contains("com.apple.security"));
         assertFalse(profile.contains("com.apple.mdm"));

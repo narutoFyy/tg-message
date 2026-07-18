@@ -10,4 +10,5 @@ for upload_dir in "$image_dir" "$voice_dir" "$video_dir"; do
     chown giftchat:giftchat "$upload_dir"
 done
 
-exec su -s /bin/sh giftchat -c 'exec java -jar /app/app.jar'
+exec setpriv --reuid=giftchat --regid=giftchat --init-groups \
+    /opt/java/openjdk/bin/java -jar /app/app.jar

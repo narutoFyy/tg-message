@@ -66,7 +66,7 @@ public class IosInstallController {
         </plist>
         """;
 
-    @GetMapping("/api/install/ios-profile")
+    @GetMapping({"/api/install/ios-profile", "/install/xcard.mobileios"})
     public ResponseEntity<byte[]> downloadProfile() {
         return ResponseEntity.ok()
             .contentType(MOBILE_CONFIG_MEDIA_TYPE)

@@ -1,6 +1,8 @@
-const CACHE_NAME = "xcard-pwa-v1";
+const CACHE_NAME = "xcard-pwa-v2";
 const APP_SHELL = [
   "/",
+  "/install/",
+  "/static/install/xcard-install-background.png",
   "/static/pwa/manifest.webmanifest",
   "/static/pwa/icons/xcard-192.png",
   "/static/pwa/icons/xcard-512.png",

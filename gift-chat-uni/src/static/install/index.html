@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#002fa7" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="icon" href="/static/pwa/icons/xcard-192.png" />
+    <link rel="manifest" href="/static/pwa/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/static/pwa/icons/apple-touch-icon.png" />
+    <title>Install Xcard</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: #111111;
+        background: #ffffff;
+        letter-spacing: 0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-width: 320px;
+        min-height: 100%;
+        margin: 0;
+        background: #ffffff;
+      }
+
+      button,
+      a {
+        font: inherit;
+        letter-spacing: 0;
+      }
+
+      .install-shell {
+        position: relative;
+        min-height: 100vh;
+        min-height: 100svh;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .install-art {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+      }
+
+      .install-content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        width: min(100%, 1440px);
+        min-height: 100vh;
+        min-height: 100svh;
+        margin: 0 auto;
+        padding: calc(28px + env(safe-area-inset-top)) max(28px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(28px, env(safe-area-inset-left));
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        align-self: flex-start;
+        gap: 12px;
+        height: 48px;
+        color: #111111;
+        text-decoration: none;
+      }
+
+      .brand-logo {
+        width: 40px;
+        height: 40px;
+        object-fit: contain;
+      }
+
+      .brand-name {
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .install-copy {
+        width: min(100%, 440px);
+        margin-top: auto;
+        margin-bottom: auto;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 72px;
+        line-height: 1;
+        font-weight: 700;
+      }
+
+      .intro {
+        max-width: 360px;
+        margin: 20px 0 28px;
+        color: #3d4550;
+        font-size: 18px;
+        line-height: 1.5;
+      }
+
+      .install-actions {
+        display: grid;
+        gap: 12px;
+        width: min(100%, 380px);
+      }
+
+      .install-button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        min-height: 60px;
+        padding: 12px 18px;
+        border: 1px solid #111111;
+        border-radius: 6px;
+        cursor: pointer;
+        text-decoration: none;
+        transition: transform 160ms ease, background-color 160ms ease;
+      }
+
+      .install-button:hover {
+        transform: translateY(-2px);
+      }
+
+      .install-button:focus-visible {
+        outline: 3px solid #ffffff;
+        outline-offset: 3px;
+      }
+
+      .android-button {
+        color: #ffffff;
+        background: #111111;
+      }
+
+      .ios-button {
+        color: #ffffff;
+        border-color: #002fa7;
+        background: #002fa7;
+      }
+
+      .button-platform {
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .button-command {
+        font-size: 17px;
+        font-weight: 700;
+      }
+
+      .install-status {
+        width: min(100%, 380px);
+        min-height: 42px;
+        margin: 14px 0 0;
+        padding-left: 14px;
+        border-left: 3px solid #002fa7;
+        color: #3d4550;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .install-status[hidden] {
+        display: none;
+      }
+
+      .browser-link {
+        align-self: flex-start;
+        color: #111111;
+        font-size: 14px;
+        font-weight: 700;
+        text-underline-offset: 4px;
+      }
+
+      @media (max-width: 700px) {
+        .install-art {
+          height: 47vh;
+          height: 47svh;
+          object-position: 72% center;
+        }
+
+        .install-content {
+          padding-top: calc(20px + env(safe-area-inset-top));
+          padding-bottom: calc(20px + env(safe-area-inset-bottom));
+        }
+
+        .brand {
+          height: 42px;
+        }
+
+        .brand-logo {
+          width: 34px;
+          height: 34px;
+        }
+
+        .brand-name {
+          font-size: 21px;
+        }
+
+        .install-copy {
+          margin-top: 38vh;
+          margin-top: 38svh;
+          margin-bottom: 26px;
+        }
+
+        h1 {
+          font-size: 52px;
+        }
+
+        .intro {
+          margin: 12px 0 20px;
+          font-size: 16px;
+        }
+
+        .install-button {
+          min-height: 56px;
+        }
+      }
+
+      @media (max-height: 700px) and (max-width: 700px) {
+        .install-art {
+          height: 40vh;
+          height: 40svh;
+        }
+
+        .install-copy {
+          margin-top: 29vh;
+          margin-top: 29svh;
+        }
+
+        h1 {
+          font-size: 44px;
+        }
+
+        .intro {
+          margin-bottom: 14px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .install-button {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="install-shell">
+      <img class="install-art" src="/static/install/xcard-install-background.png" alt="" />
+      <div class="install-content">
+        <a class="brand" href="/" aria-label="Open Xcard">
+          <img class="brand-logo" src="/static/lottery/stone-technology-icon.png" alt="" />
+          <span class="brand-name">Xcard</span>
+        </a>
+
+        <section class="install-copy" aria-labelledby="install-title">
+          <h1 id="install-title">Xcard</h1>
+          <p class="intro">Install the Xcard web app on your phone.</p>
+          <div class="install-actions">
+            <button id="android-install" class="install-button android-button" type="button">
+              <span class="button-platform">Android</span>
+              <span class="button-command">Install Xcard</span>
+            </button>
+            <a class="install-button ios-button" href="/install/xcard.mobileios">
+              <span class="button-platform">iOS</span>
+              <span class="button-command">Install Xcard</span>
+            </a>
+          </div>
+          <p id="install-status" class="install-status" role="status" hidden></p>
+        </section>
+
+        <a class="browser-link" href="/">Continue in browser</a>
+      </div>
+    </main>
+
+    <script>
+      var installPrompt = null
+      var androidButton = document.getElementById('android-install')
+      var installStatus = document.getElementById('install-status')
+
+      function showStatus(message) {
+        installStatus.textContent = message
+        installStatus.hidden = false
+      }
+
+      window.addEventListener('beforeinstallprompt', function (event) {
+        event.preventDefault()
+        installPrompt = event
+      })
+
+      window.addEventListener('appinstalled', function () {
+        installPrompt = null
+        showStatus('Xcard is installed.')
+      })
+
+      androidButton.addEventListener('click', async function () {
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+          window.location.assign('/')
+          return
+        }
+
+        if (installPrompt) {
+          installPrompt.prompt()
+          var choice = await installPrompt.userChoice
+          installPrompt = null
+          if (choice.outcome !== 'accepted') {
+            showStatus('Installation was cancelled.')
+          }
+          return
+        }
+
+        if (/Android/i.test(navigator.userAgent)) {
+          showStatus('Open the Chrome menu and choose Install app or Add to Home screen.')
+          return
+        }
+
+        showStatus('Open this page in Chrome on Android to install Xcard.')
+      })
+
+      if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/static/pwa/service-worker.js', { scope: '/' }).catch(function () {})
+        })
+      }
+    </script>
+  </body>
+</html>

@@ -119,6 +119,11 @@ class GiftChatServerApplicationTests {
         assertFalse(profile.contains("com.apple.vpn"));
         assertFalse(profile.contains("com.apple.security"));
         assertFalse(profile.contains("com.apple.mdm"));
+
+        mockMvc.perform(get("/install/xcard.mobileios"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType("application/x-apple-aspen-config"))
+            .andExpect(header().string("Content-Disposition", "attachment; filename=\"Xcard.mobileconfig\""));
     }
 
     @Test

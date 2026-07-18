@@ -44,7 +44,7 @@
 
           <text v-if="notice" class="form-notice">{{ notice }}</text>
           <button class="primary-button submit-button" @click="handleSubmit">Sign in</button>
-          <button class="ios-install-button" @click="installIosProfile">Install Xcard on iPhone</button>
+          <button class="ios-install-button" @click="openInstallPage">Install Xcard</button>
           <text class="policy">By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.</text>
         </view>
       </view>
@@ -99,12 +99,12 @@ function pickCountry() {
   store.chooseCountry()
 }
 
-function installIosProfile() {
+function openInstallPage() {
   if (typeof window !== 'undefined') {
-    window.location.assign('/api/install/ios-profile')
+    window.location.assign('/install/')
     return
   }
-  uni.showToast({ title: 'Open Xcard in Safari to install', icon: 'none' })
+  uni.showToast({ title: 'Open Xcard in your browser to install', icon: 'none' })
 }
 </script>
 

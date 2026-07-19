@@ -9,7 +9,7 @@
       <view class="wheel-section">
         <view class="wheel-stage">
           <view class="pointer"></view>
-          <view class="wheel" :style="{ transform: `rotate(${rotation}deg)` }">
+          <view class="wheel" :style="wheelStyle">
             <view v-for="index in wheelPrizes.length" :key="`spoke-${index}`" class="wheel-spoke" :style="{ transform: `rotate(${index * (360 / wheelPrizes.length)}deg)` }"></view>
             <view v-for="(prize, index) in wheelPrizes" :key="`${prize}-${index}`" :class="['wheel-label', wheelPrizeImage(prize) && 'has-image']" :style="labelStyle(index, prize)">
               <image v-if="wheelPrizeImage(prize)" class="wheel-prize-thumb" :src="wheelPrizeImage(prize)" mode="aspectFit" />
@@ -18,7 +18,7 @@
           </view>
           <view class="wheel-center"><image src="/static/lottery/stone-technology-icon.png" mode="aspectFill" /></view>
         </view>
-        <button class="primary-button spin-button" :disabled="spinning || !eligibility?.eligible" @click="handleSpin">{{ spinning ? 'Drawing...' : 'Start draw' }}</button>
+        <button class="primary-button spin-button" :disabled="spinning || !eligibility?.eligible || !wheelReady" @click="handleSpin">{{ spinButtonLabel }}</button>
         <text class="spin-hint">{{ spinHint }}</text>
       </view>
 
@@ -108,17 +108,32 @@ const claimDialogOpen = ref(false); const claimSubmitting = ref(false); const cl
 const bankForm = reactive({ country: '', accountName: '', bankName: '', accountNumber: '' })
 const deliveryForm = reactive({ recipientName: '', phone: '', country: '', addressLine: '' })
 const prizeCatalog = ref<LotteryPrizeItem[]>([])
+const frozenWheelPrizes = ref<string[]>([])
 const accountCurrencyCode = computed(() => store.state.currentUser?.currencyCode || 'USD')
 const featuredPrizes = computed(() => prizeCatalog.value.filter((prize) => prize.enabled).map((prize) => ({
   name: prize.displayAmount || prize.name,
   note: prize.prizeType === 'cash' ? `${prize.baseAmountUsd || '0'} USD reference` : 'Physical prize',
   image: prize.imageUrl
 })))
+const loadedWheelPrizes = computed(() => featuredPrizes.value.map((prize) => prize.name))
+const wheelReady = computed(() => loadedWheelPrizes.value.length > 0)
 const wheelPrizes = computed(() => {
-  const prizes = featuredPrizes.value.map((prize) => prize.name)
+  const prizes = spinning.value && frozenWheelPrizes.value.length ? frozenWheelPrizes.value : loadedWheelPrizes.value
   if (!prizes.length) return Array(8).fill('Prize') as string[]
   return prizes
 })
+const wheelColors = ['var(--cb-amber)', 'var(--cb-mint)', 'var(--cb-sky)', 'var(--cb-coral)', 'var(--cb-lilac)', '#ffe8b8', '#caf2de', '#d7eaff']
+const wheelBackground = computed(() => {
+  const sliceAngle = 360 / wheelPrizes.value.length
+  const slices = wheelPrizes.value.map((_, index) => {
+    const start = index * sliceAngle
+    const end = (index + 1) * sliceAngle
+    return `${wheelColors[index % wheelColors.length]} ${start}deg ${end}deg`
+  })
+  return `conic-gradient(${slices.join(', ')})`
+})
+const wheelStyle = computed(() => ({ transform: `rotate(${rotation.value}deg)`, background: wheelBackground.value }))
+const spinButtonLabel = computed(() => !wheelReady.value ? 'Loading prizes...' : spinning.value ? 'Drawing...' : 'Start draw')
 const spinDurationMs = 4000
 onShow(() => {
   store.refreshLotteryEligibility().catch(() => undefined)
@@ -141,7 +156,8 @@ function prizeKey(prize: string) {
   return cashValue ? `cash-${cashValue}` : prize.trim().toLowerCase()
 }
 function targetRotationForPrize(prizeName: string) {
-  const targetIndex = wheelPrizes.value.findIndex((prize) => prizeKey(prize) === prizeKey(prizeName)); if (targetIndex < 0) return rotation.value + 1800
+  const targetIndex = wheelPrizes.value.findIndex((prize) => prizeKey(prize) === prizeKey(prizeName))
+  if (targetIndex < 0) throw new Error('Draw result is not present on the wheel')
   const sliceAngle = 360 / wheelPrizes.value.length; const targetCenterAngle = targetIndex * sliceAngle + sliceAngle / 2; const targetBaseRotation = -targetCenterAngle
   const minRotation = rotation.value + 5 * 360; const maxRotation = rotation.value + 15 * 360; const kMin = Math.ceil((minRotation - targetBaseRotation) / 360); const kMax = Math.floor((maxRotation - targetBaseRotation) / 360)
   const k = kMin + Math.floor(Math.random() * (kMax - kMin + 1)); const jitter = (Math.random() - 0.5) * sliceAngle * 0.3
@@ -149,10 +165,13 @@ function targetRotationForPrize(prizeName: string) {
 }
 function waitForSpin() { return new Promise<void>((resolve) => { setTimeout(resolve, spinDurationMs) }) }
 async function handleSpin() {
-  if (spinning.value || !eligibility.value?.eligible) return
+  if (spinning.value || !eligibility.value?.eligible || !wheelReady.value) return
+  frozenWheelPrizes.value = [...loadedWheelPrizes.value]
   spinning.value = true; lastPrize.value = ''; lastRecordId.value = ''
   try {
-    const result = await store.spinLottery(); const displayPrize = result.prize.displayAmount || result.prize.name; rotation.value = targetRotationForPrize(displayPrize); await waitForSpin()
+    const result = await store.spinLottery(); const displayPrize = result.prize.displayAmount || result.prize.name
+    if (!frozenWheelPrizes.value.some((prize) => prizeKey(prize) === prizeKey(displayPrize))) frozenWheelPrizes.value.push(displayPrize)
+    rotation.value = targetRotationForPrize(displayPrize); await waitForSpin()
     lastPrize.value = displayPrize; lastRecordId.value = result.recordId; lastPrizeType.value = result.prize.prizeType
     await Promise.all([
       store.refreshLotteryRecords().catch(() => undefined),
@@ -161,7 +180,7 @@ async function handleSpin() {
     openClaimDetails(result.recordId, result.prize.name, result.prize.prizeType)
   }
   catch (error) { uni.showToast({ title: error instanceof Error ? error.message : 'Draw failed', icon: 'none' }) }
-  finally { spinning.value = false }
+  finally { spinning.value = false; frozenWheelPrizes.value = [] }
 }
 function cashOrderFor(record: LotteryRecordItem) { return store.state.withdrawals.find((item) => item.sourceType === 'lottery_cash' && item.lotteryRecordId === record.id) }
 function physicalOrderFor(record: LotteryRecordItem) { return store.state.lotteryFulfillments.find((item) => item.lotteryRecordId === record.id) }
@@ -218,7 +237,7 @@ async function submitClaim() {
 .wheel-section { min-height: 650rpx; padding: 28rpx; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--cb-sky); border: 1rpx solid #cfe4fb; border-radius: 12rpx; }
 .wheel-stage { width: min(620rpx, 380px); aspect-ratio: 1; position: relative; display: flex; align-items: center; justify-content: center; }
 .pointer { position: absolute; top: -3rpx; left: 50%; width: 0; height: 0; transform: translateX(-50%); border-left: 18rpx solid transparent; border-right: 18rpx solid transparent; border-top: 48rpx solid #002fa7; z-index: 4; }
-.wheel { position: relative; width: 100%; height: 100%; overflow: hidden; border: 7rpx solid #ffffff; border-radius: 50%; background: conic-gradient(var(--cb-amber) 0 45deg, var(--cb-mint) 45deg 90deg, var(--cb-sky) 90deg 135deg, var(--cb-coral) 135deg 180deg, var(--cb-lilac) 180deg 225deg, #ffe8b8 225deg 270deg, #caf2de 270deg 315deg, #d7eaff 315deg 360deg); box-sizing: border-box; box-shadow: 0 18rpx 46rpx rgba(34, 54, 74, 0.14); transition: transform 4s cubic-bezier(0.16, 0.72, 0.14, 1); }
+.wheel { position: relative; width: 100%; height: 100%; overflow: hidden; border: 7rpx solid #ffffff; border-radius: 50%; box-sizing: border-box; box-shadow: 0 18rpx 46rpx rgba(34, 54, 74, 0.14); transition: transform 4s cubic-bezier(0.16, 0.72, 0.14, 1); }
 .wheel-spoke { position: absolute; left: 50%; top: 50%; width: 2rpx; height: 50%; background: #c8c9cf; transform-origin: 50% 0; }
 .wheel-spoke:nth-child(odd) { background: #002fa7; }
 .wheel-label { position: absolute; left: 50%; top: 50%; width: 108rpx; margin-left: -54rpx; margin-top: -18rpx; display: flex; flex-direction: column; align-items: center; gap: 3rpx; color: #111111; font-size: 18rpx; font-weight: 700; text-align: center; }

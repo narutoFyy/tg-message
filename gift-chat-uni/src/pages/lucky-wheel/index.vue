@@ -109,7 +109,7 @@ const bankForm = reactive({ country: '', accountName: '', bankName: '', accountN
 const deliveryForm = reactive({ recipientName: '', phone: '', country: '', addressLine: '' })
 const prizeCatalog = ref<LotteryPrizeItem[]>([])
 const accountCurrencyCode = computed(() => store.state.currentUser?.currencyCode || 'USD')
-const featuredPrizes = computed(() => prizeCatalog.value.filter((prize) => prize.enabled && isWheelPrize(prize)).map((prize) => ({
+const featuredPrizes = computed(() => prizeCatalog.value.filter((prize) => prize.enabled).map((prize) => ({
   name: prize.displayAmount || prize.name,
   note: prize.prizeType === 'cash' ? `${prize.baseAmountUsd || '0'} USD reference` : 'Physical prize',
   image: prize.imageUrl
@@ -135,12 +135,6 @@ const lotteryRecords = computed(() => store.state.lotteryRecords)
 const eligibilityText = computed(() => { if (!eligibility.value) return 'Checking your draw chance.'; if (eligibility.value.eligible) return 'You have a draw chance available.'; return eligibility.value.message || 'No draw chance available.' })
 const spinHint = computed(() => { if (!eligibility.value) return ''; if (eligibility.value.eligible) return 'The server determines the final prize.'; return eligibility.value.nextAvailableAt ? `Next: ${eligibility.value.nextAvailableAt}` : 'Upgrade VIP or wait for reset.' })
 function wheelPrizeImage(prize: string) { return featuredPrizes.value.find((item) => item.name === prize)?.image || '' }
-function isWheelPrize(prize: LotteryPrizeItem) {
-  if (prize.prizeType === 'physical') return true
-  if (prize.prizeType !== 'cash') return false
-  const amount = Number((prize.name || '').replace(/[^\d.]/g, ''))
-  return Number.isFinite(amount) && amount <= 500
-}
 function labelStyle(index: number, prize: string) { const sliceAngle = 360 / wheelPrizes.value.length; const angle = index * sliceAngle + sliceAngle / 2; const distance = wheelPrizeImage(prize) ? 176 : 185; return `transform: rotate(${angle}deg) translateY(-${distance}rpx) rotate(-${angle}deg);` }
 function prizeKey(prize: string) {
   const cashValue = prize.replace(/[^\d]/g, '')

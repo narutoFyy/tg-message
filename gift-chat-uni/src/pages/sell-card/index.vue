@@ -130,6 +130,8 @@ import type { TransactionItem } from '@/types'
 const store = useAppStore()
 const notice = ref('')
 const uploading = ref(false)
+const sellRequestId = ref('')
+const sellRequestFingerprint = ref('')
 const rateId = ref('')
 const balanceText = ref('100')
 const quickAmounts = [50, 100, 200, 500]
@@ -240,7 +242,7 @@ async function confirmSell() {
     return
   }
   try {
-    const transaction = await store.createSellOrder({
+    const payload = {
       cardName: form.cardName,
       cardCountry: form.cardCountry,
       settlementCountry: form.settlementCountry,
@@ -253,7 +255,13 @@ async function confirmSell() {
       cardData: form.cardData || undefined,
       voucherImageUrl: form.voucherImageUrl || undefined,
       sendChatMessage: false
-    })
+    }
+    const fingerprint = JSON.stringify(payload)
+    if (fingerprint !== sellRequestFingerprint.value) {
+      sellRequestFingerprint.value = fingerprint
+      sellRequestId.value = createSellRequestId()
+    }
+    const transaction = await store.createSellOrder({ ...payload, clientRequestId: sellRequestId.value })
     uni.setStorageSync('pending-support-draft', buildSellCardDraft(transaction))
     if (form.voucherImageUrl) {
       uni.setStorageSync('pending-support-image', form.voucherImageUrl)
@@ -264,6 +272,11 @@ async function confirmSell() {
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Sell failed'
   }
+}
+
+function createSellRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return `sell-${Date.now()}-${Math.random().toString(36).slice(2, 14)}`
 }
 
 function buildSellCardDraft(transaction: TransactionItem) {

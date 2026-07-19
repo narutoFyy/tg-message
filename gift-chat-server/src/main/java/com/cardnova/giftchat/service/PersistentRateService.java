@@ -1,9 +1,11 @@
 package com.cardnova.giftchat.service;
 
+import com.cardnova.giftchat.api.ConflictException;
 import com.cardnova.giftchat.dto.CreateRateRequest;
 import com.cardnova.giftchat.entity.GiftCardRateEntity;
 import com.cardnova.giftchat.model.RateItem;
 import com.cardnova.giftchat.repository.GiftCardRateRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -100,10 +102,14 @@ public class PersistentRateService {
         entity.setId(UUID.randomUUID().toString());
         applyCardIdentity(entity, request);
         applyPricing(entity, request);
+        giftCardRateRepository.findByRegionCodeIgnoreCaseAndIdentityKey(entity.getRegionCode(), entity.getIdentityKey())
+            .ifPresent(existing -> {
+                throw new ConflictException("A rate already exists for this card and country");
+            });
         entity.setStatusCode("ACTIVE");
         entity.setUpdatedAt(LocalDateTime.now());
         entity.setUpdatedBy(currentUser);
-        return toRateItem(giftCardRateRepository.save(entity));
+        return toRateItem(saveWithUniqueIdentityGuard(entity));
     }
 
     public RateItem updateStatus(String rateId, String status) {
@@ -129,11 +135,18 @@ public class PersistentRateService {
 
         GiftCardRateEntity entity = giftCardRateRepository.findById(rateId)
             .orElseThrow(() -> new IllegalArgumentException("Rate not found"));
-        applyCardIdentity(entity, request);
-        applyPricing(entity, request);
+        GiftCardRateEntity proposed = new GiftCardRateEntity();
+        applyCardIdentity(proposed, request);
+        applyPricing(proposed, request);
+        giftCardRateRepository.findByRegionCodeIgnoreCaseAndIdentityKey(proposed.getRegionCode(), proposed.getIdentityKey())
+            .filter(existing -> !existing.getId().equals(entity.getId()))
+            .ifPresent(existing -> {
+                throw new ConflictException("A rate already exists for this card and country");
+            });
+        copyRateValues(proposed, entity);
         entity.setUpdatedAt(LocalDateTime.now());
         entity.setUpdatedBy(currentUser);
-        return toRateItem(giftCardRateRepository.save(entity));
+        return toRateItem(saveWithUniqueIdentityGuard(entity));
     }
 
     public RateItem delete(String rateId) {
@@ -164,6 +177,24 @@ public class PersistentRateService {
             entity.getStatusCode().equalsIgnoreCase("ACTIVE") ? "active" : "paused",
             RATE_TIME_FORMATTER.format(entity.getUpdatedAt())
         );
+    }
+
+    private GiftCardRateEntity saveWithUniqueIdentityGuard(GiftCardRateEntity entity) {
+        try {
+            return giftCardRateRepository.saveAndFlush(entity);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ConflictException("A rate already exists for this card and country");
+        }
+    }
+
+    private void copyRateValues(GiftCardRateEntity source, GiftCardRateEntity target) {
+        target.setCardName(source.getCardName());
+        target.setCardCode(source.getCardCode());
+        target.setIdentityKey(source.getIdentityKey());
+        target.setRegionCode(source.getRegionCode());
+        target.setCurrencyCode(source.getCurrencyCode());
+        target.setLocalPayoutPerUsd(source.getLocalPayoutPerUsd());
+        target.setRateValue(source.getRateValue());
     }
 
     private void applyPricing(GiftCardRateEntity entity, CreateRateRequest request) {
@@ -220,6 +251,7 @@ public class PersistentRateService {
                 .orElseThrow(() -> new IllegalArgumentException("Unsupported gift card code"));
             entity.setCardCode(card.code());
             entity.setCardName(card.name());
+            entity.setIdentityKey("CODE:" + card.code());
             return;
         }
 
@@ -228,9 +260,11 @@ public class PersistentRateService {
         GiftCardCatalog.findByName(requestedName).ifPresentOrElse(card -> {
             entity.setCardCode(card.code());
             entity.setCardName(card.name());
+            entity.setIdentityKey("CODE:" + card.code());
         }, () -> {
             entity.setCardCode(null);
             entity.setCardName(requestedName);
+            entity.setIdentityKey("NAME:" + requestedName.toLowerCase(Locale.ROOT));
         });
     }
 

@@ -267,6 +267,7 @@ export interface SellOrderPayload {
   note?: string
   voucherImageUrl?: string
   sendChatMessage?: boolean
+  clientRequestId?: string
 }
 
 export interface WithdrawalItem {

@@ -1,5 +1,6 @@
 package com.cardnova.giftchat.service;
 
+import com.cardnova.giftchat.api.ConflictException;
 import com.cardnova.giftchat.dto.CreateTransactionRequest;
 import com.cardnova.giftchat.dto.CreateSellOrderRequest;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
@@ -18,11 +19,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -48,6 +52,7 @@ public class PersistentTransactionService {
     private final UserHiddenRecordService userHiddenRecordService;
     private final PersistentRateService persistentRateService;
     private final CountryCodeService countryCodeService;
+    private final TradeOrderNumberService tradeOrderNumberService;
 
     public PersistentTransactionService(
         TradeOrderRepository tradeOrderRepository,
@@ -62,7 +67,8 @@ public class PersistentTransactionService {
         VipService vipService,
         UserHiddenRecordService userHiddenRecordService,
         PersistentRateService persistentRateService,
-        CountryCodeService countryCodeService
+        CountryCodeService countryCodeService,
+        TradeOrderNumberService tradeOrderNumberService
     ) {
         this.tradeOrderRepository = tradeOrderRepository;
         this.currentUserService = currentUserService;
@@ -77,6 +83,7 @@ public class PersistentTransactionService {
         this.userHiddenRecordService = userHiddenRecordService;
         this.persistentRateService = persistentRateService;
         this.countryCodeService = countryCodeService;
+        this.tradeOrderNumberService = tradeOrderNumberService;
     }
 
     public List<TransactionItem> getTransactions() {
@@ -128,7 +135,7 @@ public class PersistentTransactionService {
 
         TradeOrderEntity entity = new TradeOrderEntity();
         entity.setId(UUID.randomUUID().toString());
-        entity.setOrderNo(nextOrderNo());
+        entity.setOrderNo(tradeOrderNumberService.nextOrderNo());
         entity.setOwnerUser(currentUser);
         entity.setCounterpartyUser(counterparty);
         entity.setFriendship(friendship);
@@ -152,6 +159,22 @@ public class PersistentTransactionService {
             throw new IllegalArgumentException("Only users can create sell orders");
         }
 
+        String clientRequestId = normalizeClientRequestId(request.clientRequestId());
+        String requestHash = clientRequestId == null ? null : sellOrderRequestHash(request);
+        if (clientRequestId != null) {
+            currentUser = userRepository.findByIdForUpdate(currentUser.getId())
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            TradeOrderEntity existingOrder = tradeOrderRepository
+                .findByOwnerUser_IdAndClientRequestId(currentUser.getId(), clientRequestId)
+                .orElse(null);
+            if (existingOrder != null) {
+                if (!requestHash.equals(existingOrder.getClientRequestHash())) {
+                    throw new ConflictException("Idempotency key was already used for a different sell order");
+                }
+                return toTransactionItem(existingOrder, currentUser.getId());
+            }
+        }
+
         SupportConversationEntity conversation = persistentSupportService.ensureUserConversation(currentUser);
         UserEntity assignedAgent = conversation == null ? null : conversation.getAssignedAgent();
         if (assignedAgent == null) {
@@ -169,7 +192,7 @@ public class PersistentTransactionService {
 
         TradeOrderEntity entity = new TradeOrderEntity();
         entity.setId(UUID.randomUUID().toString());
-        entity.setOrderNo(nextOrderNo());
+        entity.setOrderNo(tradeOrderNumberService.nextOrderNo());
         entity.setOwnerUser(currentUser);
         entity.setCounterpartyUser(assignedAgent);
         entity.setFriendship(null);
@@ -180,6 +203,8 @@ public class PersistentTransactionService {
         entity.setLocalAmount(localAmount);
         entity.setCurrencyCode(country.currencyCode());
         entity.setBusinessRateSnapshot(rate.getLocalPayoutPerUsd());
+        entity.setClientRequestId(clientRequestId);
+        entity.setClientRequestHash(requestHash);
         entity.setStatusCode("PENDING");
         entity.setNote(note);
         entity.setVoucherImageUrl(normalizeNullable(request.voucherImageUrl()));
@@ -396,16 +421,44 @@ public class PersistentTransactionService {
             || (friendship.getRequesterUser().getId().equals(counterpartyUserId) && friendship.getAddresseeUser().getId().equals(currentUserId));
     }
 
-    private String nextOrderNo() {
-        LocalDate today = LocalDate.now();
-        LocalDateTime start = today.atStartOfDay();
-        LocalDateTime end = today.plusDays(1).atStartOfDay();
-        long count = tradeOrderRepository.countByCreatedAtBetween(start, end) + 1;
-        return "CB" + today.format(DateTimeFormatter.ofPattern("yyMMdd")) + "-" + String.format("%03d", count);
-    }
-
     private String normalizeNullable(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String normalizeClientRequestId(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > 64 || normalized.codePoints().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException("Invalid client request id");
+        }
+        return normalized;
+    }
+
+    private String sellOrderRequestHash(CreateSellOrderRequest request) {
+        String canonical = String.join("\u001f",
+            request.cardName().trim(),
+            request.cardCountry().trim(),
+            request.settlementCountry().trim(),
+            BigDecimal.valueOf(request.faceValue()).stripTrailingZeros().toPlainString(),
+            String.valueOf(request.quantity()),
+            request.cardType().trim(),
+            request.speed().trim(),
+            value(request.cardData()),
+            value(request.note()),
+            value(request.voucherImageUrl()),
+            String.valueOf(request.sendChatMessage() == null || request.sendChatMessage())
+        );
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is not available", exception);
+        }
+    }
+
+    private String value(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private String requireReason(String reason) {

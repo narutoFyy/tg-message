@@ -75,24 +75,7 @@ public class ReferralRewardService {
     }
 
     public String generateInviteCode(String username) {
-        String base = (StringUtils.hasText(username) ? username : UUID.randomUUID().toString())
-            .replaceAll("[^A-Za-z0-9]", "")
-            .toUpperCase(Locale.ROOT);
-        if (base.length() < 4) {
-            base = base + "USER";
-        }
-
-        for (int attempt = 0; attempt < 20; attempt++) {
-            String suffix = attempt == 0
-                ? randomSuffix(2)
-                : randomSuffix(4);
-            String candidate = (base + suffix).substring(0, Math.min(12, base.length() + suffix.length()));
-            if (userRepository.findByInviteCode(candidate).isEmpty()) {
-                return candidate;
-            }
-        }
-
-        return UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
+        return UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
     }
 
     public UserEntity resolveReferrer(String inviteCode) {
@@ -289,7 +272,4 @@ public class ReferralRewardService {
         return (value == null ? BigDecimal.ZERO : value).stripTrailingZeros().toPlainString();
     }
 
-    private String randomSuffix(int length) {
-        return UUID.randomUUID().toString().replace("-", "").substring(0, length).toUpperCase(Locale.ROOT);
-    }
 }

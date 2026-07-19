@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS gift_card_rate (
     id VARCHAR(36) PRIMARY KEY,
     card_name VARCHAR(128) NOT NULL,
     card_code VARCHAR(64),
+    identity_key VARCHAR(133),
     region_code VARCHAR(32) NOT NULL,
     rate_value VARCHAR(64) NOT NULL,
     currency_code VARCHAR(3),
@@ -32,7 +33,8 @@ CREATE TABLE IF NOT EXISTS gift_card_rate (
     status_code VARCHAR(32) NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     updated_by VARCHAR(36),
-    CONSTRAINT fk_rate_updated_by FOREIGN KEY (updated_by) REFERENCES app_user (id)
+    CONSTRAINT fk_rate_updated_by FOREIGN KEY (updated_by) REFERENCES app_user (id),
+    CONSTRAINT ux_gift_card_rate_region_identity UNIQUE (region_code, identity_key)
 );
 
 CREATE TABLE IF NOT EXISTS support_conversation (
@@ -143,6 +145,8 @@ CREATE TABLE IF NOT EXISTS trade_order (
     local_amount DECIMAL(18, 2),
     currency_code VARCHAR(3),
     business_rate_snapshot DECIMAL(18, 6),
+    client_request_id VARCHAR(64),
+    client_request_hash VARCHAR(64),
     status_code VARCHAR(32) NOT NULL,
     note VARCHAR(255),
     voucher_image_url VARCHAR(255),
@@ -155,7 +159,13 @@ CREATE TABLE IF NOT EXISTS trade_order (
     CONSTRAINT fk_trade_owner FOREIGN KEY (owner_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_trade_counterparty FOREIGN KEY (counterparty_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_trade_friendship FOREIGN KEY (friendship_id) REFERENCES friendship (id),
-    CONSTRAINT fk_trade_order_canceled_by FOREIGN KEY (canceled_by_user_id) REFERENCES app_user (id)
+    CONSTRAINT fk_trade_order_canceled_by FOREIGN KEY (canceled_by_user_id) REFERENCES app_user (id),
+    CONSTRAINT ux_trade_order_owner_request UNIQUE (owner_user_id, client_request_id)
+);
+
+CREATE TABLE IF NOT EXISTS trade_order_number (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    allocated_at TIMESTAMP NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS agent_welcome_message (

@@ -32,6 +32,12 @@ public class GlobalExceptionHandler {
         return new ApiErrorResponse(403, exception.getMessage());
     }
 
+    @ExceptionHandler(ConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiErrorResponse handleConflict(ConflictException exception) {
+        return new ApiErrorResponse(409, exception.getMessage());
+    }
+
     @ExceptionHandler(RateLimitException.class)
     @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
     public ApiErrorResponse handleRateLimit(RateLimitException exception) {

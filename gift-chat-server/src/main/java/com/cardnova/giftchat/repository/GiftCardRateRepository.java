@@ -15,4 +15,6 @@ public interface GiftCardRateRepository extends JpaRepository<GiftCardRateEntity
         String regionCode,
         String statusCode
     );
+
+    Optional<GiftCardRateEntity> findByRegionCodeIgnoreCaseAndIdentityKey(String regionCode, String identityKey);
 }

@@ -532,7 +532,7 @@ public class PersistentSupportService {
         }
         UserEntity agent = conversation.getAssignedAgent();
         AgentWelcomeMessageEntity welcome = agentWelcomeMessageRepository.findByAgent_Id(agent.getId())
-            .orElseGet(() -> createDefaultAgentWelcomeMessage(agent));
+            .orElseGet(() -> defaultAgentWelcomeMessage(agent));
         if (!Boolean.TRUE.equals(welcome.getEnabled()) || !StringUtils.hasText(welcome.getContent())) {
             return;
         }
@@ -543,7 +543,7 @@ public class PersistentSupportService {
         supportConversationRepository.save(conversation);
     }
 
-    private AgentWelcomeMessageEntity createDefaultAgentWelcomeMessage(UserEntity agent) {
+    private AgentWelcomeMessageEntity defaultAgentWelcomeMessage(UserEntity agent) {
         LocalDateTime now = LocalDateTime.now();
         AgentWelcomeMessageEntity welcome = new AgentWelcomeMessageEntity();
         welcome.setId(UUID.randomUUID().toString());
@@ -552,7 +552,7 @@ public class PersistentSupportService {
         welcome.setEnabled(true);
         welcome.setCreatedAt(now);
         welcome.setUpdatedAt(now);
-        return agentWelcomeMessageRepository.save(welcome);
+        return welcome;
     }
 
     private boolean canAccessConversation(UserEntity user, SupportConversationEntity conversation) {

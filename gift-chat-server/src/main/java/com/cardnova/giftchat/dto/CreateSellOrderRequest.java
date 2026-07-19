@@ -3,6 +3,7 @@ package com.cardnova.giftchat.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 public record CreateSellOrderRequest(
     @NotBlank String cardName,
@@ -17,6 +18,7 @@ public record CreateSellOrderRequest(
     String cardData,
     String note,
     String voucherImageUrl,
-    Boolean sendChatMessage
+    Boolean sendChatMessage,
+    @Size(max = 64) String clientRequestId
 ) {
 }

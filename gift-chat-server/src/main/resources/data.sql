@@ -34,6 +34,14 @@ VALUES
 ('rate-19', 'Steam', 'STEAM', 'GH', '1$ ≈ GH₵13.85', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1'),
 ('rate-20', 'Razer Gold', 'RAZER_GOLD', 'GH', '1$ ≈ GH₵14.70', 'ACTIVE', CURRENT_TIMESTAMP, 'admin-1');
 
+UPDATE gift_card_rate
+SET identity_key = CASE
+    WHEN card_code IS NOT NULL AND TRIM(card_code) <> ''
+        THEN CONCAT('CODE:', UPPER(TRIM(card_code)))
+    ELSE CONCAT('NAME:', LOWER(TRIM(card_name)))
+END
+WHERE identity_key IS NULL;
+
 INSERT INTO support_conversation (id, customer_user_id, assigned_agent_id, assignment_status, created_at, updated_at)
 VALUES
 ('support-1', 'user-1', 'agent-1', 'MANUALLY_ASSIGNED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

@@ -12,6 +12,7 @@ import com.cardnova.giftchat.repository.GiftCardRateRepository;
 import com.cardnova.giftchat.repository.RegistrationBonusRecordRepository;
 import com.cardnova.giftchat.repository.ReferralRewardRepository;
 import com.cardnova.giftchat.repository.UserRepository;
+import com.cardnova.giftchat.repository.TradeOrderRepository;
 import com.cardnova.giftchat.service.ReferralRewardService;
 import com.cardnova.giftchat.service.RegistrationBonusService;
 import com.cardnova.giftchat.service.WebSocketChannelAuthorizationService;
@@ -96,6 +97,9 @@ class GiftChatServerApplicationTests {
 
     @Autowired
     private GiftCardRateRepository giftCardRateRepository;
+
+    @Autowired
+    private TradeOrderRepository tradeOrderRepository;
 
     @Test
     void healthEndpointIsPublic() throws Exception {
@@ -1527,7 +1531,7 @@ class GiftChatServerApplicationTests {
                     {
                       "cardName": "Forged card name",
                       "cardCode": "STEAM",
-                      "region": "NG",
+                      "region": "US",
                       "rate": "NGN 880 / $1"
                     }
                     """))
@@ -1541,7 +1545,7 @@ class GiftChatServerApplicationTests {
                 .content("""
                     {
                       "cardName": "Amex",
-                      "region": "NG",
+                      "region": "US",
                       "rate": "NGN 470 / $1"
                     }
                     """))
@@ -1562,6 +1566,43 @@ class GiftChatServerApplicationTests {
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Unsupported gift card code"));
+    }
+
+    @Test
+    void duplicateCardAndCountryRateReturnsConflict() throws Exception {
+        String adminToken = loginToken("admin_mia");
+        String cardName = "Unique Rate " + UUID.randomUUID();
+        String request = """
+            {
+              "cardName": "%s",
+              "region": "NG",
+              "rate": "NGN 900 / $1"
+            }
+            """.formatted(cardName);
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(request))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(request))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("A rate already exists for this card and country"));
+    }
+
+    @Test
+    void generatedInviteCodesStayUniqueForLongSimilarUsernames() {
+        List<String> codes = new ArrayList<>();
+        for (int index = 0; index < 100; index++) {
+            codes.add(referralRewardService.generateInviteCode("same_long_username_prefix_" + index));
+        }
+
+        assertEquals(100, codes.stream().distinct().count());
+        assertTrue(codes.stream().allMatch(code -> code.length() <= 32));
     }
 
     @Test
@@ -1642,6 +1683,41 @@ class GiftChatServerApplicationTests {
             rate.setLocalPayoutPerUsd(originalRate);
             giftCardRateRepository.saveAndFlush(rate);
         }
+    }
+
+    @Test
+    void sellOrderIdempotencyReturnsOriginalOrderAndRejectsChangedPayload() throws Exception {
+        String username = "idempotent_" + UUID.randomUUID().toString().substring(0, 8);
+        String userToken = registerToken(username);
+        String clientRequestId = UUID.randomUUID().toString();
+        String request = sellOrderRequest(clientRequestId, 10);
+
+        MvcResult firstResult = mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(request))
+            .andExpect(status().isOk())
+            .andReturn();
+        MvcResult retryResult = mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(request))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        String firstId = objectMapper.readTree(firstResult.getResponse().getContentAsString()).path("data").path("id").asText();
+        String retryId = objectMapper.readTree(retryResult.getResponse().getContentAsString()).path("data").path("id").asText();
+        assertEquals(firstId, retryId);
+        assertEquals(firstId, tradeOrderRepository.findByOwnerUser_IdAndClientRequestId(
+            userRepository.findByUsername(username).orElseThrow().getId(), clientRequestId
+        ).orElseThrow().getId());
+
+        mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sellOrderRequest(clientRequestId, 20)))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("Idempotency key was already used for a different sell order"));
     }
 
     @Test
@@ -2842,6 +2918,24 @@ class GiftChatServerApplicationTests {
 
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
         return root.path("data").path("accessToken").asText();
+    }
+
+    private String sellOrderRequest(String clientRequestId, int faceValue) {
+        return """
+            {
+              "cardName": "Razer Gold",
+              "cardCountry": "USD",
+              "settlementCountry": "NG",
+              "faceValue": %d,
+              "quantity": 1,
+              "rate": "1",
+              "settlementAmount": "server-calculated",
+              "cardType": "Digital",
+              "speed": "Fast",
+              "sendChatMessage": false,
+              "clientRequestId": "%s"
+            }
+            """.formatted(faceValue, clientRequestId);
     }
 
     private String registerPhoneToken(String username, String phone) throws Exception {

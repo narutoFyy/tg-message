@@ -54,6 +54,12 @@ public class TradeOrderEntity {
     @Column(name = "business_rate_snapshot", precision = 18, scale = 6)
     private BigDecimal businessRateSnapshot;
 
+    @Column(name = "client_request_id", length = 64)
+    private String clientRequestId;
+
+    @Column(name = "client_request_hash", length = 64)
+    private String clientRequestHash;
+
     @Column(name = "status_code", nullable = false, length = 32)
     private String statusCode;
 
@@ -154,6 +160,10 @@ public class TradeOrderEntity {
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
     public BigDecimal getBusinessRateSnapshot() { return businessRateSnapshot; }
     public void setBusinessRateSnapshot(BigDecimal businessRateSnapshot) { this.businessRateSnapshot = businessRateSnapshot; }
+    public String getClientRequestId() { return clientRequestId; }
+    public void setClientRequestId(String clientRequestId) { this.clientRequestId = clientRequestId; }
+    public String getClientRequestHash() { return clientRequestHash; }
+    public void setClientRequestHash(String clientRequestHash) { this.clientRequestHash = clientRequestHash; }
 
     public String getStatusCode() {
         return statusCode;

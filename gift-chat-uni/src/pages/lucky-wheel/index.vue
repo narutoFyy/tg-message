@@ -115,9 +115,9 @@ const featuredPrizes = computed(() => prizeCatalog.value.filter((prize) => prize
   image: prize.imageUrl
 })))
 const wheelPrizes = computed(() => {
-  const cash = prizeCatalog.value.filter((prize) => prize.enabled && prize.prizeType === 'cash').map((prize) => prize.displayAmount || prize.name)
-  if (!cash.length) return Array(8).fill('Prize') as string[]
-  return cash.length >= 8 ? cash.slice(0, 8) : [...cash, ...cash.slice(0, 8 - cash.length)]
+  const prizes = prizeCatalog.value.filter((prize) => prize.enabled).map((prize) => prize.displayAmount || prize.name)
+  if (!prizes.length) return Array(8).fill('Prize') as string[]
+  return prizes
 })
 const spinDurationMs = 4000
 onShow(() => {

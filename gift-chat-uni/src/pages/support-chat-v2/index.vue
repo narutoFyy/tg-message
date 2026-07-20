@@ -931,7 +931,7 @@ onShow(() => {
       activeConversationId.value = routeConversation?.conversationId || store.state.supportConversations[0].conversationId
       pendingRouteConversationId.value = ''
       store.setActiveSupportConversation(activeConversationId.value)
-      store.refreshSupportCustomerProfile(activeConversationId.value).catch(() => {})
+      store.refreshSupportCustomerProfile(activeConversationId.value, true).catch(() => {})
       connectSocket()
       // 页面加载时标记第一个客户的消息为已读
       store.markSupportRead().catch(() => {})
@@ -1286,7 +1286,7 @@ async function selectCustomer(conv: SupportConversationItem) {
   activeConversationId.value = conv.conversationId
   store.setActiveSupportConversation(conv.conversationId)
   store.clearSupportUnread(conv.conversationId)
-  store.refreshSupportCustomerProfile(conv.conversationId).catch((error) => {
+  store.refreshSupportCustomerProfile(conv.conversationId, true).catch((error) => {
     console.error('Load customer profile failed:', error)
   })
   showChat.value = true
@@ -1679,6 +1679,8 @@ function connectSocket() {
         playIncomingSound()
       }
       store.pushSupportRealtime(payload, conversationId)
+      refreshActiveCustomerProfile(conversationId)
+      store.refreshSupportLedger().catch(() => {})
       scrollMessagesToBottom()
       store.markSupportRead().catch(() => {})
     }, {
@@ -1722,6 +1724,12 @@ function stopPresenceRefresh() {
 
 function refreshPresence() {
   store.refreshSupport().catch(() => {})
+  refreshActiveCustomerProfile()
+}
+
+function refreshActiveCustomerProfile(conversationId = activeConversationId.value) {
+  if (!conversationId || conversationId !== activeConversationId.value) return
+  store.refreshSupportCustomerProfile(conversationId, true).catch(() => {})
 }
 
 function scrollMessagesToBottom() {

@@ -10,14 +10,16 @@ import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.entity.WithdrawalRequestEntity;
 import com.cardnova.giftchat.model.WithdrawalItem;
 import com.cardnova.giftchat.repository.LotteryDrawRecordRepository;
+import com.cardnova.giftchat.repository.UserRepository;
 import com.cardnova.giftchat.repository.WithdrawalRequestRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -27,7 +29,7 @@ import java.util.UUID;
 public class WithdrawalService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final Set<String> ALLOWED_STATUSES = Set.of("pending", "completed");
+    private static final Set<String> FINAL_STATUSES = Set.of("completed", "rejected");
 
     private final WithdrawalRequestRepository withdrawalRequestRepository;
     private final CurrentUserService currentUserService;
@@ -35,6 +37,9 @@ public class WithdrawalService {
     private final NotificationService notificationService;
     private final BankAccountService bankAccountService;
     private final LotteryDrawRecordRepository lotteryDrawRecordRepository;
+    private final UserRepository userRepository;
+    private final BalanceService balanceService;
+    private final TradeOrderNumberService tradeOrderNumberService;
 
     public WithdrawalService(
         WithdrawalRequestRepository withdrawalRequestRepository,
@@ -42,7 +47,10 @@ public class WithdrawalService {
         PersistentSupportService persistentSupportService,
         NotificationService notificationService,
         BankAccountService bankAccountService,
-        LotteryDrawRecordRepository lotteryDrawRecordRepository
+        LotteryDrawRecordRepository lotteryDrawRecordRepository,
+        UserRepository userRepository,
+        BalanceService balanceService,
+        TradeOrderNumberService tradeOrderNumberService
     ) {
         this.withdrawalRequestRepository = withdrawalRequestRepository;
         this.currentUserService = currentUserService;
@@ -50,6 +58,9 @@ public class WithdrawalService {
         this.notificationService = notificationService;
         this.bankAccountService = bankAccountService;
         this.lotteryDrawRecordRepository = lotteryDrawRecordRepository;
+        this.userRepository = userRepository;
+        this.balanceService = balanceService;
+        this.tradeOrderNumberService = tradeOrderNumberService;
     }
 
     public List<WithdrawalItem> getWithdrawals() {
@@ -68,6 +79,13 @@ public class WithdrawalService {
         UserEntity currentUser = currentUserService.getCurrentUser();
         if (!"USER".equalsIgnoreCase(currentUser.getRoleCode())) {
             throw new IllegalArgumentException("Only users can withdraw");
+        }
+        BigDecimal requestedAmount = walletAmount(request.amount());
+        currentUser = userRepository.findByIdForUpdate(currentUser.getId())
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        BigDecimal available = balanceService.availableBalanceForUser(currentUser);
+        if (requestedAmount.compareTo(available) > 0) {
+            throw new IllegalArgumentException("Withdrawal amount exceeds available balance");
         }
 
         SupportConversationEntity conversation = persistentSupportService.ensureUserConversation(currentUser);
@@ -182,7 +200,7 @@ public class WithdrawalService {
     ) {
         WithdrawalRequestEntity entity = new WithdrawalRequestEntity();
         entity.setId(UUID.randomUUID().toString());
-        entity.setRequestNo(nextRequestNo());
+        entity.setRequestNo(tradeOrderNumberService.nextNumber("WD"));
         entity.setOwnerUser(owner);
         entity.setAssignedAgent(assignedAgent);
         entity.setBankAccount(bankAccount);
@@ -274,15 +292,24 @@ public class WithdrawalService {
         }
 
         String normalized = status.trim().toLowerCase();
-        if (!ALLOWED_STATUSES.contains(normalized)) {
+        if (!FINAL_STATUSES.contains(normalized)) {
             throw new IllegalArgumentException("Unsupported withdrawal status");
         }
 
-        WithdrawalRequestEntity entity = withdrawalRequestRepository.findById(withdrawalId)
+        WithdrawalRequestEntity entity = withdrawalRequestRepository.findByIdForUpdate(withdrawalId)
             .orElseThrow(() -> new IllegalArgumentException("Withdrawal not found"));
         if ("AGENT".equalsIgnoreCase(currentUser.getRoleCode())
             && (entity.getAssignedAgent() == null || !entity.getAssignedAgent().getId().equals(currentUser.getId()))) {
             throw new IllegalArgumentException("Withdrawal not accessible");
+        }
+        if (normalized.equalsIgnoreCase(entity.getStatusCode())) {
+            return toItem(entity);
+        }
+        if (!"PENDING".equalsIgnoreCase(entity.getStatusCode())) {
+            throw new IllegalArgumentException("Finalized withdrawals cannot be changed");
+        }
+        if ("rejected".equals(normalized) && !"WALLET".equalsIgnoreCase(entity.getSourceType())) {
+            throw new IllegalArgumentException("Lottery cash claims cannot be rejected here");
         }
 
         entity.setStatusCode(normalized.toUpperCase());
@@ -308,6 +335,7 @@ public class WithdrawalService {
             entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getPrize().getName(),
             entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getPrize().getPrizeType().toLowerCase(),
             entity.getAmount(),
+            entity.getOwnerUser().getCurrencyCode() == null ? "" : entity.getOwnerUser().getCurrencyCode(),
             entity.getCountry(),
             entity.getAccountName(),
             entity.getBankName(),
@@ -321,12 +349,21 @@ public class WithdrawalService {
         );
     }
 
-    private String nextRequestNo() {
-        LocalDate today = LocalDate.now();
-        LocalDateTime start = today.atStartOfDay();
-        LocalDateTime end = today.plusDays(1).atStartOfDay();
-        long count = withdrawalRequestRepository.countByCreatedAtBetween(start, end) + 1;
-        return "WD" + today.format(DateTimeFormatter.ofPattern("yyMMdd")) + "-" + String.format("%03d", count);
+    private BigDecimal walletAmount(String value) {
+        String raw = value == null ? "" : value.trim();
+        if (raw.contains("-")) {
+            throw new IllegalArgumentException("Withdrawal amount must be greater than zero");
+        }
+        String normalized = raw.replace(",", "").replaceAll("[^0-9.]", "");
+        try {
+            BigDecimal amount = new BigDecimal(normalized).setScale(2, RoundingMode.HALF_UP);
+            if (amount.signum() <= 0) {
+                throw new IllegalArgumentException("Withdrawal amount must be greater than zero");
+            }
+            return amount;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Withdrawal amount is invalid");
+        }
     }
 
     private String normalizeNullable(String value) {

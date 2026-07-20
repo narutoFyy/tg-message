@@ -5,9 +5,9 @@
         <view class="page-header-copy">
           <text class="eyebrow">Activity</text>
           <text class="title">Orders</text>
-          <text class="subtitle">Track sell orders and settlement progress.</text>
+          <text class="subtitle">Track sell orders, withdrawals and settlement progress.</text>
         </view>
-        <text class="order-count">{{ filteredTransactions.length }}</text>
+        <text class="order-count">{{ activityCount }}</text>
       </view>
 
       <view class="completed-feed">
@@ -81,9 +81,32 @@
         </view>
       </view>
 
-      <view v-else class="empty-card">
+      <view v-if="filteredWithdrawals.length" class="transaction-list withdrawal-list">
+        <view class="activity-heading">
+          <text class="section-title">Withdrawals</text>
+          <text class="section-count">{{ filteredWithdrawals.length }}</text>
+        </view>
+        <view v-for="item in filteredWithdrawals" :key="item.id" :class="['transaction-row', 'withdrawal-row', `order-${item.status}`]">
+          <view class="transaction-head">
+            <view class="order-heading">
+              <text class="order-no">{{ item.requestNo }}</text>
+              <text class="order-time">Updated {{ item.updatedAt }}</text>
+            </view>
+            <text :class="['status-pill', statusClass(item.status)]">{{ statusLabel(item.status) }}</text>
+          </view>
+          <view class="withdrawal-main">
+            <view>
+              <text class="card-title">{{ item.sourceType === 'lottery_cash' ? 'Lottery cash claim' : 'Wallet withdrawal' }}</text>
+              <text class="trade-line">{{ item.bankName }} / {{ item.accountNumber }}</text>
+            </view>
+            <text class="withdrawal-amount">{{ item.currencyCode }} {{ item.amount }}</text>
+          </view>
+        </view>
+      </view>
+
+      <view v-if="!filteredTransactions.length && !filteredWithdrawals.length" class="empty-card">
         <text class="section-title">No matching orders</text>
-        <text class="muted">Choose another status or create a sell order from the rate desk.</text>
+        <text class="muted">Choose another status or create a sell order or withdrawal.</text>
       </view>
 
       <text v-if="notice" class="notice-text">{{ notice }}</text>
@@ -99,12 +122,13 @@ import { onShow } from '@dcloudio/uni-app'
 import AppNav from '@/components/AppNav.vue'
 import { useAppStore } from '@/store/app'
 import { cardLogoFor } from '@/utils/art'
-import type { TransactionItem } from '@/types'
+import type { TransactionItem, WithdrawalItem } from '@/types'
 
 const store = useAppStore()
 const notice = ref('')
 const loadingId = ref('')
-const activeFilter = ref<'all' | TransactionItem['status']>('all')
+type ActivityStatus = TransactionItem['status'] | WithdrawalItem['status']
+const activeFilter = ref<'all' | ActivityStatus>('all')
 const completedFeed = computed(() => store.state.recentCompletedTransactions)
 
 const filters = [
@@ -112,7 +136,8 @@ const filters = [
   { label: 'Pending', value: 'pending' as const },
   { label: 'Processing', value: 'processing' as const },
   { label: 'Completed', value: 'completed' as const },
-  { label: 'Disputed', value: 'disputed' as const }
+  { label: 'Disputed', value: 'disputed' as const },
+  { label: 'Rejected', value: 'rejected' as const }
 ]
 
 onShow(() => {
@@ -123,14 +148,20 @@ const filteredTransactions = computed(() => {
   if (activeFilter.value === 'all') return store.state.transactions
   return store.state.transactions.filter((item) => item.status === activeFilter.value)
 })
+const filteredWithdrawals = computed(() => {
+  if (activeFilter.value === 'all') return store.state.withdrawals
+  return store.state.withdrawals.filter((item) => item.status === activeFilter.value)
+})
+const activityCount = computed(() => filteredTransactions.value.length + filteredWithdrawals.value.length)
 
-function statusLabel(status: TransactionItem['status']) {
+function statusLabel(status: ActivityStatus) {
   return {
     pending: 'Pending',
     processing: 'Processing',
     completed: 'Completed',
     disputed: 'Disputed',
-    canceled: 'Canceled'
+    canceled: 'Canceled',
+    rejected: 'Rejected'
   }[status]
 }
 
@@ -142,13 +173,14 @@ function formatFeedAmount(value: string) {
   return `${match[1]}${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
 }
 
-function statusClass(status: TransactionItem['status']) {
+function statusClass(status: ActivityStatus) {
   return {
     pending: 'warning',
     processing: 'active',
     completed: 'done',
     disputed: 'danger',
-    canceled: 'danger'
+    canceled: 'danger',
+    rejected: 'danger'
   }[status]
 }
 
@@ -380,6 +412,24 @@ function hideTransaction(item: TransactionItem) {
   overflow: hidden;
 }
 
+.withdrawal-list {
+  margin-top: 20rpx;
+}
+
+.activity-heading {
+  min-height: 70rpx;
+  padding: 0 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1rpx solid #dedfe3;
+}
+
+.section-count {
+  color: #6f7178;
+  font-size: 22rpx;
+}
+
 .transaction-row {
   position: relative;
   padding: 24rpx;
@@ -403,7 +453,23 @@ function hideTransaction(item: TransactionItem) {
 .transaction-row.order-processing::before { background: var(--cb-sky-strong); }
 .transaction-row.order-completed::before { background: var(--cb-mint-strong); }
 .transaction-row.order-disputed::before,
-.transaction-row.order-canceled::before { background: var(--cb-coral-strong); }
+.transaction-row.order-canceled::before,
+.transaction-row.order-rejected::before { background: var(--cb-coral-strong); }
+
+.withdrawal-main {
+  margin-top: 20rpx;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.withdrawal-amount {
+  flex: 0 0 auto;
+  color: #002fa7;
+  font-size: 28rpx;
+  font-weight: 700;
+}
 
 .transaction-head,
 .transaction-main,
@@ -632,6 +698,10 @@ function hideTransaction(item: TransactionItem) {
 
   .action-button {
     width: 100%;
+  }
+
+  .withdrawal-main {
+    flex-direction: column;
   }
 }
 

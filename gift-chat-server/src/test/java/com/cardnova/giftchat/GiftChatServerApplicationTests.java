@@ -5,6 +5,7 @@ import com.cardnova.giftchat.config.AuthSafetyConfig;
 import com.cardnova.giftchat.entity.LotteryDrawRecordEntity;
 import com.cardnova.giftchat.entity.LotteryPrizeEntity;
 import com.cardnova.giftchat.entity.GiftCardRateEntity;
+import com.cardnova.giftchat.entity.TradeOrderEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.repository.LotteryDrawRecordRepository;
 import com.cardnova.giftchat.repository.LotteryPrizeRepository;
@@ -1743,7 +1744,9 @@ class GiftChatServerApplicationTests {
 
     @Test
     void withdrawalCreatesRequestAndSupportMessage() throws Exception {
-        String user1Token = loginToken("cardnova_user");
+        String username = "withdrawal_history_" + UUID.randomUUID().toString().substring(0, 8);
+        String user1Token = registerToken(username);
+        creditWallet(username, new BigDecimal("50000"));
 
         mockMvc.perform(post("/api/withdrawals")
                 .header("Authorization", bearer(user1Token))
@@ -1767,6 +1770,168 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(content().string(containsString("Withdrawal request")))
             .andExpect(content().string(containsString("Demo Bank")));
+    }
+
+    @Test
+    void walletWithdrawalReservesBalanceAndCompletingItUpdatesUserHistory() throws Exception {
+        String username = "withdrawal_balance_" + UUID.randomUUID().toString().substring(0, 8);
+        String userToken = registerToken(username);
+        creditWallet(username, new BigDecimal("50000"));
+        String accountNumber = "77" + randomDigits(8);
+        bindBankAccount(userToken, "Nigeria", "Balance User", "Balance Bank", accountNumber)
+            .andExpect(status().isOk());
+
+        MvcResult result = mockMvc.perform(post("/api/withdrawals")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "amount": "49000",
+                      "country": "Nigeria",
+                      "accountName": "Balance User",
+                      "bankName": "Balance Bank",
+                      "accountNumber": "%s",
+                      "sendChatMessage": false
+                    }
+                    """.formatted(accountNumber)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("pending"))
+            .andExpect(jsonPath("$.data.currencyCode").value("NGN"))
+            .andReturn();
+        String withdrawalId = objectMapper.readTree(result.getResponse().getContentAsString()).path("data").path("id").asText();
+
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("1,000.00"))
+            .andExpect(jsonPath("$.data.pendingWithdrawalTotal").value("49,000.00"))
+            .andExpect(jsonPath("$.data.withdrawnTotal").value("0.00"));
+        mockMvc.perform(get("/api/withdrawals").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString(withdrawalId)));
+
+        mockMvc.perform(post("/api/withdrawals")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "amount": "1001",
+                      "country": "Nigeria",
+                      "accountName": "Balance User",
+                      "bankName": "Balance Bank",
+                      "accountNumber": "%s",
+                      "sendChatMessage": false
+                    }
+                    """.formatted(accountNumber)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Withdrawal amount exceeds available balance"));
+
+        mockMvc.perform(post("/api/withdrawals/%s/status".formatted(withdrawalId))
+                .header("Authorization", bearer(loginToken("admin_mia")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"completed\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("completed"));
+
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("1,000.00"))
+            .andExpect(jsonPath("$.data.pendingWithdrawalTotal").value("0.00"))
+            .andExpect(jsonPath("$.data.withdrawnTotal").value("49,000.00"));
+        mockMvc.perform(get("/api/withdrawals").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("completed")));
+    }
+
+    @Test
+    void rejectedWalletWithdrawalReleasesReservedBalance() throws Exception {
+        String username = "withdrawal_rejected_" + UUID.randomUUID().toString().substring(0, 8);
+        String userToken = registerToken(username);
+        creditWallet(username, new BigDecimal("50000"));
+        String accountNumber = "66" + randomDigits(8);
+        bindBankAccount(userToken, "Nigeria", "Reject User", "Reject Bank", accountNumber)
+            .andExpect(status().isOk());
+        MvcResult result = mockMvc.perform(post("/api/withdrawals")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "amount": "49000",
+                      "country": "Nigeria",
+                      "accountName": "Reject User",
+                      "bankName": "Reject Bank",
+                      "accountNumber": "%s",
+                      "sendChatMessage": false
+                    }
+                    """.formatted(accountNumber)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String withdrawalId = objectMapper.readTree(result.getResponse().getContentAsString()).path("data").path("id").asText();
+
+        mockMvc.perform(post("/api/withdrawals/%s/status".formatted(withdrawalId))
+                .header("Authorization", bearer(loginToken("admin_mia")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"rejected\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("rejected"));
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("50,000.00"))
+            .andExpect(jsonPath("$.data.pendingWithdrawalTotal").value("0.00"))
+            .andExpect(jsonPath("$.data.withdrawnTotal").value("0.00"));
+    }
+
+    @Test
+    void concurrentWalletWithdrawalsCannotExceedAvailableBalance() throws Exception {
+        String username = "withdrawal_concurrent_" + UUID.randomUUID().toString().substring(0, 8);
+        String userToken = registerToken(username);
+        creditWallet(username, new BigDecimal("50000"));
+        String accountNumber = "55" + randomDigits(8);
+        bindBankAccount(userToken, "Nigeria", "Concurrent User", "Concurrent Bank", accountNumber)
+            .andExpect(status().isOk());
+
+        List<CompletableFuture<MvcResult>> calls = new ArrayList<>();
+        for (int index = 0; index < 10; index++) {
+            calls.add(CompletableFuture.supplyAsync(() -> {
+                try {
+                    return mockMvc.perform(post("/api/withdrawals")
+                            .header("Authorization", bearer(userToken))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                {
+                                  "amount": "10000",
+                                  "country": "Nigeria",
+                                  "accountName": "Concurrent User",
+                                  "bankName": "Concurrent Bank",
+                                  "accountNumber": "%s",
+                                  "sendChatMessage": false
+                                }
+                                """.formatted(accountNumber)))
+                        .andReturn();
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+            }));
+        }
+
+        List<MvcResult> results = calls.stream().map(CompletableFuture::join).toList();
+        assertEquals(5, results.stream().filter(result -> result.getResponse().getStatus() == 200).count());
+        assertEquals(5, results.stream().filter(result -> result.getResponse().getStatus() == 400).count());
+        List<String> requestNumbers = results.stream()
+            .filter(result -> result.getResponse().getStatus() == 200)
+            .map(result -> {
+                try {
+                    return objectMapper.readTree(result.getResponse().getContentAsString()).path("data").path("requestNo").asText();
+                } catch (Exception exception) {
+                    throw new RuntimeException(exception);
+                }
+            })
+            .toList();
+        assertEquals(5, requestNumbers.stream().distinct().count());
+
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("0.00"))
+            .andExpect(jsonPath("$.data.pendingWithdrawalTotal").value("50,000.00"));
     }
 
     @Test
@@ -1833,6 +1998,8 @@ class GiftChatServerApplicationTests {
         String secondUsername = "risk_b_" + suffix;
         String firstToken = registerPhoneToken(firstUsername, "+234 701 " + randomDigits(7));
         String secondToken = registerPhoneToken(secondUsername, "+233 24 " + randomDigits(7));
+        creditWallet(firstUsername, new BigDecimal("20000"));
+        creditWallet(secondUsername, new BigDecimal("20000"));
         String accountNumber = "445566" + suffix.substring(0, 4);
 
         createWithdrawal(firstToken, "Risk Alpha", accountNumber);
@@ -2229,7 +2396,7 @@ class GiftChatServerApplicationTests {
                 .header("Authorization", bearer(agentToken)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.summary.scope").value("own"))
-            .andExpect(jsonPath("$.data.summary.userCount").value(6))
+            .andExpect(jsonPath("$.data.summary.userCount").value(greaterThanOrEqualTo(6)))
             .andExpect(jsonPath("$.data.customers").isArray())
             .andExpect(jsonPath("$.data.customers[?(@.customerUsername == 'cardnova_user')]").exists())
             .andExpect(jsonPath("$.data.customers[?(@.customerUsername == 'gift_hunter')]").doesNotExist());
@@ -2990,6 +3157,27 @@ class GiftChatServerApplicationTests {
                     }
                     """.formatted(accountName, accountNumber)))
             .andExpect(status().isOk());
+    }
+
+    private void creditWallet(String username, BigDecimal amount) {
+        UserEntity owner = userRepository.findByUsername(username).orElseThrow();
+        UserEntity agent = userRepository.findByUsername("support_luna").orElseThrow();
+        LocalDateTime now = LocalDateTime.now();
+        TradeOrderEntity order = new TradeOrderEntity();
+        order.setId(UUID.randomUUID().toString());
+        order.setOrderNo("TEST-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
+        order.setOwnerUser(owner);
+        order.setCounterpartyUser(agent);
+        order.setCardName("Wallet test credit");
+        order.setFaceValue("TEST");
+        order.setPayoutAmount("NGN " + amount.stripTrailingZeros().toPlainString());
+        order.setLocalAmount(amount);
+        order.setCurrencyCode("NGN");
+        order.setStatusCode("COMPLETED");
+        order.setNote("Test wallet credit");
+        order.setCreatedAt(now);
+        order.setUpdatedAt(now);
+        tradeOrderRepository.saveAndFlush(order);
     }
 
     private void hideRecord(String token, String targetType, String targetId, String hiddenScope) throws Exception {

@@ -7,6 +7,7 @@ public record SupportLedgerCustomer(
     String assignedAgent,
     String availableTotal,
     String pendingTotal,
+    String pendingWithdrawalTotal,
     String withdrawnTotal,
     int orderCount,
     int pendingOrderCount,

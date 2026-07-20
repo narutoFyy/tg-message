@@ -5,6 +5,7 @@ public record BalanceSummary(
     String currencyCode,
     String availableTotal,
     String pendingTotal,
+    String pendingWithdrawalTotal,
     String withdrawnTotal,
     int userCount
 ) {

@@ -16,6 +16,10 @@
           <text class="balance-value">{{ availableBalance }}</text>
         </view>
         <view class="balance-secondary">
+          <text class="balance-label">Withdrawal in progress</text>
+          <text class="pending-value hold-value">{{ pendingWithdrawalBalance }}</text>
+        </view>
+        <view class="balance-secondary">
           <text class="balance-label">Pending settlement</text>
           <text class="pending-value">{{ pendingBalance }}</text>
         </view>
@@ -79,6 +83,7 @@ const registrationBonus = computed(() => store.state.registrationBonusRecord)
 
 const walletCurrency = computed(() => store.state.balanceSummary?.currencyCode || store.state.currentUser?.currencyCode || 'USD')
 const availableBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.availableTotal || '0.00'}`)
+const pendingWithdrawalBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.pendingWithdrawalTotal || '0.00'}`)
 const pendingBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.pendingTotal || '0.00'}`)
 
 function goTransactions() {
@@ -124,7 +129,7 @@ function goWithdraw() {
 
 .balance-section {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
   border-left: 5rpx solid var(--cb-mint-strong);
 }
 
@@ -141,6 +146,10 @@ function goWithdraw() {
 .balance-value,
 .pending-value {
   display: block;
+}
+
+.hold-value {
+  color: #9a5b00;
 }
 
 .balance-label {

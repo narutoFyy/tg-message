@@ -4,6 +4,7 @@ import com.cardnova.giftchat.entity.TradeOrderEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.entity.WithdrawalRequestEntity;
 import com.cardnova.giftchat.model.BalanceSummary;
+import com.cardnova.giftchat.model.CustomerBalanceSummary;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
 import com.cardnova.giftchat.repository.TradeOrderRepository;
 import com.cardnova.giftchat.repository.UserRepository;
@@ -20,8 +21,11 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class BalanceService {
 
-    private static final DecimalFormat MONEY_FORMAT = new DecimalFormat("#,##0.00");
+    private static final ThreadLocal<DecimalFormat> MONEY_FORMAT = ThreadLocal.withInitial(
+        () -> new DecimalFormat("#,##0.00")
+    );
     private static final Set<String> PENDING_STATUSES = Set.of("PENDING", "PROCESSING");
+    private static final String WALLET_SOURCE = "WALLET";
 
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
@@ -72,8 +76,44 @@ public class BalanceService {
         List<String> userIds = users.stream().map(UserEntity::getId).toList();
         String currencyCode = commonCurrency(users);
         if (userIds.isEmpty()) {
-            return new BalanceSummary(scope, currencyCode, money(BigDecimal.ZERO), money(BigDecimal.ZERO), money(BigDecimal.ZERO), 0);
+            return new BalanceSummary(
+                scope,
+                currencyCode,
+                money(BigDecimal.ZERO),
+                money(BigDecimal.ZERO),
+                money(BigDecimal.ZERO),
+                money(BigDecimal.ZERO),
+                0
+            );
         }
+
+        WalletAmounts amounts = walletAmounts(userIds);
+        return new BalanceSummary(
+            scope,
+            currencyCode,
+            money(amounts.available()),
+            money(amounts.pendingSettlement()),
+            money(amounts.pendingWithdrawal()),
+            money(amounts.withdrawn()),
+            users.size()
+        );
+    }
+
+    public BigDecimal availableBalanceForUser(UserEntity user) {
+        return walletAmounts(List.of(user.getId())).available();
+    }
+
+    public CustomerBalanceSummary customerSummary(UserEntity user) {
+        WalletAmounts amounts = walletAmounts(List.of(user.getId()));
+        return new CustomerBalanceSummary(
+            money(amounts.available()),
+            money(amounts.pendingSettlement()),
+            money(amounts.pendingWithdrawal()),
+            money(amounts.withdrawn())
+        );
+    }
+
+    private WalletAmounts walletAmounts(List<String> userIds) {
 
         List<TradeOrderEntity> orders = tradeOrderRepository.findByOwnerUser_IdIn(userIds);
         List<WithdrawalRequestEntity> withdrawals = withdrawalRequestRepository.findByOwnerUser_IdIn(userIds);
@@ -86,16 +126,28 @@ public class BalanceService {
             .filter(order -> PENDING_STATUSES.contains(order.getStatusCode().toUpperCase()))
             .map(this::orderAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal withdrawn = withdrawals.stream()
+        BigDecimal withdrawn = walletWithdrawals(withdrawals)
             .filter(withdrawal -> "COMPLETED".equalsIgnoreCase(withdrawal.getStatusCode()))
-            .filter(withdrawal -> "WALLET".equalsIgnoreCase(withdrawal.getSourceType()))
+            .map(withdrawal -> amountFromText(withdrawal.getAmount()))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal pendingWithdrawal = walletWithdrawals(withdrawals)
+            .filter(withdrawal -> "PENDING".equalsIgnoreCase(withdrawal.getStatusCode()))
             .map(withdrawal -> amountFromText(withdrawal.getAmount()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal rewards = referralRewardService.availableRewardsForUsers(userIds);
         BigDecimal registrationBonuses = registrationBonusService.availableBonusesForUsers(userIds);
 
-        BigDecimal available = completed.add(rewards).add(registrationBonuses).subtract(withdrawn).max(BigDecimal.ZERO);
-        return new BalanceSummary(scope, currencyCode, money(available), money(pending), money(withdrawn), users.size());
+        BigDecimal available = completed
+            .add(rewards)
+            .add(registrationBonuses)
+            .subtract(withdrawn)
+            .subtract(pendingWithdrawal)
+            .max(BigDecimal.ZERO);
+        return new WalletAmounts(available, pending, pendingWithdrawal, withdrawn);
+    }
+
+    private java.util.stream.Stream<WithdrawalRequestEntity> walletWithdrawals(List<WithdrawalRequestEntity> withdrawals) {
+        return withdrawals.stream().filter(withdrawal -> WALLET_SOURCE.equalsIgnoreCase(withdrawal.getSourceType()));
     }
 
     private BigDecimal orderAmount(TradeOrderEntity order) {
@@ -127,6 +179,14 @@ public class BalanceService {
     }
 
     private String money(BigDecimal value) {
-        return MONEY_FORMAT.format(value);
+        return MONEY_FORMAT.get().format(value);
+    }
+
+    private record WalletAmounts(
+        BigDecimal available,
+        BigDecimal pendingSettlement,
+        BigDecimal pendingWithdrawal,
+        BigDecimal withdrawn
+    ) {
     }
 }

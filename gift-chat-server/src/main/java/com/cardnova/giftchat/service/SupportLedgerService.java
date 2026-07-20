@@ -24,7 +24,9 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class SupportLedgerService {
 
-    private static final DecimalFormat MONEY_FORMAT = new DecimalFormat("#,##0.00");
+    private static final ThreadLocal<DecimalFormat> MONEY_FORMAT = ThreadLocal.withInitial(
+        () -> new DecimalFormat("#,##0.00")
+    );
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final Set<String> PENDING_STATUSES = Set.of("PENDING", "PROCESSING");
 
@@ -32,20 +34,20 @@ public class SupportLedgerService {
     private final SupportConversationRepository supportConversationRepository;
     private final TradeOrderRepository tradeOrderRepository;
     private final WithdrawalRequestRepository withdrawalRequestRepository;
-    private final ReferralRewardService referralRewardService;
+    private final BalanceService balanceService;
 
     public SupportLedgerService(
         CurrentUserService currentUserService,
         SupportConversationRepository supportConversationRepository,
         TradeOrderRepository tradeOrderRepository,
         WithdrawalRequestRepository withdrawalRequestRepository,
-        ReferralRewardService referralRewardService
+        BalanceService balanceService
     ) {
         this.currentUserService = currentUserService;
         this.supportConversationRepository = supportConversationRepository;
         this.tradeOrderRepository = tradeOrderRepository;
         this.withdrawalRequestRepository = withdrawalRequestRepository;
-        this.referralRewardService = referralRewardService;
+        this.balanceService = balanceService;
     }
 
     public SupportLedgerReport report() {
@@ -66,13 +68,24 @@ public class SupportLedgerService {
         BigDecimal pending = customers.stream()
             .map(customer -> amountFromText(customer.pendingTotal()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal pendingWithdrawal = customers.stream()
+            .map(customer -> amountFromText(customer.pendingWithdrawalTotal()))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal withdrawn = customers.stream()
             .map(customer -> amountFromText(customer.withdrawnTotal()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         String scope = "ADMIN".equalsIgnoreCase(currentUser.getRoleCode()) ? "all" : "own";
         return new SupportLedgerReport(
-            new BalanceSummary(scope, "", money(available), money(pending), money(withdrawn), customers.size()),
+            new BalanceSummary(
+                scope,
+                "",
+                money(available),
+                money(pending),
+                money(pendingWithdrawal),
+                money(withdrawn),
+                customers.size()
+            ),
             customers
         );
     }
@@ -89,20 +102,7 @@ public class SupportLedgerService {
         List<TradeOrderEntity> orders = tradeOrderRepository.findByOwnerUser_IdOrderByUpdatedAtDesc(customer.getId());
         List<WithdrawalRequestEntity> withdrawals = withdrawalRequestRepository.findByOwnerUser_IdOrderByUpdatedAtDesc(customer.getId());
 
-        BigDecimal completed = orders.stream()
-            .filter(order -> "COMPLETED".equalsIgnoreCase(order.getStatusCode()))
-            .map(order -> amountFromText(order.getPayoutAmount()))
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal pending = orders.stream()
-            .filter(order -> PENDING_STATUSES.contains(order.getStatusCode().toUpperCase()))
-            .map(order -> amountFromText(order.getPayoutAmount()))
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal withdrawn = withdrawals.stream()
-            .filter(withdrawal -> "COMPLETED".equalsIgnoreCase(withdrawal.getStatusCode()))
-            .filter(withdrawal -> "WALLET".equalsIgnoreCase(withdrawal.getSourceType()))
-            .map(withdrawal -> amountFromText(withdrawal.getAmount()))
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal rewards = referralRewardService.availableRewardsForUsers(List.of(customer.getId()));
+        var balance = balanceService.customerSummary(customer);
 
         int pendingOrderCount = (int) orders.stream()
             .filter(order -> PENDING_STATUSES.contains(order.getStatusCode().toUpperCase()))
@@ -115,9 +115,10 @@ public class SupportLedgerService {
                 ? customer.getUsername()
                 : conversation.getAgentNote(),
             conversation.getAssignedAgent() == null ? "" : conversation.getAssignedAgent().getUsername(),
-            money(completed.add(rewards).subtract(withdrawn).max(BigDecimal.ZERO)),
-            money(pending),
-            money(withdrawn),
+            balance.availableTotal(),
+            balance.pendingTotal(),
+            balance.pendingWithdrawalTotal(),
+            balance.withdrawnTotal(),
             orders.size(),
             pendingOrderCount,
             withdrawals.size(),
@@ -141,6 +142,6 @@ public class SupportLedgerService {
     }
 
     private String money(BigDecimal value) {
-        return MONEY_FORMAT.format(value);
+        return MONEY_FORMAT.get().format(value);
     }
 }

@@ -65,6 +65,10 @@
             <text class="balance-number">{{ store.state.balanceSummary?.pendingTotal || '0.00' }}</text>
           </view>
           <view>
+            <text class="row-meta">提现处理中</text>
+            <text class="balance-number">{{ store.state.balanceSummary?.pendingWithdrawalTotal || '0.00' }}</text>
+          </view>
+          <view>
             <text class="row-meta">已提现</text>
             <text class="balance-number">{{ store.state.balanceSummary?.withdrawnTotal || '0.00' }}</text>
           </view>
@@ -418,15 +422,12 @@
               <text class="row-meta">{{ item.ownerUsername || item.accountName }} / {{ item.bankName }} / {{ item.accountNumber }}</text>
               <text class="row-meta">{{ item.assignedAgent }} / {{ item.createdAt }}</text>
             </view>
-            <text :class="['status-pill', item.status === 'completed' ? 'active' : 'warning']">{{ item.status }}</text>
+            <text :class="['status-pill', item.status === 'completed' ? 'active' : item.status === 'rejected' ? 'danger' : 'warning']">{{ item.status }}</text>
           </view>
-          <button
-            v-if="item.status !== 'completed'"
-            class="ghost-button mini-button"
-            @click="completeWithdrawal(item.id)"
-          >
-            Mark Completed
-          </button>
+          <view v-if="item.status === 'pending'" class="row-actions">
+            <button class="ghost-button mini-button" @click="completeWithdrawal(item.id)">Mark Completed</button>
+            <button v-if="item.sourceType === 'wallet'" class="ghost-button mini-button danger-action" @click="rejectWithdrawal(item.id)">Reject</button>
+          </view>
         </view>
         <view v-for="item in lotteryFulfillments" :key="item.id" class="conversation-card physical-claim-card">
           <view class="list-row compact-row">
@@ -1223,6 +1224,16 @@ async function toggleAgent(agentId: string, status: string) {
   }
 }
 
+async function rejectWithdrawal(withdrawalId: string) {
+  try {
+    await updateWithdrawalStatus(withdrawalId, 'rejected')
+    notice.value = 'Withdrawal rejected and reserved funds released.'
+    await refreshAll()
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Withdrawal update failed'
+  }
+}
+
 async function completeLotteryFulfillment(orderId: string) {
   try {
     await updateLotteryFulfillmentStatus(orderId, 'completed')
@@ -1423,6 +1434,13 @@ async function assignConversation(conversationId: string) {
   flex-wrap: wrap;
 }
 
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+
 .row-title {
   display: block;
   font-size: 29rpx;
@@ -1512,7 +1530,7 @@ async function assignConversation(conversationId: string) {
 
 .balance-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14rpx;
 }
 
@@ -1702,6 +1720,10 @@ async function assignConversation(conversationId: string) {
 
   .bonus-config-grid {
     grid-template-columns: 1fr;
+  }
+
+  .balance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

@@ -343,6 +343,10 @@
               <text class="metric-value">{{ supportLedger?.summary.pendingTotal || '0.00' }}</text>
             </view>
             <view class="ledger-summary-item">
+              <text class="metric-label">{{ workbenchText.pendingWithdrawal }}</text>
+              <text class="metric-value">{{ supportLedger?.summary.pendingWithdrawalTotal || '0.00' }}</text>
+            </view>
+            <view class="ledger-summary-item">
               <text class="metric-label">{{ workbenchText.withdrawn }}</text>
               <text class="metric-value">{{ supportLedger?.summary.withdrawnTotal || '0.00' }}</text>
             </view>
@@ -361,7 +365,7 @@
             </view>
             <view class="ledger-row-money">
               <text class="ledger-money">{{ customer.availableTotal }}</text>
-              <text class="ledger-pending">{{ customer.pendingTotal }}</text>
+              <text class="ledger-pending">{{ customer.pendingTotal }} / {{ customer.pendingWithdrawalTotal }}</text>
             </view>
           </view>
         </view>
@@ -429,6 +433,10 @@
             <text class="metric-value">{{ profile.balance.pendingTotal }}</text>
           </view>
           <view class="metric-item">
+            <text class="metric-label">{{ workbenchText.pendingWithdrawal }}</text>
+            <text class="metric-value">{{ profile.balance.pendingWithdrawalTotal }}</text>
+          </view>
+          <view class="metric-item">
             <text class="metric-label">{{ workbenchText.withdrawn }}</text>
             <text class="metric-value">{{ profile.balance.withdrawnTotal }}</text>
           </view>
@@ -486,6 +494,7 @@
             <text class="work-line">{{ item.accountName }} / {{ item.bankName }} / {{ item.accountNumber }}</text>
             <view v-if="item.status === 'pending'" class="work-actions">
               <button class="mini-btn primary" @click="changeWithdrawalStatus(item.id, 'completed')">{{ workbenchText.markPaid }}</button>
+              <button v-if="item.sourceType === 'wallet'" class="mini-btn danger" @click="changeWithdrawalStatus(item.id, 'rejected')">{{ workbenchText.rejectWithdrawal }}</button>
             </view>
           </view>
         </view>
@@ -815,6 +824,7 @@ const workbenchCopy = {
     joined: '加入时间',
     available: '可用余额',
     pendingBalance: '待结算',
+    pendingWithdrawal: '提现处理中',
     withdrawn: '已提现',
     orders: '订单',
     withdrawals: '提现',
@@ -829,6 +839,7 @@ const workbenchCopy = {
     dispute: '争议',
     cancelOrder: '取消订单',
     markPaid: '标记已付款',
+    rejectWithdrawal: '拒绝提现',
     loading: '正在加载客户资料...',
     selectCustomer: '选择客户后查看订单、余额、提现和贷款。',
     orderUpdated: '订单已更新',
@@ -849,6 +860,7 @@ const workbenchCopy = {
     joined: 'Joined',
     available: 'Available',
     pendingBalance: 'Pending',
+    pendingWithdrawal: 'Withdrawal pending',
     withdrawn: 'Withdrawn',
     orders: 'Orders',
     withdrawals: 'Withdrawals',
@@ -863,6 +875,7 @@ const workbenchCopy = {
     dispute: 'Dispute',
     cancelOrder: 'Cancel order',
     markPaid: 'Mark paid',
+    rejectWithdrawal: 'Reject withdrawal',
     loading: 'Loading customer details...',
     selectCustomer: 'Select a customer to view orders, balance, withdrawals, and loans.',
     orderUpdated: 'Order updated',

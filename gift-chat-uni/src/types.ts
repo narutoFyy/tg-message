@@ -279,13 +279,14 @@ export interface WithdrawalItem {
   prizeName: string
   prizeType: string
   amount: string
+  currencyCode: string
   country: string
   accountName: string
   bankName: string
   accountNumber: string
   contact: string
   note: string
-  status: 'pending' | 'completed'
+  status: 'pending' | 'completed' | 'rejected'
   assignedAgent: string
   createdAt: string
   updatedAt: string
@@ -358,6 +359,7 @@ export interface BalanceSummary {
   currencyCode: string
   availableTotal: string
   pendingTotal: string
+  pendingWithdrawalTotal: string
   withdrawnTotal: string
   userCount: number
 }
@@ -369,6 +371,7 @@ export interface SupportLedgerCustomer {
   assignedAgent: string
   availableTotal: string
   pendingTotal: string
+  pendingWithdrawalTotal: string
   withdrawnTotal: string
   orderCount: number
   pendingOrderCount: number
@@ -384,6 +387,7 @@ export interface SupportLedgerReport {
 export interface CustomerBalanceSummary {
   availableTotal: string
   pendingTotal: string
+  pendingWithdrawalTotal: string
   withdrawnTotal: string
 }
 

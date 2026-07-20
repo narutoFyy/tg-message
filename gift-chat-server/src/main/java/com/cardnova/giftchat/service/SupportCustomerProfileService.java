@@ -7,7 +7,6 @@ import com.cardnova.giftchat.entity.TradeOrderEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.entity.VideoSessionEntity;
 import com.cardnova.giftchat.entity.WithdrawalRequestEntity;
-import com.cardnova.giftchat.model.CustomerBalanceSummary;
 import com.cardnova.giftchat.model.LoanApplicationItem;
 import com.cardnova.giftchat.model.LotteryFulfillmentItem;
 import com.cardnova.giftchat.model.SupportCustomerInfo;
@@ -24,19 +23,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.text.DecimalFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 @Service
 @Transactional(readOnly = true)
 public class SupportCustomerProfileService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final DecimalFormat MONEY_FORMAT = new DecimalFormat("#,##0.00");
-    private static final Set<String> PENDING_STATUSES = Set.of("PENDING", "PROCESSING");
 
     private final PersistentSupportService persistentSupportService;
     private final TradeOrderRepository tradeOrderRepository;
@@ -45,11 +40,11 @@ public class SupportCustomerProfileService {
     private final LoanApplicationRepository loanApplicationRepository;
     private final VideoSessionRepository videoSessionRepository;
     private final UserPresenceService userPresenceService;
-    private final ReferralRewardService referralRewardService;
     private final RegistrationBonusService registrationBonusService;
     private final BankAccountRiskService bankAccountRiskService;
     private final CurrentUserService currentUserService;
     private final PhoneCountryCodeResolver phoneCountryCodeResolver;
+    private final BalanceService balanceService;
 
     public SupportCustomerProfileService(
         PersistentSupportService persistentSupportService,
@@ -59,11 +54,11 @@ public class SupportCustomerProfileService {
         LoanApplicationRepository loanApplicationRepository,
         VideoSessionRepository videoSessionRepository,
         UserPresenceService userPresenceService,
-        ReferralRewardService referralRewardService,
         RegistrationBonusService registrationBonusService,
         BankAccountRiskService bankAccountRiskService,
         CurrentUserService currentUserService,
-        PhoneCountryCodeResolver phoneCountryCodeResolver
+        PhoneCountryCodeResolver phoneCountryCodeResolver,
+        BalanceService balanceService
     ) {
         this.persistentSupportService = persistentSupportService;
         this.tradeOrderRepository = tradeOrderRepository;
@@ -72,11 +67,11 @@ public class SupportCustomerProfileService {
         this.loanApplicationRepository = loanApplicationRepository;
         this.videoSessionRepository = videoSessionRepository;
         this.userPresenceService = userPresenceService;
-        this.referralRewardService = referralRewardService;
         this.registrationBonusService = registrationBonusService;
         this.bankAccountRiskService = bankAccountRiskService;
         this.currentUserService = currentUserService;
         this.phoneCountryCodeResolver = phoneCountryCodeResolver;
+        this.balanceService = balanceService;
     }
 
     public SupportCustomerProfile getProfile(String conversationId) {
@@ -92,7 +87,7 @@ public class SupportCustomerProfileService {
         return new SupportCustomerProfile(
             conversation.getId(),
             toCustomerInfo(conversation, customer),
-            toBalance(customer, orders, withdrawals),
+            balanceService.customerSummary(customer),
             orders.stream().map(order -> toTransactionItem(order, conversation)).toList(),
             withdrawals.stream().map(this::toWithdrawalItem).toList(),
             lotteryFulfillments.stream().map(this::toLotteryFulfillmentItem).toList(),
@@ -117,30 +112,6 @@ public class SupportCustomerProfileService {
             conversation.getAssignedAgent() == null ? "" : conversation.getAssignedAgent().getUsername(),
             TIME_FORMATTER.format(customer.getCreatedAt()),
             TIME_FORMATTER.format(customer.getUpdatedAt())
-        );
-    }
-
-    private CustomerBalanceSummary toBalance(UserEntity customer, List<TradeOrderEntity> orders, List<WithdrawalRequestEntity> withdrawals) {
-        BigDecimal completed = orders.stream()
-            .filter(order -> "COMPLETED".equalsIgnoreCase(order.getStatusCode()))
-            .map(order -> amountFromText(order.getPayoutAmount()))
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal pending = orders.stream()
-            .filter(order -> PENDING_STATUSES.contains(order.getStatusCode().toUpperCase()))
-            .map(order -> amountFromText(order.getPayoutAmount()))
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal withdrawn = withdrawals.stream()
-            .filter(withdrawal -> "COMPLETED".equalsIgnoreCase(withdrawal.getStatusCode()))
-            .filter(withdrawal -> "WALLET".equalsIgnoreCase(withdrawal.getSourceType()))
-            .map(withdrawal -> amountFromText(withdrawal.getAmount()))
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal rewards = referralRewardService.availableRewardsForUsers(List.of(customer.getId()));
-        BigDecimal registrationBonuses = registrationBonusService.availableBonusesForUsers(List.of(customer.getId()));
-
-        return new CustomerBalanceSummary(
-            money(completed.add(rewards).add(registrationBonuses).subtract(withdrawn).max(BigDecimal.ZERO)),
-            money(pending),
-            money(withdrawn)
         );
     }
 
@@ -182,6 +153,7 @@ public class SupportCustomerProfileService {
             entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getPrize().getName(),
             entity.getLotteryDrawRecord() == null ? "" : entity.getLotteryDrawRecord().getPrize().getPrizeType().toLowerCase(),
             entity.getAmount(),
+            entity.getOwnerUser().getCurrencyCode() == null ? "" : entity.getOwnerUser().getCurrencyCode(),
             entity.getCountry(),
             entity.getAccountName(),
             entity.getBankName(),
@@ -248,25 +220,6 @@ public class SupportCustomerProfileService {
             TIME_FORMATTER.format(entity.getCreatedAt()),
             TIME_FORMATTER.format(entity.getUpdatedAt())
         );
-    }
-
-    private BigDecimal amountFromText(String value) {
-        if (value == null || value.isBlank()) {
-            return BigDecimal.ZERO;
-        }
-        String normalized = value.replaceAll("[^0-9.]", "");
-        if (normalized.isBlank()) {
-            return BigDecimal.ZERO;
-        }
-        try {
-            return new BigDecimal(normalized);
-        } catch (NumberFormatException exception) {
-            return BigDecimal.ZERO;
-        }
-    }
-
-    private String money(BigDecimal value) {
-        return MONEY_FORMAT.format(value);
     }
 
     private String value(String value) {

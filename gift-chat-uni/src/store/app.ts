@@ -943,6 +943,7 @@ export function useAppStore() {
     }
     refreshSupportCustomerProfile(state.supportConversationId, true).catch(() => {})
     refreshSupportLedger().catch(() => {})
+    refreshBalanceSummary().catch(() => {})
     return updated
   }
 

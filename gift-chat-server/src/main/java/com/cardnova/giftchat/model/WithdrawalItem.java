@@ -9,6 +9,7 @@ public record WithdrawalItem(
     String prizeName,
     String prizeType,
     String amount,
+    String currencyCode,
     String country,
     String accountName,
     String bankName,

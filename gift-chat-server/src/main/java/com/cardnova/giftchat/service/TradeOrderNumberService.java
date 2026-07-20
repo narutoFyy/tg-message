@@ -20,10 +20,18 @@ public class TradeOrderNumberService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public String nextOrderNo() {
+        return nextNumber("CB");
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public String nextNumber(String prefix) {
+        if (prefix == null || !prefix.matches("[A-Z]{2,4}")) {
+            throw new IllegalArgumentException("Invalid number prefix");
+        }
         TradeOrderNumberEntity allocation = new TradeOrderNumberEntity();
         allocation.setAllocatedAt(LocalDateTime.now());
         long sequence = repository.saveAndFlush(allocation).getId();
-        return "CB" + LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyMMdd"))
+        return prefix + LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyMMdd"))
             + "-" + String.format("%010d", sequence);
     }
 }

@@ -1,13 +1,20 @@
 package com.cardnova.giftchat.repository;
 
 import com.cardnova.giftchat.entity.WithdrawalRequestEntity;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalRequestEntity, String> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select withdrawal from WithdrawalRequestEntity withdrawal where withdrawal.id = :withdrawalId")
+    Optional<WithdrawalRequestEntity> findByIdForUpdate(@Param("withdrawalId") String withdrawalId);
 
     List<WithdrawalRequestEntity> findByOwnerUser_IdOrderByUpdatedAtDesc(String ownerUserId);
 
@@ -23,5 +30,4 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
 
     boolean existsByOwnerUser_IdAndStatusCode(String ownerUserId, String statusCode);
 
-    long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 }

@@ -12,6 +12,7 @@
       <view v-if="!lotteryRecordId" class="balance-panel tone-finance">
         <text class="balance-label">Available to withdraw</text>
         <text class="balance-value">{{ availableBalance }}</text>
+        <text v-if="hasPendingWithdrawal" class="balance-hold">{{ pendingWithdrawalBalance }} is currently being processed</text>
       </view>
 
       <view v-if="!bankAccount" class="form-section bind-section">
@@ -94,8 +95,8 @@
             <text class="row-meta">{{ item.createdAt }}</text>
           </view>
           <view class="amount-side">
-            <text class="amount">{{ item.amount }}</text>
-            <text :class="['status-pill', item.status === 'completed' ? 'active' : 'warning']">{{ item.status }}</text>
+            <text class="amount">{{ item.currencyCode }} {{ item.amount }}</text>
+            <text :class="['status-pill', item.status === 'completed' ? 'active' : item.status === 'rejected' ? 'rejected' : 'warning']">{{ item.status }}</text>
           </view>
         </view>
       </view>
@@ -135,8 +136,11 @@ onShow(() => {
 })
 
 const availableBalance = computed(() => {
-  return `NGN ${store.state.balanceSummary?.availableTotal || '0.00'}`
+  return `${walletCurrency.value} ${store.state.balanceSummary?.availableTotal || '0.00'}`
 })
+const walletCurrency = computed(() => store.state.balanceSummary?.currencyCode || store.state.currentUser?.currencyCode || 'USD')
+const pendingWithdrawalBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.pendingWithdrawalTotal || '0.00'}`)
+const hasPendingWithdrawal = computed(() => Number((store.state.balanceSummary?.pendingWithdrawalTotal || '0').replace(/,/g, '')) > 0)
 
 async function bindAccount() {
   try {
@@ -267,6 +271,13 @@ function buildWithdrawalDraft(requestNo: string) {
   font-weight: 700;
 }
 
+.balance-hold {
+  display: block;
+  margin-top: 10rpx;
+  color: #9a5b00;
+  font-size: 22rpx;
+}
+
 .section-head {
   min-height: 82rpx;
   padding: 16rpx 24rpx;
@@ -377,6 +388,11 @@ function buildWithdrawalDraft(requestNo: string) {
 .status-pill.warning {
   color: #9a5b00;
   background: #fff4df;
+}
+
+.status-pill.rejected {
+  color: #b42318;
+  background: #fff0ee;
 }
 
 .notice-text {

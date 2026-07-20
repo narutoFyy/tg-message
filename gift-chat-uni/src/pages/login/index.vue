@@ -1,6 +1,9 @@
 <template>
   <view class="page-shell login-page">
-    <view class="login-layout">
+    <view v-if="restoringSession" class="session-loading" aria-label="Loading">
+      <view class="session-spinner" />
+    </view>
+    <view v-else class="login-layout">
       <view class="brand-panel tone-market">
         <view class="brand-mark">
           <image class="brand-logo" src="/static/lottery/stone-technology-icon.png" mode="aspectFit" />
@@ -60,6 +63,7 @@ import { safeRouteForRole } from '@/utils/routeGuard'
 
 const store = useAppStore()
 const notice = ref('')
+const restoringSession = ref(Boolean(store.state.currentUser?.accessToken))
 
 const form = reactive({
   identifier: '',
@@ -67,10 +71,36 @@ const form = reactive({
 })
 
 onShow(() => {
+  restorePersistedSession()
+})
+
+async function restorePersistedSession() {
+  if (!store.state.currentUser?.accessToken) {
+    restoringSession.value = false
+    resetForm()
+    return
+  }
+
+  restoringSession.value = true
+  notice.value = ''
+  try {
+    const session = await store.refreshCurrentAccount()
+    if (session) {
+      uni.reLaunch({ url: safeRouteForRole(session.nextRoute, session, '/pages/support/index') })
+      return
+    }
+  } catch {
+    // Keep the stored session so a temporary network failure does not sign the user out.
+  }
+  restoringSession.value = false
+  resetForm()
+}
+
+function resetForm() {
   form.identifier = ''
   form.password = ''
   notice.value = ''
-})
+}
 
 async function handleSubmit() {
   try {
@@ -118,6 +148,27 @@ function openInstallPage() {
   width: 100%;
   max-width: 1040rpx;
   margin: 0 auto;
+}
+
+.session-loading {
+  min-height: calc(100vh - 80rpx);
+  min-height: calc(100dvh - 80rpx);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.session-spinner {
+  width: 42rpx;
+  height: 42rpx;
+  border: 5rpx solid #cfe4fb;
+  border-top-color: #2368c4;
+  border-radius: 50%;
+  animation: session-spin 0.8s linear infinite;
+}
+
+@keyframes session-spin {
+  to { transform: rotate(360deg); }
 }
 
 .brand-mark {

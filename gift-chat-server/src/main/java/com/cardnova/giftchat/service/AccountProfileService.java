@@ -70,7 +70,7 @@ public class AccountProfileService {
             country == null ? "" : country.currencySymbol(),
             user.getRoleCode(),
             nextRoute(user),
-            jwtService.getAccessTokenExpiry().toString()
+            jwtService.getAccessTokenExpiry(user).toString()
         );
     }
 

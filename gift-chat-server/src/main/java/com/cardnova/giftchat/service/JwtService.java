@@ -19,19 +19,22 @@ public class JwtService {
     private final Algorithm algorithm;
     private final JWTVerifier verifier;
     private final long accessTokenMinutes;
+    private final long userAccessTokenDays;
 
     public JwtService(
         @Value("${app.auth.jwt-secret}") String secret,
-        @Value("${app.auth.access-token-minutes}") long accessTokenMinutes
+        @Value("${app.auth.access-token-minutes}") long accessTokenMinutes,
+        @Value("${app.auth.user-access-token-days:30}") long userAccessTokenDays
     ) {
         this.algorithm = Algorithm.HMAC256(secret);
         this.verifier = JWT.require(algorithm).withIssuer("gift-chat-server").build();
         this.accessTokenMinutes = accessTokenMinutes;
+        this.userAccessTokenDays = userAccessTokenDays;
     }
 
     public String issueAccessToken(UserEntity user) {
         Instant now = Instant.now();
-        Instant expiresAt = now.plus(accessTokenMinutes, ChronoUnit.MINUTES);
+        Instant expiresAt = expiryFor(user, now);
 
         return JWT.create()
             .withIssuer("gift-chat-server")
@@ -43,8 +46,8 @@ public class JwtService {
             .sign(algorithm);
     }
 
-    public Instant getAccessTokenExpiry() {
-        return Instant.now().plus(accessTokenMinutes, ChronoUnit.MINUTES);
+    public Instant getAccessTokenExpiry(UserEntity user) {
+        return expiryFor(user, Instant.now());
     }
 
     public DecodedJWT verify(String token) {
@@ -53,5 +56,12 @@ public class JwtService {
         } catch (JWTVerificationException exception) {
             throw new com.cardnova.giftchat.api.UnauthorizedException("Invalid access token");
         }
+    }
+
+    private Instant expiryFor(UserEntity user, Instant issuedAt) {
+        if (user != null && "USER".equalsIgnoreCase(user.getRoleCode())) {
+            return issuedAt.plus(userAccessTokenDays, ChronoUnit.DAYS);
+        }
+        return issuedAt.plus(accessTokenMinutes, ChronoUnit.MINUTES);
     }
 }

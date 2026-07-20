@@ -40,6 +40,7 @@ app:
   auth:
     jwt-secret: ${APP_AUTH_JWT_SECRET}
     access-token-minutes: ${APP_AUTH_ACCESS_TOKEN_MINUTES:30}
+    user-access-token-days: 30
     demo-fallback: ${APP_AUTH_DEMO_FALLBACK:false}
   upload:
     image-dir: ${APP_UPLOAD_IMAGE_DIR:uploads/images}

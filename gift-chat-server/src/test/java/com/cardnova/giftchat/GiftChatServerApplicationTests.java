@@ -58,6 +58,8 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.math.BigDecimal;
 import java.util.List;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
@@ -362,6 +364,40 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.email").value(email))
             .andExpect(jsonPath("$.data.roleCode").value("USER"))
             .andExpect(jsonPath("$.data.nextRoute").value("/pages/support/index"));
+    }
+
+    @Test
+    void ordinaryUsersReceivePersistentSessionsWhileStaffSessionsStayShort() throws Exception {
+        Instant requestedAt = Instant.now();
+        MvcResult userResult = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "identifier": "cardnova_user",
+                      "password": "demo12345",
+                      "countryCode": "NG"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        MvcResult staffResult = mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "identifier": "support_luna",
+                      "password": "demo12345"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+
+        Instant userExpiry = Instant.parse(objectMapper.readTree(userResult.getResponse().getContentAsString())
+            .at("/data/expiresAt").asText());
+        Instant staffExpiry = Instant.parse(objectMapper.readTree(staffResult.getResponse().getContentAsString())
+            .at("/data/expiresAt").asText());
+
+        assertTrue(Duration.between(requestedAt, userExpiry).toDays() >= 29);
+        assertTrue(Duration.between(requestedAt, staffExpiry).toDays() < 1);
     }
 
     @Test

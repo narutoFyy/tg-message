@@ -5,7 +5,10 @@
       <text :class="['tab-label', current === 'home' && 'active']">Home</text>
     </view>
     <view :class="['tab-item', 'nav-chat', current === 'chat' && 'active']" @click="go('/pages/support/index')">
-      <image class="tab-icon-image" :src="current === 'chat' ? navIcons.chat.active : navIcons.chat.inactive" mode="aspectFit" />
+      <view class="tab-icon-wrap">
+        <image class="tab-icon-image" :src="current === 'chat' ? navIcons.chat.active : navIcons.chat.inactive" mode="aspectFit" />
+        <view v-if="store.state.supportUnreadCount > 0" class="tab-unread-badge">{{ store.state.supportUnreadCount > 99 ? '99+' : store.state.supportUnreadCount }}</view>
+      </view>
       <text :class="['tab-label', current === 'chat' && 'active']">Chat</text>
     </view>
     <view :class="['tab-item', 'nav-games', current === 'games' && 'active']" @click="go('/pages/games/index')">
@@ -24,13 +27,24 @@
 </template>
 
 <script setup lang="ts">
+import { watch } from 'vue'
+import { useAppStore } from '@/store/app'
 import { getStoredSessionUser } from '@/utils/api'
 import { navIcons } from '@/utils/art'
+import { setAppUnreadBadge } from '@/utils/messageNotifications'
 import { safeRouteForRole } from '@/utils/routeGuard'
 
 defineProps<{
   current?: 'home' | 'chat' | 'games' | 'transactions' | 'me'
 }>()
+
+const store = useAppStore()
+
+watch(
+  () => store.state.supportUnreadCount,
+  (count) => setAppUnreadBadge(count),
+  { immediate: true }
+)
 
 function go(url: string) {
   uni.redirectTo({ url: safeRouteForRole(url, getStoredSessionUser()) })
@@ -87,6 +101,32 @@ function go(url: string) {
 .tab-icon-image {
   width: 42rpx;
   height: 42rpx;
+}
+
+.tab-icon-wrap {
+  position: relative;
+  width: 42rpx;
+  height: 42rpx;
+}
+
+.tab-unread-badge {
+  position: absolute;
+  top: -13rpx;
+  right: -20rpx;
+  min-width: 30rpx;
+  height: 30rpx;
+  padding: 0 7rpx;
+  box-sizing: border-box;
+  border: 3rpx solid #ffffff;
+  border-radius: 16rpx;
+  background: #e5484d;
+  color: #ffffff;
+  font-size: 17rpx;
+  font-weight: 800;
+  line-height: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab-label {

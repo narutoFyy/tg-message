@@ -174,6 +174,7 @@
             @click="toggleSound"
           >
             <text class="icon-bell"></text>
+            <view v-if="totalUnreadCount > 0" class="header-unread-badge">{{ totalUnreadCount > 99 ? '99+' : totalUnreadCount }}</view>
           </view>
           <view class="icon-action primary" title="视频通话" @click="startVideoCall">
             <text class="icon-video"></text>
@@ -655,6 +656,7 @@ import { useComposerAttachments, type ComposerAttachmentKind } from '@/component
 import { fetchAgents, translateToChinese, uploadImage, uploadVideo } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
+import { notifyIncomingSupportMessage, requestMessageNotificationPermission, setAppUnreadBadge } from '@/utils/messageNotifications'
 import { cardLogoFor, uiIcons } from '@/utils/art'
 import type { AgentItem, ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
@@ -715,6 +717,8 @@ const pendingRouteConversationId = ref('')
 const replyTarget = ref<ChatMessage['replyTo'] | null>(null)
 const messageContextMenu = ref<{ message: ChatMessage; x: number; y: number } | null>(null)
 const lastContextMenuPoint = ref<{ clientX: number; clientY: number; time: number } | null>(null)
+const unreadSnapshot = new Map<string, number>()
+let unreadSnapshotReady = false
 
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT' || store.state.currentUser?.roleCode === 'ADMIN')
@@ -802,6 +806,7 @@ const connectionStatusLabel = computed(() => {
 })
 const connectionStatusOffline = computed(() => socketStatus.value !== 'online' || !activeCustomer.value?.online)
 const soundEnabled = computed(() => audioEnabled.value)
+const totalUnreadCount = computed(() => store.state.supportUnreadCount)
 const profile = computed(() => store.state.activeSupportCustomerProfile)
 const supportLedger = computed(() => store.state.supportLedger)
 const ledgerCustomers = computed(() => supportLedger.value?.customers.slice(0, 6) || [])
@@ -940,6 +945,8 @@ onShow(() => {
       pendingRouteConversationId.value = ''
       store.setActiveSupportConversation(activeConversationId.value)
       store.refreshSupportCustomerProfile(activeConversationId.value, true).catch(() => {})
+      rememberUnreadCounts()
+      setAppUnreadBadge(totalUnreadCount.value)
       connectSocket()
       // 页面加载时标记第一个客户的消息为已读
       store.markSupportRead().catch(() => {})
@@ -967,6 +974,12 @@ watch(
   () => {
     scrollMessagesToBottom()
   }
+)
+
+watch(
+  () => totalUnreadCount.value,
+  (count) => setAppUnreadBadge(count),
+  { immediate: true }
 )
 
 watch(
@@ -1294,6 +1307,8 @@ async function selectCustomer(conv: SupportConversationItem) {
   activeConversationId.value = conv.conversationId
   store.setActiveSupportConversation(conv.conversationId)
   store.clearSupportUnread(conv.conversationId)
+  rememberUnreadCounts()
+  setAppUnreadBadge(totalUnreadCount.value)
   store.refreshSupportCustomerProfile(conv.conversationId, true).catch((error) => {
     console.error('Load customer profile failed:', error)
   })
@@ -1685,6 +1700,11 @@ function connectSocket() {
       // 处理普通消息
       if (shouldPlayIncomingSound(payload, conversationId)) {
         playIncomingSound()
+        notifyIncomingSupportMessage(
+          activeCustomer.value ? customerDisplayName(activeCustomer.value) : 'Customer',
+          messagePreview(payload as ChatMessage),
+          conversationId
+        )
       }
       store.pushSupportRealtime(payload, conversationId)
       refreshActiveCustomerProfile(conversationId)
@@ -1731,8 +1751,44 @@ function stopPresenceRefresh() {
 }
 
 function refreshPresence() {
-  store.refreshSupport().catch(() => {})
+  const previousUnread = new Map(unreadSnapshot)
+  store.refreshSupport().then((conversations) => {
+    if (unreadSnapshotReady) {
+      conversations.forEach((conversationItem) => {
+        const previous = previousUnread.get(conversationItem.conversationId) || 0
+        if (conversationItem.conversationId === activeConversationId.value) return
+        if (conversationItem.unreadCount > previous) {
+          const latestIncoming = [...conversationItem.messages].reverse()
+            .find((message) => message.author !== 'me' && message.author !== 'system')
+          notifyIncomingSupportMessage(
+            customerDisplayName(conversationItem),
+            messagePreview(latestIncoming),
+            conversationItem.conversationId
+          )
+        }
+      })
+    }
+    rememberUnreadCounts()
+    setAppUnreadBadge(store.state.supportUnreadCount)
+  }).catch(() => {})
   refreshActiveCustomerProfile()
+}
+
+function rememberUnreadCounts() {
+  unreadSnapshot.clear()
+  store.state.supportConversations.forEach((conversationItem) => {
+    unreadSnapshot.set(conversationItem.conversationId, conversationItem.unreadCount)
+  })
+  unreadSnapshotReady = true
+}
+
+function messagePreview(message?: ChatMessage) {
+  if (!message) return 'You have a new support message.'
+  if (message.type === 'image') return '[Image]'
+  if (message.type === 'video') return '[Video]'
+  if (message.type === 'voice') return '[Voice message]'
+  if (message.type === 'gif') return '[GIF]'
+  return message.content.trim().slice(0, 100) || 'You have a new support message.'
 }
 
 function refreshActiveCustomerProfile(conversationId = activeConversationId.value) {
@@ -1852,12 +1908,22 @@ async function answerIncomingVideo() {
 
 function enableAudio() {
   audioUnlocked.value = true
+  if (audioEnabled.value) {
+    requestMessageNotificationPermission().catch(() => {})
+  }
 }
 
 function toggleSound() {
   audioEnabled.value = !audioEnabled.value
   showHeaderMenu.value = false
   uni.setStorageSync(SOUND_ENABLED_KEY, audioEnabled.value)
+  if (audioEnabled.value) {
+    requestMessageNotificationPermission().then((permission) => {
+      if (permission === 'denied') {
+        uni.showToast({ title: 'Browser notifications are blocked', icon: 'none' })
+      }
+    })
+  }
   uni.showToast({
     title: audioEnabled.value ? '提示音已开启' : '提示音已关闭',
     icon: 'none'
@@ -3514,6 +3580,26 @@ function previewImage(url: string) {
   color: #44544b;
   cursor: pointer;
   transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.header-unread-badge {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border: 2px solid #ffffff;
+  border-radius: 10px;
+  background: #e5484d;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-action:hover {

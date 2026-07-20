@@ -104,6 +104,7 @@ import {
 import { closeAllChatSockets } from '@/utils/realtime'
 import { safeRouteForRole } from '@/utils/routeGuard'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
+import { setAppUnreadBadge } from '@/utils/messageNotifications'
 import { supportedCountryOptions } from '@/data/supported-countries'
 
 const initialUser = getInitialUser()
@@ -566,6 +567,7 @@ export function useAppStore() {
       setSessionToken(undefined)
       setStoredSessionUser(null)
       uni.removeStorageSync(CHAT_CURSOR_CACHE_KEY)
+      setAppUnreadBadge(0)
     }
   }
 

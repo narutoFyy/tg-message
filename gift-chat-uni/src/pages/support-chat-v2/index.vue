@@ -273,6 +273,10 @@
                 <text class="composer-option-icon gif">GIF</text>
                 <text>GIF</text>
               </view>
+              <view class="composer-option" @click="chooseComposerTool('video')">
+                <text class="composer-option-icon video"></text>
+                <text>视频</text>
+              </view>
             </view>
           </view>
           <input v-model="draft" class="message-input" placeholder="输入消息..." @focus="closeComposerTools" @confirm="handleSend" />
@@ -289,6 +293,10 @@
             <view class="composer-panel-item" @click="chooseComposerTool('gif')">
               <text class="composer-panel-icon gif">GIF</text>
               <text>GIF</text>
+            </view>
+            <view class="composer-panel-item" @click="chooseComposerTool('video')">
+              <text class="composer-panel-icon video"></text>
+              <text>视频</text>
             </view>
           </view>
         </view>
@@ -1933,13 +1941,17 @@ function closeChatPanels() {
   closeComposerTools()
 }
 
-function chooseComposerTool(action: 'image' | 'gif') {
+function chooseComposerTool(action: 'image' | 'gif' | 'video') {
   showComposerTools.value = false
   if (action === 'image') {
     sendImage()
     return
   }
-  sendGif()
+  if (action === 'gif') {
+    sendGif()
+    return
+  }
+  sendVideo()
 }
 
 function playIncomingSound() {
@@ -2045,7 +2057,8 @@ async function sendPendingAttachment() {
   if (!attachment || isAttachmentUploading.value) return
   setStatus(attachment.id, 'uploading')
   try {
-    const asset = await uploadImage(attachment.url)
+    const source = attachment.file || attachment.url
+    const asset = attachment.kind === 'video' ? await uploadVideo(source) : await uploadImage(source)
     const replyTo = replyTarget.value || undefined
     await store.sendSupport(asset.publicUrl, attachment.kind, replyTo)
     clearReplyTarget()
@@ -2079,6 +2092,21 @@ async function sendGif() {
     addPath(filePath, 'gif')
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : 'GIF选择失败', icon: 'none' })
+  }
+}
+
+async function sendVideo() {
+  try {
+    if (typeof document !== 'undefined') {
+      const file = await chooseBrowserVideoOnce()
+      if (file) addFile(file)
+      return
+    }
+    const filePath = await chooseNativeVideoOnce()
+    if (!filePath) return
+    addPath(filePath, 'video')
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '视频选择失败', icon: 'none' })
   }
 }
 
@@ -2118,6 +2146,49 @@ function chooseBrowserImageOnce(kind: ComposerAttachmentKind) {
       const filePath = file ? URL.createObjectURL(file) : null
       input.remove()
       resolve(filePath)
+    }
+    input.onerror = (event) => {
+      input.remove()
+      reject(event)
+    }
+    input.click()
+  })
+}
+
+function chooseNativeVideoOnce() {
+  return new Promise<string | null>((resolve, reject) => {
+    uni.chooseVideo({
+      sourceType: ['album', 'camera'],
+      compressed: true,
+      maxDuration: 60,
+      success(result) {
+        resolve(result.tempFilePath || null)
+      },
+      fail(error) {
+        reject(error)
+      }
+    })
+  })
+}
+
+function chooseBrowserVideoOnce() {
+  return new Promise<File | null>((resolve, reject) => {
+    if (typeof document === 'undefined') {
+      resolve(null)
+      return
+    }
+
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'video/mp4,video/webm,video/quicktime,.mov'
+    input.style.position = 'fixed'
+    input.style.left = '-9999px'
+    document.body.appendChild(input)
+
+    input.onchange = () => {
+      const file = input.files?.[0] || null
+      input.remove()
+      resolve(file)
     }
     input.onerror = (event) => {
       input.remove()
@@ -4044,6 +4115,28 @@ function previewImage(url: string) {
   letter-spacing: 0;
 }
 
+.composer-option-icon.video::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 7px;
+  width: 13px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.composer-option-icon.video::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  top: 10px;
+  border-left: 6px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
 .composer-panel {
   display: none;
 }
@@ -4104,6 +4197,28 @@ function previewImage(url: string) {
   font-size: 13px;
   font-weight: 900;
   letter-spacing: 0;
+}
+
+.composer-panel-icon.video::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 18px;
+  width: 22px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.composer-panel-icon.video::after {
+  content: '';
+  position: absolute;
+  right: 11px;
+  top: 21px;
+  border-left: 9px solid currentColor;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
 }
 
 .reply-composer {

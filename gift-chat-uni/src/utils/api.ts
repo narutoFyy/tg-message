@@ -704,8 +704,8 @@ export function uploadVoice(filePath: string) {
   return uploadFile('/uploads/voices', filePath)
 }
 
-export function uploadVideo(filePath: string) {
-  return uploadFile('/uploads/videos', filePath)
+export function uploadVideo(source: string | File) {
+  return uploadFile('/uploads/videos', source)
 }
 
 function uploadFile(url: string, source: string | File) {

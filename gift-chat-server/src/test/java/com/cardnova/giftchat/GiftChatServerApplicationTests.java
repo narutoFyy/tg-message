@@ -1159,7 +1159,8 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data[0].messages[?(@.type == 'video')]").exists())
             .andExpect(content().string(containsString(sessionId)))
-            .andExpect(content().string(containsString("video_call")));
+            .andExpect(content().string(containsString("video_call")))
+            .andExpect(content().string(containsString("\"type\":\"call\"")));
     }
 
     @Test
@@ -2845,6 +2846,44 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.mimeType").value("video/mp4"))
             .andExpect(jsonPath("$.data.publicUrl", containsString("/uploads/videos/")));
+    }
+
+    @Test
+    void uploadedVideoCanBeSentAsPlayableSupportAttachment() throws Exception {
+        String userToken = loginToken("cardnova_user");
+        byte[] mp4Header = new byte[] {
+            0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+            0x69, 0x73, 0x6F, 0x6D, 0x00, 0x00, 0x00, 0x00
+        };
+        MockMultipartFile video = new MockMultipartFile(
+            "file",
+            "support-video.mp4",
+            "video/mp4",
+            mp4Header
+        );
+
+        MvcResult uploadResult = mockMvc.perform(multipart("/api/uploads/videos")
+                .file(video)
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String videoUrl = objectMapper.readTree(uploadResult.getResponse().getContentAsString())
+            .at("/data/publicUrl")
+            .asText();
+
+        mockMvc.perform(post("/api/support/conversations/support-1/messages")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "content": "%s",
+                      "messageType": "video"
+                    }
+                    """.formatted(videoUrl)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.type").value("video"))
+            .andExpect(jsonPath("$.data.attachments[0].type").value("video"))
+            .andExpect(jsonPath("$.data.attachments[0].url").value(videoUrl));
     }
 
     @Test

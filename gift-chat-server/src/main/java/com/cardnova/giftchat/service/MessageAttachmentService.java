@@ -28,7 +28,7 @@ public class MessageAttachmentService {
     }
 
     public void createFromMessageContent(String ownerType, String messageId, String messageType, String content) {
-        String normalizedType = normalizeAttachmentType(messageType);
+        String normalizedType = normalizeAttachmentType(messageType, content);
         if (normalizedType.isEmpty() || !StringUtils.hasText(content)) {
             return;
         }
@@ -82,7 +82,7 @@ public class MessageAttachmentService {
             return attachments;
         }
 
-        String normalizedType = normalizeAttachmentType(messageType);
+        String normalizedType = normalizeAttachmentType(messageType, content);
         if (normalizedType.isEmpty() || !StringUtils.hasText(content)) {
             return List.of();
         }
@@ -117,15 +117,24 @@ public class MessageAttachmentService {
         );
     }
 
-    private String normalizeAttachmentType(String messageType) {
+    private String normalizeAttachmentType(String messageType, String content) {
         String normalized = messageType == null ? "" : messageType.trim().toUpperCase(Locale.ROOT);
         return switch (normalized) {
             case "IMAGE" -> "IMAGE";
             case "GIF" -> "GIF";
             case "VOICE" -> "VOICE";
-            case "VIDEO" -> "CALL";
+            case "VIDEO" -> isUploadedVideo(content) ? "VIDEO" : "CALL";
             default -> "";
         };
+    }
+
+    private boolean isUploadedVideo(String content) {
+        if (!StringUtils.hasText(content)) {
+            return false;
+        }
+        return uploadAssetRepository.findByPublicUrl(content.trim())
+            .map(asset -> asset.getMimeType() != null && asset.getMimeType().startsWith("video/"))
+            .orElse(false);
     }
 
     private String normalizeStoredAttachmentType(String attachmentType) {

@@ -141,7 +141,7 @@ import AppNav from '@/components/AppNav.vue'
 import ChatMessageBubble from '@/components/chat/ChatMessageBubble.vue'
 import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPreview.vue'
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
-import { fetchVideoSessionBootstrap, uploadImage } from '@/utils/api'
+import { fetchVideoSessionBootstrap, uploadImage, uploadVideo } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { uiIcons } from '@/utils/art'
@@ -837,7 +837,7 @@ function chooseComposerTool(action: 'image' | 'gif' | 'video') {
     sendGif()
     return
   }
-  startVideoCall()
+  sendVideo()
 }
 
 async function sendPendingAttachment() {
@@ -845,7 +845,8 @@ async function sendPendingAttachment() {
   if (!attachment || isAttachmentUploading.value) return
   setStatus(attachment.id, 'uploading')
   try {
-    const asset = await uploadImage(attachment.url)
+    const source = attachment.file || attachment.url
+    const asset = attachment.kind === 'video' ? await uploadVideo(source) : await uploadImage(source)
     const replyTo = replyTarget.value || undefined
     await store.sendSupport(asset.publicUrl, attachment.kind, replyTo)
     startReadRefresh()
@@ -916,6 +917,22 @@ async function sendGif() {
     showNotice('GIF ready. Click Send to send it.')
   } catch (error) {
     showNotice(error instanceof Error ? error.message : 'GIF select failed')
+  }
+}
+
+async function sendVideo() {
+  try {
+    if (typeof document !== 'undefined') {
+      const file = await chooseBrowserVideoOnce()
+      if (file) addFile(file)
+      return
+    }
+    const filePath = await chooseNativeVideoOnce()
+    if (!filePath) return
+    addPath(filePath, 'video')
+    showNotice('Video ready. Click Send to send it.')
+  } catch (error) {
+    showNotice(error instanceof Error ? error.message : 'Video select failed')
   }
 }
 
@@ -993,6 +1010,49 @@ function chooseBrowserImageOnce(kind: ComposerAttachmentKind) {
       const filePath = file ? URL.createObjectURL(file) : null
       input.remove()
       resolve(filePath)
+    }
+    input.onerror = (event) => {
+      input.remove()
+      reject(event)
+    }
+    input.click()
+  })
+}
+
+function chooseNativeVideoOnce() {
+  return new Promise<string | null>((resolve, reject) => {
+    uni.chooseVideo({
+      sourceType: ['album', 'camera'],
+      compressed: true,
+      maxDuration: 60,
+      success(result) {
+        resolve(result.tempFilePath || null)
+      },
+      fail(error) {
+        reject(error)
+      }
+    })
+  })
+}
+
+function chooseBrowserVideoOnce() {
+  return new Promise<File | null>((resolve, reject) => {
+    if (typeof document === 'undefined') {
+      resolve(null)
+      return
+    }
+
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'video/mp4,video/webm,video/quicktime,.mov'
+    input.style.position = 'fixed'
+    input.style.left = '-9999px'
+    document.body.appendChild(input)
+
+    input.onchange = () => {
+      const file = input.files?.[0] || null
+      input.remove()
+      resolve(file)
     }
     input.onerror = (event) => {
       input.remove()

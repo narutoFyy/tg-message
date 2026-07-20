@@ -300,7 +300,8 @@ public class PersistentSupportService {
             saved.getDeliveryStatus(),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
             saved.getFailedReason(),
-            replyToChatMessage(saved)
+            replyToChatMessage(saved),
+            message.attachments()
         );
         return message;
     }

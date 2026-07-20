@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 
-export type ComposerAttachmentKind = 'image' | 'gif'
+export type ComposerAttachmentKind = 'image' | 'gif' | 'video'
 export type ComposerAttachmentStatus = 'ready' | 'uploading' | 'failed'
 
 export interface ComposerAttachment {
@@ -12,9 +12,11 @@ export interface ComposerAttachment {
   status: ComposerAttachmentStatus
   error?: string
   revokeOnClear?: boolean
+  file?: File
 }
 
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
+const MAX_IMAGE_ATTACHMENT_SIZE = 10 * 1024 * 1024
+const MAX_VIDEO_ATTACHMENT_SIZE = 20 * 1024 * 1024
 
 function nextAttachmentId() {
   return `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -23,12 +25,14 @@ function nextAttachmentId() {
 function inferKind(name = '', mimeType = ''): ComposerAttachmentKind {
   const lowerName = name.toLowerCase()
   const lowerType = mimeType.toLowerCase()
+  if (lowerType.startsWith('video/') || /\.(mp4|webm|mov)$/.test(lowerName)) return 'video'
   return lowerType.includes('gif') || lowerName.endsWith('.gif') ? 'gif' : 'image'
 }
 
-function assertAllowedSize(size: number) {
-  if (size > MAX_ATTACHMENT_SIZE) {
-    throw new Error('Image or GIF must be 10MB or smaller.')
+function assertAllowedSize(size: number, kind: ComposerAttachmentKind) {
+  const maxSize = kind === 'video' ? MAX_VIDEO_ATTACHMENT_SIZE : MAX_IMAGE_ATTACHMENT_SIZE
+  if (size > maxSize) {
+    throw new Error(kind === 'video' ? 'Video must be 20MB or smaller.' : 'Image or GIF must be 10MB or smaller.')
   }
 }
 
@@ -59,17 +63,18 @@ export function useComposerAttachments() {
   }
 
   function addFile(file: File) {
-    assertAllowedSize(file.size)
-    clearAttachment()
     const kind = inferKind(file.name, file.type)
+    assertAllowedSize(file.size, kind)
+    clearAttachment()
     const attachment: ComposerAttachment = {
       id: nextAttachmentId(),
       url: URL.createObjectURL(file),
       kind,
-      name: file.name || (kind === 'gif' ? 'Pasted GIF' : 'Pasted image'),
+      name: file.name || (kind === 'video' ? 'Video' : kind === 'gif' ? 'Pasted GIF' : 'Pasted image'),
       size: file.size,
       status: 'ready',
-      revokeOnClear: true
+      revokeOnClear: true,
+      file
     }
     attachments.value = [attachment]
     return attachment
@@ -81,7 +86,7 @@ export function useComposerAttachments() {
       id: nextAttachmentId(),
       url: filePath,
       kind,
-      name: name || (kind === 'gif' ? 'GIF' : 'Image'),
+      name: name || (kind === 'video' ? 'Video' : kind === 'gif' ? 'GIF' : 'Image'),
       size: 0,
       status: 'ready',
       revokeOnClear: filePath.startsWith('blob:')
@@ -100,6 +105,7 @@ export function useComposerAttachments() {
     clearAttachment,
     setStatus,
     inferKind,
-    maxAttachmentSize: MAX_ATTACHMENT_SIZE
+    maxAttachmentSize: MAX_IMAGE_ATTACHMENT_SIZE,
+    maxVideoAttachmentSize: MAX_VIDEO_ATTACHMENT_SIZE
   }
 }

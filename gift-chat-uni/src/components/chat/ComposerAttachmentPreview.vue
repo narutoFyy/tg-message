@@ -1,10 +1,18 @@
 <template>
   <view v-if="attachment" :class="['composer-preview', attachment.status]">
-    <image class="preview-thumb" :src="attachment.url" mode="aspectFill" />
+    <video
+      v-if="attachment.kind === 'video'"
+      class="preview-thumb"
+      :src="attachment.url"
+      :controls="false"
+      muted
+    />
+    <image v-else class="preview-thumb" :src="attachment.url" mode="aspectFill" />
     <view class="preview-body">
       <view class="preview-title-row">
         <text class="preview-title">{{ title }}</text>
         <text v-if="attachment.kind === 'gif'" class="preview-kind">GIF</text>
+        <text v-else-if="attachment.kind === 'video'" class="preview-kind">VIDEO</text>
       </view>
       <text class="preview-status">{{ statusText }}</text>
     </view>

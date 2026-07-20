@@ -14,6 +14,7 @@ import com.cardnova.giftchat.repository.RegistrationBonusRecordRepository;
 import com.cardnova.giftchat.repository.ReferralRewardRepository;
 import com.cardnova.giftchat.repository.UserRepository;
 import com.cardnova.giftchat.repository.TradeOrderRepository;
+import com.cardnova.giftchat.repository.UploadAssetRepository;
 import com.cardnova.giftchat.service.ReferralRewardService;
 import com.cardnova.giftchat.service.RegistrationBonusService;
 import com.cardnova.giftchat.service.WebSocketChannelAuthorizationService;
@@ -101,6 +102,9 @@ class GiftChatServerApplicationTests {
 
     @Autowired
     private TradeOrderRepository tradeOrderRepository;
+
+    @Autowired
+    private UploadAssetRepository uploadAssetRepository;
 
     @Test
     void healthEndpointIsPublic() throws Exception {
@@ -2870,6 +2874,12 @@ class GiftChatServerApplicationTests {
         String videoUrl = objectMapper.readTree(uploadResult.getResponse().getContentAsString())
             .at("/data/publicUrl")
             .asText();
+        String assetId = objectMapper.readTree(uploadResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+        var uploadedAsset = uploadAssetRepository.findById(assetId).orElseThrow();
+        uploadedAsset.setPublicUrl("https://stonetradex.com" + videoUrl);
+        uploadAssetRepository.saveAndFlush(uploadedAsset);
 
         mockMvc.perform(post("/api/support/conversations/support-1/messages")
                 .header("Authorization", bearer(userToken))

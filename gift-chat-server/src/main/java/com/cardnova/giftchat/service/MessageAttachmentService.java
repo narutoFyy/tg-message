@@ -51,7 +51,7 @@ public class MessageAttachmentService {
     }
 
     private void create(String ownerType, String messageId, String attachmentType, String url) {
-        UploadAssetEntity asset = uploadAssetRepository.findByPublicUrl(url).orElse(null);
+        UploadAssetEntity asset = findUploadAsset(url);
 
         LocalDateTime now = LocalDateTime.now();
         MessageAttachmentEntity entity = new MessageAttachmentEntity();
@@ -132,9 +132,45 @@ public class MessageAttachmentService {
         if (!StringUtils.hasText(content)) {
             return false;
         }
-        return uploadAssetRepository.findByPublicUrl(content.trim())
-            .map(asset -> asset.getMimeType() != null && asset.getMimeType().startsWith("video/"))
-            .orElse(false);
+        UploadAssetEntity asset = findUploadAsset(content);
+        return asset != null && asset.getMimeType() != null && asset.getMimeType().startsWith("video/");
+    }
+
+    private UploadAssetEntity findUploadAsset(String url) {
+        if (!StringUtils.hasText(url)) {
+            return null;
+        }
+        String value = url.trim();
+        UploadAssetEntity exact = uploadAssetRepository.findByPublicUrl(value).orElse(null);
+        if (exact != null) {
+            return exact;
+        }
+
+        String uploadPath = uploadPath(value);
+        if (uploadPath.isEmpty()) {
+            return null;
+        }
+        exact = uploadAssetRepository.findByPublicUrl(uploadPath).orElse(null);
+        return exact != null
+            ? exact
+            : uploadAssetRepository.findFirstByPublicUrlEndingWith(uploadPath).orElse(null);
+    }
+
+    private String uploadPath(String value) {
+        int start = value.indexOf("/uploads/");
+        if (start < 0) {
+            return "";
+        }
+        int query = value.indexOf('?', start);
+        int fragment = value.indexOf('#', start);
+        int end = value.length();
+        if (query >= 0) {
+            end = Math.min(end, query);
+        }
+        if (fragment >= 0) {
+            end = Math.min(end, fragment);
+        }
+        return value.substring(start, end);
     }
 
     private String normalizeStoredAttachmentType(String attachmentType) {

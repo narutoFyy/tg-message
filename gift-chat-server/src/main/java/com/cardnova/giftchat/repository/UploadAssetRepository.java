@@ -7,4 +7,6 @@ import java.util.Optional;
 
 public interface UploadAssetRepository extends JpaRepository<UploadAssetEntity, String> {
     Optional<UploadAssetEntity> findByPublicUrl(String publicUrl);
+
+    Optional<UploadAssetEntity> findFirstByPublicUrlEndingWith(String publicUrlSuffix);
 }

@@ -74,7 +74,7 @@
         <view class="ranking-content">
           <view class="ranking-side">
             <text class="ranking-label">Sales</text>
-            <text class="ranking-value">{{ walletValue }} / No.{{ salesRankLabel }}</text>
+            <text class="ranking-value">{{ salesValue }} / No.{{ salesRankLabel }}</text>
           </view>
           <image class="ranking-art" :src="pageArt.trophy" mode="aspectFit" />
           <view class="ranking-side align-right">
@@ -143,6 +143,7 @@ const invitationRanking = ref<RankingBoard | null>(null)
 
 onShow(() => {
   store.bootstrap()
+  store.refreshBalanceSummary().catch(() => undefined)
   store.refreshCurrentAccount().catch(() => undefined)
   store.refreshVipSummary().catch(() => undefined)
   store.refreshLotteryEligibility().catch(() => undefined)
@@ -176,10 +177,12 @@ const inviteCode = computed(() => store.state.currentUser?.inviteCode || 'Not av
 const completedPayout = computed(() =>
   store.state.transactions
     .filter((item) => item.status === 'completed')
-    .reduce((sum, item) => sum + parseNgn(item.payoutAmount), 0)
+    .reduce((sum, item) => sum + parseAmount(item.payoutAmount), 0)
 )
 
-const walletValue = computed(() => formatNaira(completedPayout.value))
+const walletCurrency = computed(() => store.state.balanceSummary?.currencyCode || store.state.currentUser?.currencyCode || 'USD')
+const walletValue = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.availableTotal || '0.00'}`)
+const salesValue = computed(() => formatCurrency(completedPayout.value))
 
 async function refreshPersonalRankings() {
   try {
@@ -196,12 +199,12 @@ function rankLabel(rank: number | undefined, fallback: string) {
   return rank >= 500 ? '500+' : `${rank}`
 }
 
-function parseNgn(value: string) {
+function parseAmount(value: string) {
   return Number(value.replace(/[^\d.]/g, '') || '0')
 }
 
-function formatNaira(value: number) {
-  return `NGN ${value.toLocaleString('en-US')}`
+function formatCurrency(value: number) {
+  return `${walletCurrency.value} ${value.toLocaleString('en-US')}`
 }
 
 function goBlacklist() { uni.navigateTo({ url: '/pages/blacklist/index' }) }

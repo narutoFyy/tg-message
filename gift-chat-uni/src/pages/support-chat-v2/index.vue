@@ -249,7 +249,7 @@
       <!-- 粘贴图片预览 -->
       <ComposerAttachmentPreview
         :attachment="activeAttachment"
-        @retry="sendPendingAttachment"
+        @retry="retryPendingAttachment"
         @clear="clearAttachment"
       />
 
@@ -1010,7 +1010,12 @@ onShow(() => {
     applyPendingSupportDraft()
     if (store.state.supportConversations.length > 0) {
       const routeConversation = store.state.supportConversations.find(item => item.conversationId === pendingRouteConversationId.value)
-      activeConversationId.value = routeConversation?.conversationId || store.state.supportConversations[0].conversationId
+      const selectedConversation = store.state.supportConversations.find(item => item.conversationId === activeConversationId.value)
+      const storedConversation = store.state.supportConversations.find(item => item.conversationId === store.state.supportConversationId)
+      activeConversationId.value = routeConversation?.conversationId
+        || selectedConversation?.conversationId
+        || storedConversation?.conversationId
+        || store.state.supportConversations[0].conversationId
       pendingRouteConversationId.value = ''
       store.setActiveSupportConversation(activeConversationId.value)
       store.refreshSupportCustomerProfile(activeConversationId.value, true).catch(() => {})
@@ -2249,8 +2254,10 @@ async function handleSend() {
   showHeaderMenu.value = false
   showComposerTools.value = false
   closeMessageMenu()
+  const conversationId = activeConversationId.value
+  if (!conversationId) return
   if (activeAttachment.value) {
-    await sendPendingAttachment()
+    await sendPendingAttachment(conversationId)
     return
   }
   const value = draft.value.trim()
@@ -2258,7 +2265,7 @@ async function handleSend() {
 
   try {
     const replyTo = replyTarget.value || undefined
-    await store.sendSupport(value, 'text', replyTo)
+    await store.sendSupport(value, 'text', replyTo, conversationId)
     draft.value = ''
     clearReplyTarget()
     scrollMessagesToBottom()
@@ -2278,18 +2285,24 @@ async function retryMessage(message: ChatMessage) {
   }
 }
 
-async function sendPendingAttachment() {
+function retryPendingAttachment() {
+  return sendPendingAttachment(activeConversationId.value)
+}
+
+async function sendPendingAttachment(conversationId: string) {
   const attachment = activeAttachment.value
-  if (!attachment || isAttachmentUploading.value) return
+  if (!attachment || !conversationId || isAttachmentUploading.value) return
+  const replyTo = replyTarget.value || undefined
   setStatus(attachment.id, 'uploading')
   try {
     const source = attachment.file || attachment.url
     const asset = attachment.kind === 'video' ? await uploadVideo(source) : await uploadImage(source)
-    const replyTo = replyTarget.value || undefined
-    await store.sendSupport(asset.publicUrl, attachment.kind, replyTo)
+    await store.sendSupport(asset.publicUrl, attachment.kind, replyTo, conversationId)
     clearReplyTarget()
-    scrollMessagesToBottom()
-    startReadRefresh()
+    if (activeConversationId.value === conversationId) {
+      scrollMessagesToBottom()
+      startReadRefresh()
+    }
     clearAttachment(attachment.id)
     if (draft.value.trim()) {
       await handleSend()
@@ -2679,6 +2692,11 @@ function previewImage(url: string) {
 
 .profile-scroll {
   flex: 1;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 12px 14px 18px;
 }
@@ -4939,6 +4957,11 @@ function previewImage(url: string) {
   .input-area {
     padding-left: 7px;
     padding-right: 7px;
+  }
+
+  .composer-panel {
+    margin-left: -7px;
+    margin-right: -7px;
   }
 
   .input-row {

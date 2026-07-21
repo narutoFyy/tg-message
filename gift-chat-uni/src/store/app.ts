@@ -400,7 +400,6 @@ export function useAppStore() {
     }
     try {
       const previousActiveFriend = state.activeFriendUsername
-      const previousSupportConversationId = state.supportConversationId
       const [
         rates,
         friends,
@@ -471,8 +470,9 @@ export function useAppStore() {
         fetchMyCurrencyExchangeRate().then((rate) => { state.currencyExchangeRate = rate }).catch(() => {})
       }
       refreshSupportLedger().catch(() => {})
-      state.supportConversationId = normalizedSupport.some((conversation) => conversation.conversationId === previousSupportConversationId)
-        ? previousSupportConversationId
+      const currentSupportConversationId = state.supportConversationId
+      state.supportConversationId = normalizedSupport.some((conversation) => conversation.conversationId === currentSupportConversationId)
+        ? currentSupportConversationId
         : normalizedSupport[0]?.conversationId || state.supportConversationId
       syncActiveSupportConversation()
       state.activeFriendUsername = normalizedFriends.some((friend) => friend.username === previousActiveFriend)
@@ -652,12 +652,20 @@ export function useAppStore() {
     return request
   }
 
-  function appendSupportMessage(content: string, type: ChatMessage['type'] = 'text', clientMessageId?: string, replyTo?: ChatMessage['replyTo']) {
+  function appendSupportMessage(
+    content: string,
+    type: ChatMessage['type'] = 'text',
+    clientMessageId?: string,
+    replyTo?: ChatMessage['replyTo'],
+    conversationId = state.supportConversationId
+  ) {
     const fallback = makeLocalMessage(content, type, clientMessageId, replyTo)
-    mergeUniqueMessage(state.supportMessages, fallback)
-    const active = state.supportConversations.find((conversation) => conversation.conversationId === state.supportConversationId)
-    if (active) {
-      mergeUniqueMessage(active.messages, fallback)
+    const target = state.supportConversations.find((conversation) => conversation.conversationId === conversationId)
+    if (target) {
+      mergeUniqueMessage(target.messages, fallback)
+    }
+    if (conversationId === state.supportConversationId) {
+      mergeUniqueMessage(state.supportMessages, fallback)
     }
     return fallback
   }
@@ -707,10 +715,16 @@ export function useAppStore() {
     }
   }
 
-  async function sendSupport(content: string, messageType: ChatMessage['type'] = 'text', replyTo?: ChatMessage['replyTo']) {
-    const conversationId = state.supportConversationId
-    const local = appendSupportMessage(content, messageType, undefined, replyTo)
-    const active = state.supportConversations.find((conversation) => conversation.conversationId === state.supportConversationId)
+  async function sendSupport(
+    content: string,
+    messageType: ChatMessage['type'] = 'text',
+    replyTo?: ChatMessage['replyTo'],
+    conversationId = state.supportConversationId
+  ) {
+    if (!conversationId) {
+      throw new Error('Select a customer before sending a message.')
+    }
+    const local = appendSupportMessage(content, messageType, undefined, replyTo, conversationId)
     try {
       const sent = await sendSupportMessage(conversationId, {
         content,
@@ -720,15 +734,21 @@ export function useAppStore() {
       })
       const message = normalizeOwnSupportMessage(sent)
       rememberMessageCursor('support', conversationId, message)
-      replaceMessage(state.supportMessages, local.id, message)
-      if (active) {
-        replaceMessage(active.messages, local.id, message)
+      if (conversationId === state.supportConversationId) {
+        replaceMessage(state.supportMessages, local.id, message)
+      }
+      const target = state.supportConversations.find((conversation) => conversation.conversationId === conversationId)
+      if (target) {
+        replaceMessage(target.messages, local.id, message)
       }
       return message
     } catch (error) {
-      markMessageFailed(state.supportMessages, local.id)
-      if (active) {
-        markMessageFailed(active.messages, local.id)
+      if (conversationId === state.supportConversationId) {
+        markMessageFailed(state.supportMessages, local.id)
+      }
+      const target = state.supportConversations.find((conversation) => conversation.conversationId === conversationId)
+      if (target) {
+        markMessageFailed(target.messages, local.id)
       }
       throw error
     }

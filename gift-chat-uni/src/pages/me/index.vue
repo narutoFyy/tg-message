@@ -29,8 +29,8 @@
       <view class="vip-row" @click="goPerformance">
         <view class="vip-copy-block">
           <view class="vip-title-row">
-            <text class="vip-title">{{ vipSummary?.level || 'VIP1' }} / {{ vipSummary?.levelName || 'Bronze' }}</text>
-            <text class="vip-points">{{ vipSummary?.points || '0' }} pts</text>
+            <text class="vip-title">{{ vipSummary?.level || 'VIP0' }} / {{ vipSummary?.levelName || 'New member' }}</text>
+            <text class="vip-points">USD {{ vipSummary?.points || '0' }} completed</text>
           </view>
           <view class="vip-progress-track">
             <view class="vip-progress-fill" :style="{ width: `${vipProgress}%` }"></view>
@@ -154,14 +154,15 @@ const vipSummary = computed(() => store.state.vipSummary)
 const vipProgress = computed(() => Math.max(0, Math.min(100, vipSummary.value?.progressPercent ?? 0)))
 const vipProgressText = computed(() => {
   const vip = vipSummary.value
-  if (!vip) return '0 / 20 to VIP2'
+  if (!vip) return 'VIP progress unavailable'
   if (vip.maxLevel) return 'Highest level reached'
-  return `${vip.points} / ${vip.nextThreshold} to ${vip.nextLevel} / ${vip.remainingPoints} pts left`
+  if (vip.level === 'VIP0') return 'Complete your first trade to reach VIP1'
+  return `USD ${vip.points} / USD ${vip.nextThreshold} to ${vip.nextLevel} / USD ${vip.remainingPoints} left`
 })
 const lotteryHint = computed(() => {
   const eligibility = store.state.lotteryEligibility
   if (!eligibility) return 'Check eligibility'
-  return eligibility.eligible ? 'Available now' : (eligibility.nextAvailableAt || 'Not available')
+  return eligibility.eligible ? `${eligibility.availableChances} available` : (eligibility.nextAvailableAt || 'Not available')
 })
 const salesRankLabel = computed(() => rankLabel(salesRanking.value?.currentUser?.rank, '500+'))
 const invitationCount = computed(() => invitationRanking.value?.currentUser?.score || '0 invites')

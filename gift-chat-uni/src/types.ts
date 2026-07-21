@@ -1,3 +1,5 @@
+export type GiftCardFaceCurrency = 'USD' | 'EUR' | 'GBP' | 'AUD'
+
 export interface RateItem {
   id: string
   cardName: string
@@ -7,6 +9,8 @@ export interface RateItem {
   currencyCode?: string
   localPayoutPerUsd?: string
   displayRate?: string
+  quotes: Partial<Record<GiftCardFaceCurrency, string>>
+  imageUrl: string
   status: 'active' | 'paused'
   updatedAt: string
 }
@@ -143,6 +147,10 @@ export interface TransactionItem {
   localAmount?: string
   currencyCode?: string
   businessRate?: string
+  faceCurrencyCode?: string
+  faceValueAmount?: string
+  quantity?: number
+  faceToUsdRate?: string
   status: 'pending' | 'processing' | 'completed' | 'disputed' | 'canceled'
   counterpartyName: string
   counterpartyUsername: string
@@ -165,7 +173,7 @@ export interface CompletedTransactionFeedItem {
 }
 
 export interface VipSummary {
-  level: 'VIP1' | 'VIP2' | 'VIP3' | 'VIP4' | string
+  level: 'VIP0' | 'VIP1' | 'VIP2' | 'VIP3' | 'VIP4' | 'VIP5' | string
   levelName: string
   points: string
   nextLevel: string
@@ -196,8 +204,60 @@ export interface LotteryEligibility {
   periodType: 'once' | 'week' | 'day' | string
   periodKey: string
   periodDrawCount: number
+  availableChances: number
   nextAvailableAt: string
   message: string
+}
+
+export interface VipHolidayRewardItem {
+  id: string
+  countryCode: string
+  holidayCode: string
+  holidayName: string
+  holidayDate: string
+  rewardAmount: string
+  currencyCode: string
+  enabled: boolean
+  claimable: boolean
+  claimed: boolean
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface VipBenefitSummary {
+  vipLevel: string
+  birthDate: string
+  birthdayLocked: boolean
+  birthdayEligible: boolean
+  birthdayRewardNgn: string
+  birthdayRewardDisplay: string
+  supportRedPacketEligible: boolean
+  supportRewardDisplay: string
+  holidayRewards: VipHolidayRewardItem[]
+}
+
+export interface VipBenefitClaimItem {
+  id: string
+  username: string
+  benefitType: 'birthday' | 'support_red_packet' | 'holiday' | string
+  periodKey: string
+  vipLevel: string
+  status: 'pending' | 'approved' | 'rejected' | string
+  baseAmountUsd: string
+  localAmount: string
+  currencyCode: string
+  requestedAt: string
+  reviewedBy: string
+  reviewedAt: string
+  reviewNote: string
+}
+
+export interface VipBenefitConfigItem {
+  vip4SupportAmountNgn: string
+  vip5SupportAmountNgn: string
+  supportRewardEnabled: boolean
+  updatedAt: string
+  updatedBy: string
 }
 
 export interface LotteryDrawResult {

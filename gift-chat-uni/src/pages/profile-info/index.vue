@@ -18,6 +18,14 @@
         <view class="info-row"><text class="info-label">Password</text><text class="info-value">Set</text></view>
         <view class="info-row"><text class="info-label">Email</text><text class="info-value">{{ user?.email || 'Not set' }}</text></view>
         <view class="info-row"><text class="info-label">Phone</text><text class="info-value">{{ user?.phone || 'Not set' }}</text></view>
+        <view class="info-row birthday-row">
+          <view><text class="info-label">Birthday</text><text v-if="birthdayLocked" class="locked-note">Locked after first save</text></view>
+          <text v-if="birthdayLocked" class="info-value">{{ benefits?.birthDate }}</text>
+          <picker v-else mode="date" :value="birthdayDraft" :end="today" @change="saveBirthday">
+            <view class="birthday-picker">{{ birthdayDraft || 'Set birthday' }}</view>
+          </picker>
+        </view>
+        <text v-if="birthdayLocked" class="birthday-help">Contact customer support if the saved birthday needs correction.</text>
       </view>
 
       <view class="info-section bank-section">
@@ -71,12 +79,29 @@ const replaceForm = reactive({ country: '', accountName: '', bankName: '', accou
 onShow(() => {
   store.bootstrap()
   store.refreshCurrentAccount().catch(() => undefined)
+  store.refreshVipBenefits().catch(() => undefined)
   refreshBankAccount()
 })
 
 const user = computed(() => store.state.currentUser)
 const roleLabel = computed(() => user.value?.roleCode || 'USER')
+const benefits = computed(() => store.state.vipBenefits)
+const birthdayLocked = computed(() => Boolean(benefits.value?.birthdayLocked && benefits.value.birthDate))
+const birthdayDraft = ref('')
+const today = new Date().toISOString().slice(0, 10)
 const safeBankNumber = computed(() => bankAccount.value?.maskedAccountNumber || '****')
+
+async function saveBirthday(event: { detail: { value: string } }) {
+  const birthDate = event.detail.value
+  if (!birthDate) return
+  try {
+    await store.setVipBirthday(birthDate)
+    birthdayDraft.value = birthDate
+    notice.value = 'Birthday saved. Contact support if it ever needs correction.'
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Birthday update failed.'
+  }
+}
 
 async function refreshBankAccount() {
   notice.value = ''
@@ -127,6 +152,10 @@ async function saveBank() {
 .info-row:last-child { border-bottom: 0; }
 .info-label { flex: 0 0 auto; color: #6f7178; font-size: 24rpx; }
 .info-value { min-width: 0; color: #111111; font-size: 25rpx; font-weight: 700; text-align: right; overflow-wrap: anywhere; }
+.birthday-row { border-bottom: 0; }
+.locked-note { display: block; margin-top: 4rpx; color: #6f7178; font-size: 19rpx; }
+.birthday-picker { min-width: 190rpx; padding: 12rpx 16rpx; border: 1rpx solid #b8c9ef; border-radius: 4rpx; background: #ffffff; color: #002fa7; font-size: 23rpx; font-weight: 700; text-align: center; }
+.birthday-help { display: block; padding: 0 24rpx 18rpx; color: #6f7178; font-size: 20rpx; line-height: 1.4; }
 .bank-summary { padding: 24rpx; border-bottom: 1rpx solid #c6ead8; border-left: 5rpx solid var(--cb-mint-strong); background: rgba(255, 255, 255, 0.72); }
 .bank-name, .bank-number { display: block; }
 .bank-name { color: #111111; font-size: 25rpx; font-weight: 700; }

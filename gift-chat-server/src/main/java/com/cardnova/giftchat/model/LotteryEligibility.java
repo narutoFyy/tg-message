@@ -6,6 +6,7 @@ public record LotteryEligibility(
     String periodType,
     String periodKey,
     long periodDrawCount,
+    long availableChances,
     String nextAvailableAt,
     String message
 ) {

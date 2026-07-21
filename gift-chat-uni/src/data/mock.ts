@@ -1,17 +1,17 @@
 import type { ChatMessage, FriendProfile, RateItem, TransactionItem } from '@/types'
 
 export const mockRates: RateItem[] = [
-  { id: 'rate-1', cardName: 'Apple(itunes)', region: 'NG', rate: '1$ ≈ ₦1051.75', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-2', cardName: 'Steam', region: 'NG', rate: '1$ ≈ ₦886.88', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-3', cardName: 'Razer Gold', region: 'NG', rate: '1$ ≈ ₦1076.56', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-4', cardName: 'Zelle', region: 'NG', rate: '1$ ≈ ₦552.77', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-5', cardName: 'Chime', region: 'NG', rate: '1$ ≈ ₦1203.35', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-6', cardName: 'Xbox', region: 'NG', rate: '1$ ≈ ₦890.67', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-7', cardName: 'eBay', region: 'NG', rate: '1$ ≈ ₦740.96', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-8', cardName: 'Sephora', region: 'NG', rate: '1$ ≈ ₦1053.64', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-9', cardName: 'Google', region: 'NG', rate: '1$ ≈ ₦397.96', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-10', cardName: 'Vanilla', region: 'NG', rate: '1$ ≈ ₦568.51', status: 'active', updatedAt: '2026-05-21 11:15' },
-  { id: 'rate-11', cardName: 'American Express', region: 'NG', rate: '1$ ≈ ₦473.76', status: 'active', updatedAt: '2026-05-21 11:15' }
+  { id: 'rate-1', cardName: 'Apple(itunes)', region: 'NG', rate: '1$ ≈ ₦1051.75', quotes: { USD: '1051.75' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-2', cardName: 'Steam', region: 'NG', rate: '1$ ≈ ₦886.88', quotes: { USD: '886.88' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-3', cardName: 'Razer Gold', region: 'NG', rate: '1$ ≈ ₦1076.56', quotes: { USD: '1076.56' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-4', cardName: 'Zelle', region: 'NG', rate: '1$ ≈ ₦552.77', quotes: { USD: '552.77' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-5', cardName: 'Chime', region: 'NG', rate: '1$ ≈ ₦1203.35', quotes: { USD: '1203.35' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-6', cardName: 'Xbox', region: 'NG', rate: '1$ ≈ ₦890.67', quotes: { USD: '890.67' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-7', cardName: 'eBay', region: 'NG', rate: '1$ ≈ ₦740.96', quotes: { USD: '740.96' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-8', cardName: 'Sephora', region: 'NG', rate: '1$ ≈ ₦1053.64', quotes: { USD: '1053.64' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-9', cardName: 'Google', region: 'NG', rate: '1$ ≈ ₦397.96', quotes: { USD: '397.96' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-10', cardName: 'Vanilla', region: 'NG', rate: '1$ ≈ ₦568.51', quotes: { USD: '568.51' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' },
+  { id: 'rate-11', cardName: 'American Express', region: 'NG', rate: '1$ ≈ ₦473.76', quotes: { USD: '473.76' }, imageUrl: '', status: 'active', updatedAt: '2026-05-21 11:15' }
 ]
 
 export const mockSupportMessages: ChatMessage[] = []

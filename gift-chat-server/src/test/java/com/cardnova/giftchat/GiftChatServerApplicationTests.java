@@ -60,6 +60,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
@@ -1637,6 +1638,104 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void cardArtworkIsSharedAcrossCountriesAndRejectsUnauthorizedOrNonImageUploads() throws Exception {
+        String adminToken = loginToken("admin_mia");
+        byte[] pngHeader = new byte[] {
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D
+        };
+        MockMultipartFile artwork = new MockMultipartFile("file", "card.png", "image/png", pngHeader);
+        MvcResult artworkUpload = mockMvc.perform(multipart("/api/uploads/images")
+                .file(artwork)
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String imageUrl = objectMapper.readTree(artworkUpload.getResponse().getContentAsString())
+            .path("data").path("publicUrl").asText();
+        String sharedCardName = "Shared Artwork " + UUID.randomUUID().toString().substring(0, 8);
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "%s",
+                      "region": "NG",
+                      "quotes": { "USD": 1000, "EUR": 1200 },
+                      "imageUrl": "%s"
+                    }
+                    """.formatted(sharedCardName, imageUrl)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.imageUrl").value(imageUrl))
+            .andExpect(jsonPath("$.data.quotes.USD").value("1000"))
+            .andExpect(jsonPath("$.data.quotes.EUR").value("1200"));
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "%s",
+                      "region": "US",
+                      "quotes": { "USD": 0.8 }
+                    }
+                    """.formatted(sharedCardName)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.imageUrl").value(imageUrl));
+
+        String userToken = loginToken("cardnova_user");
+        MockMultipartFile userImage = new MockMultipartFile("file", "user-card.png", "image/png", pngHeader);
+        MvcResult userUpload = mockMvc.perform(multipart("/api/uploads/images")
+                .file(userImage)
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String userImageUrl = objectMapper.readTree(userUpload.getResponse().getContentAsString())
+            .path("data").path("publicUrl").asText();
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Unauthorized Artwork %s",
+                      "region": "NG",
+                      "quotes": { "USD": 900 },
+                      "imageUrl": "%s"
+                    }
+                    """.formatted(UUID.randomUUID().toString().substring(0, 8), userImageUrl)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Card image must be an image uploaded by the current administrator"));
+
+        byte[] mp4Header = new byte[] {
+            0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+            0x69, 0x73, 0x6F, 0x6D, 0x00, 0x00, 0x00, 0x00
+        };
+        MockMultipartFile video = new MockMultipartFile("file", "card.mp4", "video/mp4", mp4Header);
+        MvcResult videoUpload = mockMvc.perform(multipart("/api/uploads/videos")
+                .file(video)
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String videoUrl = objectMapper.readTree(videoUpload.getResponse().getContentAsString())
+            .path("data").path("publicUrl").asText();
+
+        mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "Video Artwork %s",
+                      "region": "NG",
+                      "quotes": { "USD": 900 },
+                      "imageUrl": "%s"
+                    }
+                    """.formatted(UUID.randomUUID().toString().substring(0, 8), videoUrl)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Card image must be an image uploaded by the current administrator"));
+    }
+
+    @Test
     void generatedInviteCodesStayUniqueForLongSimilarUsernames() {
         List<String> codes = new ArrayList<>();
         for (int index = 0; index < 100; index++) {
@@ -1657,7 +1756,7 @@ class GiftChatServerApplicationTests {
                 .content("""
                     {
                       "cardName": "Razer Gold",
-                      "cardCountry": "AUD",
+                      "cardCountry": "USD",
                       "settlementCountry": "NG",
                       "faceValue": 50,
                       "quantity": 1,
@@ -1725,6 +1824,95 @@ class GiftChatServerApplicationTests {
             rate.setLocalPayoutPerUsd(originalRate);
             giftCardRateRepository.saveAndFlush(rate);
         }
+    }
+
+    @Test
+    void sellOrderUsesSelectedFaceCurrencyQuoteAndRejectsMissingCurrency() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String cardName = "Currency Card " + suffix;
+        String adminToken = loginToken("admin_mia");
+        String userToken = loginToken("cardnova_user");
+
+        MvcResult rateResult = mockMvc.perform(post("/api/admin/rates")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "%s",
+                      "region": "NG",
+                      "quotes": { "USD": 1000, "EUR": 1200 }
+                    }
+                    """.formatted(cardName)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.quotes.USD").value("1000"))
+            .andExpect(jsonPath("$.data.quotes.EUR").value("1200"))
+            .andReturn();
+        String rateId = objectMapper.readTree(rateResult.getResponse().getContentAsString()).at("/data/id").asText();
+
+        MvcResult orderResult = mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "%s",
+                      "cardCountry": "EUR",
+                      "settlementCountry": "NG",
+                      "faceValue": 10,
+                      "quantity": 2,
+                      "rate": "forged",
+                      "settlementAmount": "forged",
+                      "cardType": "Digital",
+                      "speed": "Fast",
+                      "sendChatMessage": false
+                    }
+                    """.formatted(cardName)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.faceCurrencyCode").value("EUR"))
+            .andExpect(jsonPath("$.data.faceValueAmount").value("10"))
+            .andExpect(jsonPath("$.data.quantity").value(2))
+            .andExpect(jsonPath("$.data.localAmount").value("24000"))
+            .andExpect(jsonPath("$.data.baseAmountUsd").value("24"))
+            .andExpect(jsonPath("$.data.businessRate").value("1200"))
+            .andExpect(jsonPath("$.data.faceToUsdRate").value("1.2"))
+            .andReturn();
+        String orderId = objectMapper.readTree(orderResult.getResponse().getContentAsString()).at("/data/id").asText();
+
+        mockMvc.perform(post("/api/admin/rates/" + rateId)
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "%s",
+                      "region": "NG",
+                      "quotes": { "USD": 1000, "EUR": 1300 }
+                    }
+                    """.formatted(cardName)))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/transactions/" + orderId).header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.localAmount").value("24000"))
+            .andExpect(jsonPath("$.data.businessRate").value("1200"));
+
+        mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName": "%s",
+                      "cardCountry": "GBP",
+                      "settlementCountry": "NG",
+                      "faceValue": 10,
+                      "quantity": 1,
+                      "rate": "forged",
+                      "settlementAmount": "forged",
+                      "cardType": "Digital",
+                      "speed": "Fast",
+                      "sendChatMessage": false
+                    }
+                    """.formatted(cardName)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("GBP payout rate is not configured for this gift card"));
     }
 
     @Test
@@ -2455,7 +2643,7 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void vipPointsAreAwardedOnceWhenSellOrderCompletes() throws Exception {
+    void completedUsdVolumeUpgradesVipAndAddsASecondPermanentDraw() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String userToken = registerToken("vip_points_" + suffix);
 
@@ -2498,9 +2686,22 @@ class GiftChatServerApplicationTests {
         mockMvc.perform(get("/api/vip/me")
                 .header("Authorization", bearer(userToken)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.level").value("VIP2"))
+            .andExpect(jsonPath("$.data.level").value("VIP1"))
             .andExpect(jsonPath("$.data.points").value("50"))
-            .andExpect(jsonPath("$.data.nextLevel").value("VIP3"));
+            .andExpect(jsonPath("$.data.nextLevel").value("VIP2"));
+
+        mockMvc.perform(get("/api/lottery/eligibility")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.vipLevel").value("VIP1"))
+            .andExpect(jsonPath("$.data.availableChances").value(2));
+
+        spinLottery(userToken);
+        spinLottery(userToken);
+        mockMvc.perform(post("/api/lottery/spin")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message", containsString("Next chance available")));
     }
 
     @Test
@@ -2511,14 +2712,16 @@ class GiftChatServerApplicationTests {
         mockMvc.perform(get("/api/lottery/eligibility")
                 .header("Authorization", bearer(userToken)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.vipLevel").value("VIP1"))
+            .andExpect(jsonPath("$.data.vipLevel").value("VIP0"))
             .andExpect(jsonPath("$.data.eligible").value(true))
-            .andExpect(jsonPath("$.data.periodType").value("ONCE"));
+            .andExpect(jsonPath("$.data.periodType").value("ONCE"))
+            .andExpect(jsonPath("$.data.availableChances").value(1));
 
         MvcResult spinResult = mockMvc.perform(post("/api/lottery/spin")
                 .header("Authorization", bearer(userToken)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.eligibility.eligible").value(false))
+            .andExpect(jsonPath("$.data.eligibility.availableChances").value(0))
             .andExpect(jsonPath("$.data.recordId").isString())
             .andReturn();
         String prizeName = objectMapper.readTree(spinResult.getResponse().getContentAsString())
@@ -2685,8 +2888,24 @@ class GiftChatServerApplicationTests {
 
     @Test
     void loanApplicationCanBeReviewedByAdmin() throws Exception {
-        String user1Token = loginToken("cardnova_user");
+        String username = "vip4_loan_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String user1Token = registerToken(username);
         String adminToken = loginToken("admin_mia");
+
+        mockMvc.perform(post("/api/loans")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "amount": "NGN 100000",
+                      "country": "Nigeria",
+                      "purpose": "Need working capital for card trading"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Loan applications require VIP4 or above"));
+
+        grantCompletedUsdVolume(username, "10000");
 
         MvcResult loanResult = mockMvc.perform(post("/api/loans")
                 .header("Authorization", bearer(user1Token))
@@ -2728,6 +2947,136 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(content().string(containsString("Loan application")))
             .andExpect(content().string(containsString("approved")));
+    }
+
+    @Test
+    void vipBirthdayRewardLocksDateCreditsWalletOnce() throws Exception {
+        String username = "vip_birthday_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String token = registerToken(username);
+        grantCompletedUsdVolume(username, "1000");
+        LocalDate birthday = LocalDate.now().minusYears(20);
+
+        mockMvc.perform(post("/api/vip/benefits/birthday")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"birthDate\":\"%s\"}".formatted(birthday)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.birthdayLocked").value(true))
+            .andExpect(jsonPath("$.data.birthdayEligible").value(true))
+            .andExpect(jsonPath("$.data.birthdayRewardNgn").value("5000"));
+
+        mockMvc.perform(post("/api/vip/benefits/birthday")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"birthDate\":\"%s\"}".formatted(birthday.minusDays(1))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message", containsString("already locked")));
+
+        mockMvc.perform(post("/api/vip/benefits/birthday/claim")
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("approved"))
+            .andExpect(jsonPath("$.data.localAmount").value("5000"))
+            .andExpect(jsonPath("$.data.currencyCode").value("NGN"));
+
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("5,000.00"));
+
+        mockMvc.perform(post("/api/vip/benefits/birthday/claim")
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message", containsString("already been claimed")));
+    }
+
+    @Test
+    void monthlySupportRedPacketOnlyCreditsAfterAdminApproval() throws Exception {
+        String username = "vip_support_reward_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String token = registerToken(username);
+        String adminToken = loginToken("admin_mia");
+        grantCompletedUsdVolume(username, "10000");
+
+        mockMvc.perform(post("/api/admin/vip-benefits/config")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "vip4SupportAmountNgn": 4000,
+                      "vip5SupportAmountNgn": 8000,
+                      "supportRewardEnabled": true
+                    }
+                    """))
+            .andExpect(status().isOk());
+
+        MvcResult requestResult = mockMvc.perform(post("/api/vip/benefits/support-red-packets")
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("pending"))
+            .andReturn();
+        String claimId = objectMapper.readTree(requestResult.getResponse().getContentAsString()).at("/data/id").asText();
+
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("0.00"));
+
+        mockMvc.perform(post("/api/vip/benefits/staff/claims/%s/review".formatted(claimId))
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"approved\",\"reviewNote\":\"Monthly VIP reward\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("approved"));
+
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("4,000.00"));
+
+        mockMvc.perform(post("/api/vip/benefits/support-red-packets").header("Authorization", bearer(token)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message", containsString("already been requested")));
+    }
+
+    @Test
+    void vipFiveCanClaimConfiguredCountryHolidayOnce() throws Exception {
+        String username = "vip_holiday_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String token = registerToken(username);
+        String adminToken = loginToken("admin_mia");
+        grantCompletedUsdVolume(username, "50000");
+
+        MvcResult holidayResult = mockMvc.perform(post("/api/admin/vip-benefits/holidays")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "countryCode": "NG",
+                      "holidayCode": "TEST_DAY_%s",
+                      "holidayName": "Test Public Holiday",
+                      "holidayDate": "%s",
+                      "rewardAmount": 12000,
+                      "enabled": true
+                    }
+                    """.formatted(UUID.randomUUID().toString().substring(0, 8), LocalDate.now())))
+            .andExpect(status().isOk())
+            .andReturn();
+        String holidayId = objectMapper.readTree(holidayResult.getResponse().getContentAsString()).at("/data/id").asText();
+
+        mockMvc.perform(get("/api/vip/benefits/me").header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.vipLevel").value("VIP5"))
+            .andExpect(jsonPath("$.data.holidayRewards[0].claimable").value(true));
+
+        mockMvc.perform(post("/api/vip/benefits/holidays/%s/claim".formatted(holidayId))
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.localAmount").value("12000"));
+
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("12,000.00"));
+
+        mockMvc.perform(post("/api/vip/benefits/holidays/%s/claim".formatted(holidayId))
+                .header("Authorization", bearer(token)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message", containsString("already been claimed")));
     }
 
     @Test
@@ -3170,6 +3519,30 @@ class GiftChatServerApplicationTests {
 
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
         return root.path("data").path("accessToken").asText();
+    }
+
+    private void grantCompletedUsdVolume(String username, String amountUsd) {
+        UserEntity owner = userRepository.findByUsername(username).orElseThrow();
+        UserEntity agent = userRepository.findByUsername("support_luna").orElseThrow();
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        BigDecimal baseAmount = new BigDecimal(amountUsd);
+        TradeOrderEntity order = new TradeOrderEntity();
+        order.setId(UUID.randomUUID().toString());
+        order.setOrderNo("VIP" + suffix);
+        order.setOwnerUser(owner);
+        order.setCounterpartyUser(agent);
+        order.setCardName("VIP volume fixture");
+        order.setFaceValue(amountUsd + " USD x1");
+        order.setPayoutAmount("NGN 0");
+        order.setBaseAmountUsd(baseAmount);
+        order.setLocalAmount(BigDecimal.ZERO);
+        order.setCurrencyCode("NGN");
+        order.setBusinessRateSnapshot(new BigDecimal("1000"));
+        order.setStatusCode("COMPLETED");
+        order.setNote("VIP benefit integration test");
+        order.setCreatedAt(LocalDateTime.now());
+        order.setUpdatedAt(LocalDateTime.now());
+        tradeOrderRepository.saveAndFlush(order);
     }
 
     private String sellOrderRequest(String clientRequestId, int faceValue) {

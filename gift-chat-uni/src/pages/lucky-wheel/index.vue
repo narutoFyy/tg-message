@@ -1,8 +1,8 @@
 <template>
   <view class="page-shell soft-page lucky-page">
     <view class="page-header lucky-head tone-reward">
-      <view class="page-header-copy"><text class="eyebrow">Games</text><text class="title">Lucky Wheel</text><text class="subtitle">{{ eligibility?.vipLevel || 'VIP1' }} account draw</text></view>
-      <text :class="['chance-status', eligibility?.eligible && 'available']">{{ eligibility?.eligible ? 'Available' : 'Locked' }}</text>
+      <view class="page-header-copy"><text class="eyebrow">Games</text><text class="title">Lucky Wheel</text><text class="subtitle">{{ eligibility?.vipLevel || 'VIP0' }} account draw</text></view>
+      <text :class="['chance-status', eligibility?.eligible && 'available']">{{ chanceLabel }}</text>
     </view>
 
     <view class="draw-layout">
@@ -165,7 +165,8 @@ onShow(() => {
 const eligibility = computed(() => store.state.lotteryEligibility)
 const recentWinners = computed(() => store.state.lotteryWinners.slice(0, 6))
 const lotteryRecords = computed(() => store.state.lotteryRecords)
-const eligibilityText = computed(() => { if (!eligibility.value) return 'Checking your draw chance.'; if (eligibility.value.eligible) return 'You have a draw chance available.'; return eligibility.value.message || 'No draw chance available.' })
+const chanceLabel = computed(() => eligibility.value ? `${eligibility.value.availableChances} available` : 'Checking')
+const eligibilityText = computed(() => { if (!eligibility.value) return 'Checking your draw chance.'; if (eligibility.value.eligible) return `${eligibility.value.availableChances} draw chance${eligibility.value.availableChances === 1 ? '' : 's'} available.`; return eligibility.value.message || 'No draw chance available.' })
 const spinHint = computed(() => { if (!eligibility.value) return ''; if (eligibility.value.eligible) return 'The server determines the final prize.'; return eligibility.value.nextAvailableAt ? `Next: ${eligibility.value.nextAvailableAt}` : 'Upgrade VIP or wait for reset.' })
 function wheelPrizeImage(prize: string) { return featuredPrizes.value.find((item) => item.name === prize)?.image || '' }
 function labelStyle(index: number, prize: string) { const sliceAngle = 360 / wheelPrizes.value.length; const angle = index * sliceAngle + sliceAngle / 2; const distance = wheelPrizeImage(prize) ? 176 : 185; return `transform: rotate(${angle}deg) translateY(-${distance}rpx) rotate(-${angle}deg);` }

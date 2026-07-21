@@ -28,17 +28,20 @@ public class LoanService {
     private final CurrentUserService currentUserService;
     private final PersistentSupportService persistentSupportService;
     private final NotificationService notificationService;
+    private final VipService vipService;
 
     public LoanService(
         LoanApplicationRepository loanApplicationRepository,
         CurrentUserService currentUserService,
         PersistentSupportService persistentSupportService,
-        NotificationService notificationService
+        NotificationService notificationService,
+        VipService vipService
     ) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.currentUserService = currentUserService;
         this.persistentSupportService = persistentSupportService;
         this.notificationService = notificationService;
+        this.vipService = vipService;
     }
 
     public List<LoanApplicationItem> getLoans() {
@@ -57,6 +60,9 @@ public class LoanService {
         UserEntity currentUser = currentUserService.getCurrentUser();
         if (!"USER".equalsIgnoreCase(currentUser.getRoleCode())) {
             throw new IllegalArgumentException("Only users can apply for loans");
+        }
+        if (!vipService.isAtLeast(currentUser.getId(), 4)) {
+            throw new IllegalArgumentException("Loan applications require VIP4 or above");
         }
 
         SupportConversationEntity conversation = persistentSupportService.ensureUserConversation(currentUser);

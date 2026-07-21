@@ -77,7 +77,7 @@
                 <text class="customer-name">{{ item.displayName || item.customerUsername }}</text>
                 <text class="message-time">{{ formatTime(item.lastMessageTime) }}</text>
               </view>
-              <text class="customer-note">{{ countryLabel(item.phoneCountryCode) }} / {{ item.vipLevel }} / {{ item.vipPoints }} pts</text>
+              <text class="customer-note">{{ countryLabel(item.phoneCountryCode) }} / {{ item.vipLevel }} / USD {{ item.vipPoints }}</text>
               <text v-if="isAdmin" class="customer-note">客服：{{ assignedAgentForConversation(item.conversationId) }}</text>
               <view class="info-row">
                 <text class="last-message">{{ item.phone || '@' + item.customerUsername }}</text>
@@ -122,7 +122,7 @@
                     <text class="message-time">{{ formatTime(conv.lastMessageTime) }}</text>
                   </view>
                   <text v-if="conv.agentNote" class="customer-note">{{ conv.customerUsername }}</text>
-                  <text v-else class="customer-note">{{ conv.vipLevel || 'VIP1' }} / {{ conv.vipPoints || '0' }} pts</text>
+                  <text v-else class="customer-note">{{ conv.vipLevel || 'VIP0' }} / USD {{ conv.vipPoints || '0' }}</text>
                   <text v-if="isAdmin" class="customer-note">客服：{{ assignedAgentLabel(conv) }}</text>
                   <view class="info-row">
                     <text class="last-message">{{ getLastMessage(conv) }}</text>
@@ -417,6 +417,26 @@
 
         <view class="profile-section">
           <view class="section-head">
+            <text class="section-title">VIP benefit requests</text>
+            <text class="section-count">{{ activeCustomerBenefitClaims.length }}</text>
+          </view>
+          <view v-if="activeCustomerBenefitClaims.length === 0" class="mini-empty">No support red packet requests for this customer.</view>
+          <view v-for="claim in activeCustomerBenefitClaims" :key="claim.id" class="work-item">
+            <view class="work-top">
+              <text class="work-title">{{ claim.vipLevel }} support red packet</text>
+              <text :class="['work-status', claim.status]">{{ statusText(claim.status) }}</text>
+            </view>
+            <text class="work-line strong">{{ claim.localAmount }} {{ claim.currencyCode }}</text>
+            <text class="work-line">{{ claim.periodKey }} / {{ claim.requestedAt }}</text>
+            <view v-if="claim.status === 'pending'" class="work-actions">
+              <button class="mini-btn danger" @click="reviewActiveBenefit(claim.id, 'rejected')">Reject</button>
+              <button class="mini-btn primary" @click="reviewActiveBenefit(claim.id, 'approved')">Approve</button>
+            </view>
+          </view>
+        </view>
+
+        <view class="profile-section">
+          <view class="section-head">
             <text class="section-title">Bank risk</text>
             <text class="section-count">{{ profile.bankAccountRiskMatches.length }}</text>
           </view>
@@ -653,14 +673,14 @@ import { useAppStore } from '@/store/app'
 import ChatMessageBubble from '@/components/chat/ChatMessageBubble.vue'
 import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPreview.vue'
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
-import { fetchAgents, translateToChinese, uploadImage, uploadVideo } from '@/utils/api'
+import { fetchAgents, fetchStaffVipBenefitClaims, reviewVipBenefitClaim, translateToChinese, uploadImage, uploadVideo } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { notifyIncomingSupportMessage, requestMessageNotificationPermission, setAppUnreadBadge } from '@/utils/messageNotifications'
 import { cardLogoFor, uiIcons } from '@/utils/art'
 import type { AgentItem, ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
-import type { LotteryFulfillmentItem, TransactionItem, WithdrawalItem } from '@/types'
+import type { LotteryFulfillmentItem, TransactionItem, VipBenefitClaimItem, WithdrawalItem } from '@/types'
 
 const store = useAppStore()
 const draft = ref('')
@@ -719,6 +739,7 @@ const messageContextMenu = ref<{ message: ChatMessage; x: number; y: number } | 
 const lastContextMenuPoint = ref<{ clientX: number; clientY: number; time: number } | null>(null)
 const unreadSnapshot = new Map<string, number>()
 let unreadSnapshotReady = false
+const vipBenefitClaims = ref<VipBenefitClaimItem[]>([])
 
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT' || store.state.currentUser?.roleCode === 'ADMIN')
@@ -808,6 +829,11 @@ const connectionStatusOffline = computed(() => socketStatus.value !== 'online' |
 const soundEnabled = computed(() => audioEnabled.value)
 const totalUnreadCount = computed(() => store.state.supportUnreadCount)
 const profile = computed(() => store.state.activeSupportCustomerProfile)
+const activeCustomerBenefitClaims = computed(() => {
+  const username = profile.value?.customer.username
+  if (!username) return []
+  return vipBenefitClaims.value.filter(claim => claim.username === username && claim.benefitType === 'support_red_packet')
+})
 const supportLedger = computed(() => store.state.supportLedger)
 const ledgerCustomers = computed(() => supportLedger.value?.customers.slice(0, 6) || [])
 const selectedOrderId = ref('')
@@ -938,6 +964,7 @@ onShow(() => {
       return
     }
     loadAdminAgentFilters()
+    refreshStaffBenefitClaims()
     applyPendingSupportDraft()
     if (store.state.supportConversations.length > 0) {
       const routeConversation = store.state.supportConversations.find(item => item.conversationId === pendingRouteConversationId.value)
@@ -1316,6 +1343,7 @@ async function selectCustomer(conv: SupportConversationItem) {
   store.refreshSupportCustomerProfile(conv.conversationId, true).catch((error) => {
     console.error('Load customer profile failed:', error)
   })
+  refreshStaffBenefitClaims()
   showChat.value = true
   enableAudio()
   connectSocket()
@@ -1650,6 +1678,27 @@ function translateVisibleIncomingMessages() {
           translatingIds.delete(message.id)
         })
     })
+}
+
+async function refreshStaffBenefitClaims() {
+  try {
+    vipBenefitClaims.value = await fetchStaffVipBenefitClaims()
+  } catch (error) {
+    console.warn('Failed to load VIP benefit requests', error)
+  }
+}
+
+async function reviewActiveBenefit(claimId: string, status: 'approved' | 'rejected') {
+  const claim = activeCustomerBenefitClaims.value.find(item => item.id === claimId)
+  if (!claim || claim.username !== profile.value?.customer.username) return
+  try {
+    const updated = await reviewVipBenefitClaim(claimId, status, status === 'approved' ? 'Approved by customer support' : 'Rejected by customer support')
+    const index = vipBenefitClaims.value.findIndex(item => item.id === claimId)
+    if (index >= 0) vipBenefitClaims.value[index] = updated
+    uni.showToast({ title: `Request ${status}`, icon: status === 'approved' ? 'success' : 'none' })
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : 'Benefit review failed', icon: 'none' })
+  }
 }
 
 function isVideoFileMessage(message: ChatMessage) {

@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "app_user")
@@ -58,6 +59,9 @@ public class UserEntity {
 
     @Column(name = "country_bound_by", length = 36)
     private String countryBoundBy;
+
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -192,6 +196,9 @@ public class UserEntity {
     public void setCountryBoundBy(String countryBoundBy) {
         this.countryBoundBy = countryBoundBy;
     }
+
+    public LocalDate getBirthDate() { return birthDate; }
+    public void setBirthDate(LocalDate birthDate) { this.birthDate = birthDate; }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

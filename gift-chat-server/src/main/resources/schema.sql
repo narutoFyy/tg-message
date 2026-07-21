@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS app_user (
     country_binding_status VARCHAR(16),
     country_bound_at TIMESTAMP,
     country_bound_by VARCHAR(36),
+    birth_date DATE,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_app_user_referred_by FOREIGN KEY (referred_by_user_id) REFERENCES app_user (id),
@@ -50,6 +51,26 @@ CREATE TABLE IF NOT EXISTS support_conversation (
     CONSTRAINT fk_support_customer FOREIGN KEY (customer_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_support_agent FOREIGN KEY (assigned_agent_id) REFERENCES app_user (id),
     CONSTRAINT fk_support_welcome_agent FOREIGN KEY (welcome_message_agent_id) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS gift_card_rate_quote (
+    id VARCHAR(36) PRIMARY KEY,
+    rate_id VARCHAR(36) NOT NULL,
+    face_currency_code VARCHAR(3) NOT NULL,
+    local_payout_per_unit DECIMAL(18, 6) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_gift_card_quote_rate FOREIGN KEY (rate_id) REFERENCES gift_card_rate (id),
+    CONSTRAINT ux_gift_card_quote_currency UNIQUE (rate_id, face_currency_code)
+);
+
+CREATE TABLE IF NOT EXISTS gift_card_artwork (
+    identity_key VARCHAR(133) PRIMARY KEY,
+    image_url VARCHAR(500) NOT NULL,
+    updated_by VARCHAR(36),
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_gift_card_artwork_admin FOREIGN KEY (updated_by) REFERENCES app_user (id)
 );
 
 CREATE TABLE IF NOT EXISTS currency_exchange_rate (
@@ -140,11 +161,15 @@ CREATE TABLE IF NOT EXISTS trade_order (
     friendship_id VARCHAR(36),
     card_name VARCHAR(128) NOT NULL,
     face_value VARCHAR(32) NOT NULL,
+    face_currency_code VARCHAR(3),
+    face_value_amount DECIMAL(18, 6),
+    quantity_value INT,
     payout_amount VARCHAR(32) NOT NULL,
     base_amount_usd DECIMAL(18, 6),
     local_amount DECIMAL(18, 2),
     currency_code VARCHAR(3),
     business_rate_snapshot DECIMAL(18, 6),
+    face_to_usd_rate_snapshot DECIMAL(18, 6),
     client_request_id VARCHAR(64),
     client_request_hash VARCHAR(64),
     status_code VARCHAR(32) NOT NULL,
@@ -436,11 +461,26 @@ CREATE TABLE IF NOT EXISTS lottery_prize (
     updated_at TIMESTAMP NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS lottery_chance_ledger (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    source_key VARCHAR(160) NOT NULL,
+    source_type VARCHAR(32) NOT NULL,
+    vip_level VARCHAR(16) NOT NULL,
+    period_type VARCHAR(16) NOT NULL,
+    period_key VARCHAR(32) NOT NULL,
+    granted_at TIMESTAMP NOT NULL,
+    consumed_at TIMESTAMP,
+    CONSTRAINT fk_lottery_chance_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    CONSTRAINT ux_lottery_chance_source UNIQUE (source_key)
+);
+
 CREATE TABLE IF NOT EXISTS lottery_draw_record (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
     vip_level VARCHAR(16) NOT NULL,
     prize_id VARCHAR(36) NOT NULL,
+    lottery_chance_id VARCHAR(36),
     period_type VARCHAR(16) NOT NULL,
     period_key VARCHAR(32) NOT NULL,
     drawn_at TIMESTAMP NOT NULL,
@@ -453,8 +493,10 @@ CREATE TABLE IF NOT EXISTS lottery_draw_record (
     exchange_rate_snapshot DECIMAL(18, 6),
     CONSTRAINT fk_lottery_draw_user FOREIGN KEY (user_id) REFERENCES app_user (id),
     CONSTRAINT fk_lottery_draw_prize FOREIGN KEY (prize_id) REFERENCES lottery_prize (id),
+    CONSTRAINT fk_lottery_draw_chance FOREIGN KEY (lottery_chance_id) REFERENCES lottery_chance_ledger (id),
     CONSTRAINT fk_lottery_draw_processed_by FOREIGN KEY (processed_by) REFERENCES app_user (id),
-    CONSTRAINT ux_lottery_draw_period UNIQUE (user_id, period_type, period_key)
+    CONSTRAINT ux_lottery_draw_period UNIQUE (user_id, period_type, period_key),
+    CONSTRAINT ux_lottery_draw_chance UNIQUE (lottery_chance_id)
 );
 
 CREATE TABLE IF NOT EXISTS lottery_eligibility_reset (
@@ -465,6 +507,56 @@ CREATE TABLE IF NOT EXISTS lottery_eligibility_reset (
     created_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_lottery_reset_user FOREIGN KEY (user_id) REFERENCES app_user (id),
     CONSTRAINT fk_lottery_reset_admin FOREIGN KEY (admin_user_id) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS vip_benefit_config (
+    id VARCHAR(36) PRIMARY KEY,
+    vip4_support_amount_ngn DECIMAL(18, 2) NOT NULL,
+    vip5_support_amount_ngn DECIMAL(18, 2) NOT NULL,
+    support_reward_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_by VARCHAR(36),
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_vip_benefit_config_admin FOREIGN KEY (updated_by) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS vip_holiday_reward (
+    id VARCHAR(36) PRIMARY KEY,
+    country_code VARCHAR(2) NOT NULL,
+    holiday_code VARCHAR(64) NOT NULL,
+    holiday_name VARCHAR(128) NOT NULL,
+    holiday_date DATE NOT NULL,
+    reward_amount DECIMAL(18, 2) NOT NULL,
+    currency_code VARCHAR(3) NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_by VARCHAR(36),
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_vip_holiday_admin FOREIGN KEY (updated_by) REFERENCES app_user (id),
+    CONSTRAINT ux_vip_holiday UNIQUE (country_code, holiday_code, holiday_date)
+);
+
+CREATE TABLE IF NOT EXISTS vip_benefit_claim (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    holiday_reward_id VARCHAR(36),
+    benefit_type VARCHAR(32) NOT NULL,
+    source_key VARCHAR(160) NOT NULL,
+    period_key VARCHAR(32) NOT NULL,
+    vip_level VARCHAR(16) NOT NULL,
+    status_code VARCHAR(16) NOT NULL,
+    base_amount_usd DECIMAL(18, 6) NOT NULL,
+    local_amount DECIMAL(18, 2) NOT NULL,
+    currency_code VARCHAR(3) NOT NULL,
+    exchange_rate_snapshot DECIMAL(18, 6) NOT NULL,
+    requested_at TIMESTAMP NOT NULL,
+    reviewed_by VARCHAR(36),
+    reviewed_at TIMESTAMP,
+    review_note VARCHAR(255),
+    CONSTRAINT fk_vip_benefit_claim_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_vip_benefit_claim_holiday FOREIGN KEY (holiday_reward_id) REFERENCES vip_holiday_reward (id),
+    CONSTRAINT fk_vip_benefit_claim_reviewer FOREIGN KEY (reviewed_by) REFERENCES app_user (id),
+    CONSTRAINT ux_vip_benefit_claim_source UNIQUE (source_key)
 );
 
 CREATE TABLE IF NOT EXISTS user_hidden_record (

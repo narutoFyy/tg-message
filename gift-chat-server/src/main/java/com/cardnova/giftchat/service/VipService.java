@@ -1,9 +1,9 @@
 package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.entity.TradeOrderEntity;
-import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.entity.VipPointLedgerEntity;
 import com.cardnova.giftchat.model.VipSummary;
+import com.cardnova.giftchat.repository.TradeOrderRepository;
 import com.cardnova.giftchat.repository.VipPointLedgerRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,49 +15,66 @@ import java.text.DecimalFormat;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 @Transactional(readOnly = true)
 public class VipService {
 
-    private static final Pattern NUMBER_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)");
-    private static final Pattern QUANTITY_PATTERN = Pattern.compile("(?i)x\\s*(\\d+)");
-    private static final DecimalFormat POINT_FORMAT = new DecimalFormat("#,##0.##");
+    private static final DecimalFormat USD_FORMAT = new DecimalFormat("#,##0.##");
     private static final List<VipTier> TIERS = List.of(
         new VipTier("VIP1", "Bronze", BigDecimal.ZERO),
-        new VipTier("VIP2", "Silver", new BigDecimal("20")),
-        new VipTier("VIP3", "Gold", new BigDecimal("100")),
-        new VipTier("VIP4", "Diamond", new BigDecimal("500"))
+        new VipTier("VIP2", "Silver", new BigDecimal("1000")),
+        new VipTier("VIP3", "Gold", new BigDecimal("5000")),
+        new VipTier("VIP4", "Platinum", new BigDecimal("10000")),
+        new VipTier("VIP5", "Diamond", new BigDecimal("50000"))
     );
 
     private final VipPointLedgerRepository vipPointLedgerRepository;
+    private final TradeOrderRepository tradeOrderRepository;
     private final CurrentUserService currentUserService;
 
-    public VipService(VipPointLedgerRepository vipPointLedgerRepository, CurrentUserService currentUserService) {
+    public VipService(
+        VipPointLedgerRepository vipPointLedgerRepository,
+        TradeOrderRepository tradeOrderRepository,
+        CurrentUserService currentUserService
+    ) {
         this.vipPointLedgerRepository = vipPointLedgerRepository;
+        this.tradeOrderRepository = tradeOrderRepository;
         this.currentUserService = currentUserService;
     }
 
     public VipSummary currentUserSummary() {
-        UserEntity currentUser = currentUserService.getCurrentUser();
-        return summaryForUser(currentUser.getId());
+        return summaryForUser(currentUserService.getCurrentUser().getId());
     }
 
     public VipSummary summaryForUser(String userId) {
-        return toSummary(pointsForUser(userId));
+        BigDecimal volume = tradeVolumeUsdForUser(userId);
+        return toSummary(volume, hasCompletedTrade(userId));
     }
 
     public BigDecimal pointsForUser(String userId) {
+        return tradeVolumeUsdForUser(userId);
+    }
+
+    public BigDecimal tradeVolumeUsdForUser(String userId) {
         if (!StringUtils.hasText(userId)) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            return money(BigDecimal.ZERO);
         }
-        return vipPointLedgerRepository.sumPointsByUserId(userId).setScale(2, RoundingMode.HALF_UP);
+        return money(tradeOrderRepository.sumCompletedBaseAmountUsdByOwnerUserId(userId));
+    }
+
+    public boolean hasCompletedTrade(String userId) {
+        return StringUtils.hasText(userId)
+            && tradeOrderRepository.existsByOwnerUser_IdAndStatusCodeIgnoreCase(userId, "COMPLETED");
     }
 
     public String levelForUser(String userId) {
-        return tierFor(pointsForUser(userId)).level();
+        return tierFor(tradeVolumeUsdForUser(userId), hasCompletedTrade(userId)).level();
+    }
+
+    public boolean isAtLeast(String userId, int requiredLevel) {
+        String level = levelForUser(userId);
+        return level.matches("VIP[0-5]") && Integer.parseInt(level.substring(3)) >= requiredLevel;
     }
 
     @Transactional
@@ -69,104 +86,56 @@ public class VipService {
         if (vipPointLedgerRepository.existsBySourceKey(sourceKey)) {
             return;
         }
-
-        BigDecimal points = pointsFromOrder(order);
-        if (points.compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal amount = order.getBaseAmountUsd() == null ? BigDecimal.ZERO : order.getBaseAmountUsd();
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-
         VipPointLedgerEntity ledger = new VipPointLedgerEntity();
         ledger.setId(UUID.randomUUID().toString());
         ledger.setUser(order.getOwnerUser());
         ledger.setTradeOrder(order);
         ledger.setSourceKey(sourceKey);
-        ledger.setPointsDelta(points.setScale(2, RoundingMode.HALF_UP));
-        ledger.setReasonCode("TRADE_COMPLETED");
+        ledger.setPointsDelta(money(amount));
+        ledger.setReasonCode("TRADE_COMPLETED_USD");
         ledger.setCreatedAt(LocalDateTime.now());
         vipPointLedgerRepository.save(ledger);
     }
 
-    public VipSummary toSummary(BigDecimal points) {
-        BigDecimal normalizedPoints = points == null ? BigDecimal.ZERO : points.max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-        VipTier current = tierFor(normalizedPoints);
+    private VipSummary toSummary(BigDecimal volume, boolean hasCompletedTrade) {
+        BigDecimal normalized = money(volume == null ? BigDecimal.ZERO : volume.max(BigDecimal.ZERO));
+        VipTier current = tierFor(normalized, hasCompletedTrade);
+        if ("VIP0".equals(current.level())) {
+            return new VipSummary("VIP0", "New", format(normalized), "VIP1", "First completed trade", "1 completed trade", 0, false);
+        }
         VipTier next = nextTier(current);
         if (next == null) {
-            return new VipSummary(
-                current.level(),
-                current.name(),
-                formatPoints(normalizedPoints),
-                "",
-                "",
-                "0",
-                100,
-                true
-            );
+            return new VipSummary(current.level(), current.name(), format(normalized), "", "", "0", 100, true);
         }
-
         BigDecimal currentThreshold = current.threshold();
         BigDecimal nextThreshold = next.threshold();
         BigDecimal span = nextThreshold.subtract(currentThreshold).max(BigDecimal.ONE);
-        BigDecimal gainedInTier = normalizedPoints.subtract(currentThreshold).max(BigDecimal.ZERO);
-        int progress = gainedInTier.multiply(new BigDecimal("100")).divide(span, 0, RoundingMode.DOWN).intValue();
-        progress = Math.max(0, Math.min(99, progress));
-        BigDecimal remaining = nextThreshold.subtract(normalizedPoints).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-
+        BigDecimal gained = normalized.subtract(currentThreshold).max(BigDecimal.ZERO);
+        int progress = gained.multiply(new BigDecimal("100")).divide(span, 0, RoundingMode.DOWN).intValue();
+        BigDecimal remaining = nextThreshold.subtract(normalized).max(BigDecimal.ZERO);
         return new VipSummary(
             current.level(),
             current.name(),
-            formatPoints(normalizedPoints),
+            format(normalized),
             next.level(),
-            formatPoints(nextThreshold),
-            formatPoints(remaining),
-            progress,
+            format(nextThreshold),
+            format(remaining),
+            Math.max(0, Math.min(99, progress)),
             false
         );
     }
 
-    private BigDecimal pointsFromOrder(TradeOrderEntity order) {
-        BigDecimal faceValuePoints = amountFromFaceValue(order.getFaceValue());
-        if (faceValuePoints.compareTo(BigDecimal.ZERO) > 0) {
-            return faceValuePoints;
+    private VipTier tierFor(BigDecimal volume, boolean hasCompletedTrade) {
+        if (!hasCompletedTrade) {
+            return new VipTier("VIP0", "New", BigDecimal.ZERO);
         }
-        return firstAmount(order.getPayoutAmount());
-    }
-
-    private BigDecimal amountFromFaceValue(String value) {
-        BigDecimal amount = firstAmount(value);
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            return BigDecimal.ZERO;
-        }
-        int quantity = 1;
-        Matcher quantityMatcher = QUANTITY_PATTERN.matcher(value == null ? "" : value);
-        if (quantityMatcher.find()) {
-            try {
-                quantity = Math.max(1, Integer.parseInt(quantityMatcher.group(1)));
-            } catch (NumberFormatException ignored) {
-                quantity = 1;
-            }
-        }
-        return amount.multiply(new BigDecimal(quantity));
-    }
-
-    private BigDecimal firstAmount(String value) {
-        if (!StringUtils.hasText(value)) {
-            return BigDecimal.ZERO;
-        }
-        Matcher matcher = NUMBER_PATTERN.matcher(value.replace(",", ""));
-        if (!matcher.find()) {
-            return BigDecimal.ZERO;
-        }
-        try {
-            return new BigDecimal(matcher.group(1)).setScale(2, RoundingMode.HALF_UP);
-        } catch (NumberFormatException exception) {
-            return BigDecimal.ZERO;
-        }
-    }
-
-    private VipTier tierFor(BigDecimal points) {
         VipTier selected = TIERS.get(0);
         for (VipTier tier : TIERS) {
-            if (points.compareTo(tier.threshold()) >= 0) {
+            if (volume.compareTo(tier.threshold()) >= 0) {
                 selected = tier;
             }
         }
@@ -175,14 +144,15 @@ public class VipService {
 
     private VipTier nextTier(VipTier current) {
         int index = TIERS.indexOf(current);
-        if (index < 0 || index + 1 >= TIERS.size()) {
-            return null;
-        }
-        return TIERS.get(index + 1);
+        return index < 0 || index + 1 >= TIERS.size() ? null : TIERS.get(index + 1);
     }
 
-    private String formatPoints(BigDecimal value) {
-        return POINT_FORMAT.format(value == null ? BigDecimal.ZERO : value);
+    private BigDecimal money(BigDecimal value) {
+        return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String format(BigDecimal value) {
+        return USD_FORMAT.format(value == null ? BigDecimal.ZERO : value);
     }
 
     private record VipTier(String level, String name, BigDecimal threshold) {

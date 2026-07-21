@@ -1,6 +1,7 @@
 package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.entity.LotteryDrawRecordEntity;
+import com.cardnova.giftchat.entity.LotteryChanceEntity;
 import com.cardnova.giftchat.entity.LotteryEligibilityResetEntity;
 import com.cardnova.giftchat.entity.LotteryPrizeEntity;
 import com.cardnova.giftchat.entity.CurrencyExchangeRateEntity;
@@ -11,6 +12,7 @@ import com.cardnova.giftchat.model.LotteryPrizeItem;
 import com.cardnova.giftchat.model.LotteryRecordItem;
 import com.cardnova.giftchat.model.LotteryWinnerItem;
 import com.cardnova.giftchat.repository.LotteryDrawRecordRepository;
+import com.cardnova.giftchat.repository.LotteryChanceRepository;
 import com.cardnova.giftchat.repository.LotteryEligibilityResetRepository;
 import com.cardnova.giftchat.repository.LotteryPrizeRepository;
 import com.cardnova.giftchat.repository.UserRepository;
@@ -25,6 +27,7 @@ import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.WeekFields;
 import java.util.List;
@@ -37,11 +40,11 @@ import java.util.UUID;
 public class LotteryService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final DateTimeFormatter DAY_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final Set<String> FULFILLMENT_STATUSES = Set.of("PENDING", "PROCESSING", "FULFILLED", "CANCELED");
     private static final BigDecimal MAX_NGN_CASH_PRIZE = BigDecimal.valueOf(500);
 
     private final LotteryPrizeRepository lotteryPrizeRepository;
+    private final LotteryChanceRepository lotteryChanceRepository;
     private final LotteryDrawRecordRepository lotteryDrawRecordRepository;
     private final LotteryEligibilityResetRepository lotteryEligibilityResetRepository;
     private final CurrentUserService currentUserService;
@@ -53,6 +56,7 @@ public class LotteryService {
 
     public LotteryService(
         LotteryPrizeRepository lotteryPrizeRepository,
+        LotteryChanceRepository lotteryChanceRepository,
         LotteryDrawRecordRepository lotteryDrawRecordRepository,
         LotteryEligibilityResetRepository lotteryEligibilityResetRepository,
         CurrentUserService currentUserService,
@@ -62,6 +66,7 @@ public class LotteryService {
         CountryCodeService countryCodeService
     ) {
         this.lotteryPrizeRepository = lotteryPrizeRepository;
+        this.lotteryChanceRepository = lotteryChanceRepository;
         this.lotteryDrawRecordRepository = lotteryDrawRecordRepository;
         this.lotteryEligibilityResetRepository = lotteryEligibilityResetRepository;
         this.currentUserService = currentUserService;
@@ -71,28 +76,33 @@ public class LotteryService {
         this.countryCodeService = countryCodeService;
     }
 
+    @Transactional
     public LotteryEligibility currentEligibility() {
-        UserEntity currentUser = currentUserService.getCurrentUser();
+        UserEntity currentUser = lockUser(currentUserService.getCurrentUser().getId());
         return eligibilityFor(currentUser, LocalDateTime.now());
     }
 
     @Transactional
     public LotteryDrawResult spin() {
-        UserEntity currentUser = currentUserService.getCurrentUser();
+        UserEntity currentUser = lockUser(currentUserService.getCurrentUser().getId());
         LocalDateTime now = LocalDateTime.now();
         LotteryEligibility eligibility = eligibilityFor(currentUser, now);
         if (!eligibility.eligible()) {
             throw new IllegalArgumentException(eligibility.message());
         }
 
+        LotteryChanceEntity chance = lotteryChanceRepository
+            .findFirstByUser_IdAndConsumedAtIsNullOrderByGrantedAtAsc(currentUser.getId())
+            .orElseThrow(() -> new IllegalArgumentException("No lottery chance is available."));
         LotteryPrizeEntity prize = choosePrize();
         LotteryDrawRecordEntity record = new LotteryDrawRecordEntity();
         record.setId(UUID.randomUUID().toString());
         record.setUser(currentUser);
         record.setVipLevel(eligibility.vipLevel());
         record.setPrize(prize);
-        record.setPeriodType(eligibility.periodType());
-        record.setPeriodKey(eligibility.periodKey());
+        record.setLotteryChance(chance);
+        record.setPeriodType(chance.getPeriodType());
+        record.setPeriodKey(chance.getPeriodKey());
         record.setDrawnAt(now);
         record.setFulfillmentStatus("PENDING");
         if ("CASH".equalsIgnoreCase(prize.getPrizeType()) && prize.getBaseAmountUsd() != null) {
@@ -105,6 +115,8 @@ public class LotteryService {
 
         try {
             LotteryDrawRecordEntity saved = lotteryDrawRecordRepository.saveAndFlush(record);
+            chance.setConsumedAt(now);
+            lotteryChanceRepository.save(chance);
             return new LotteryDrawResult(
                 eligibilityFor(currentUser, now),
                 toPrizeItem(prize, currentUser),
@@ -168,7 +180,7 @@ public class LotteryService {
     public boolean resetUserEligibility(String userId, String reason) {
         UserEntity currentUser = currentUserService.getCurrentUser();
         currentUserService.requireAdmin(currentUser);
-        UserEntity targetUser = userRepository.findById(userId)
+        UserEntity targetUser = userRepository.findByIdForUpdate(userId)
             .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         LotteryEligibilityResetEntity reset = new LotteryEligibilityResetEntity();
@@ -178,65 +190,150 @@ public class LotteryService {
         reset.setReason(reason == null ? "" : reason.trim());
         reset.setCreatedAt(LocalDateTime.now());
         lotteryEligibilityResetRepository.save(reset);
+        grantChance(
+            targetUser,
+            "ADMIN_RESET:" + reset.getId(),
+            "ADMIN_RESET",
+            vipService.levelForUser(targetUser.getId()),
+            "RESET",
+            reset.getId().replace("-", "")
+        );
         return true;
     }
 
     private LotteryEligibility eligibilityFor(UserEntity user, LocalDateTime now) {
         String vipLevel = vipService.levelForUser(user.getId());
-        Period period = periodFor(vipLevel, now);
-        Period effectivePeriod = resetPeriodIfAvailable(user, period);
-        long drawCount = lotteryDrawRecordRepository.countByUser_IdAndPeriodTypeAndPeriodKey(
-            user.getId(),
-            effectivePeriod.type(),
-            effectivePeriod.key()
-        );
-        boolean eligible = drawCount == 0;
-        String nextAvailableAt = eligible ? "" : nextAvailableAt(period, now);
-        String message = eligible ? "Lottery chance available." : "Next chance available at " + nextAvailableAt;
+        ensureChances(user, vipLevel, now);
+        LotteryChanceEntity available = lotteryChanceRepository
+            .findFirstByUser_IdAndConsumedAtIsNullOrderByGrantedAtAsc(user.getId())
+            .orElse(null);
+        long availableChances = lotteryChanceRepository.countByUser_IdAndConsumedAtIsNull(user.getId());
+        Period currentPeriod = periodFor(vipLevel, now);
+        String periodType = available == null
+            ? currentPeriod == null ? "ONCE" : currentPeriod.type()
+            : available.getPeriodType();
+        String periodKey = available == null
+            ? currentPeriod == null ? vipLevel : currentPeriod.key()
+            : available.getPeriodKey();
+        long drawCount = lotteryDrawRecordRepository.countByUser_IdAndPeriodTypeAndPeriodKey(user.getId(), periodType, periodKey);
+        boolean eligible = availableChances > 0;
+        String nextAvailableAt = eligible ? "" : nextAvailableAt(currentPeriod, now);
+        String message = eligible
+            ? availableChances + " lottery chance" + (availableChances == 1 ? "" : "s") + " available."
+            : "Next chance available at " + nextAvailableAt;
         return new LotteryEligibility(
             vipLevel,
             eligible,
-            effectivePeriod.type(),
-            effectivePeriod.key(),
+            periodType,
+            periodKey,
             drawCount,
+            availableChances,
             nextAvailableAt,
             message
         );
     }
 
-    private Period resetPeriodIfAvailable(UserEntity user, Period basePeriod) {
-        LotteryDrawRecordEntity latestDraw = lotteryDrawRecordRepository.findFirstByUser_IdOrderByDrawnAtDesc(user.getId()).orElse(null);
-        LotteryEligibilityResetEntity latestReset = lotteryEligibilityResetRepository.findFirstByUser_IdOrderByCreatedAtDesc(user.getId()).orElse(null);
-        if (latestDraw == null || latestReset == null || !latestReset.getCreatedAt().isAfter(latestDraw.getDrawnAt())) {
-            return basePeriod;
+    private void ensureChances(UserEntity user, String vipLevel, LocalDateTime now) {
+        grantChance(user, "WELCOME:" + user.getId(), "WELCOME", "VIP0", "ONCE", "WELCOME");
+        if (vipWeight(vipLevel) >= 1 && vipService.hasCompletedTrade(user.getId())) {
+            grantChance(user, "VIP1_UPGRADE:" + user.getId(), "VIP_UPGRADE", "VIP1", "ONCE", "VIP1-UPGRADE");
         }
-        return new Period(basePeriod.type(), "RESET-" + latestReset.getId().replace("-", "").substring(0, 16));
+        Period period = periodFor(vipLevel, now);
+        if (period != null) {
+            grantChance(
+                user,
+                "VIP_PERIOD:" + user.getId() + ":" + vipLevel + ":" + period.type() + ":" + period.key(),
+                "VIP_PERIOD",
+                vipLevel,
+                period.type(),
+                period.key()
+            );
+        }
+        LotteryEligibilityResetEntity latestReset = lotteryEligibilityResetRepository.findFirstByUser_IdOrderByCreatedAtDesc(user.getId()).orElse(null);
+        if (latestReset != null) {
+            grantChance(
+                user,
+                "ADMIN_RESET:" + latestReset.getId(),
+                "ADMIN_RESET",
+                vipLevel,
+                "RESET",
+                latestReset.getId().replace("-", "")
+            );
+        }
     }
 
     private Period periodFor(String vipLevel, LocalDateTime now) {
-        String normalized = vipLevel == null ? "VIP1" : vipLevel.toUpperCase(Locale.ROOT);
+        String normalized = vipLevel == null ? "VIP0" : vipLevel.toUpperCase(Locale.ROOT);
         if ("VIP2".equals(normalized)) {
+            return new Period("MONTH", YearMonth.from(now).toString());
+        }
+        if ("VIP3".equals(normalized)) {
+            String half = now.getDayOfMonth() <= 15 ? "H1" : "H2";
+            return new Period("HALF_MONTH", YearMonth.from(now) + "-" + half);
+        }
+        if ("VIP4".equals(normalized) || "VIP5".equals(normalized)) {
             WeekFields weekFields = WeekFields.ISO;
             LocalDate date = now.toLocalDate();
             int week = date.get(weekFields.weekOfWeekBasedYear());
             int year = date.get(weekFields.weekBasedYear());
             return new Period("WEEK", "%04d-W%02d".formatted(year, week));
         }
-        if ("VIP3".equals(normalized) || "VIP4".equals(normalized)) {
-            return new Period("DAY", DAY_FORMATTER.format(now.toLocalDate()));
-        }
-        return new Period("ONCE", "WELCOME");
+        return null;
     }
 
     private String nextAvailableAt(Period basePeriod, LocalDateTime now) {
+        if (basePeriod == null) {
+            return "after the next VIP upgrade or admin reset";
+        }
+        if ("MONTH".equals(basePeriod.type())) {
+            return TIME_FORMATTER.format(YearMonth.from(now).plusMonths(1).atDay(1).atStartOfDay());
+        }
+        if ("HALF_MONTH".equals(basePeriod.type())) {
+            LocalDate next = now.getDayOfMonth() <= 15
+                ? now.toLocalDate().withDayOfMonth(16)
+                : YearMonth.from(now).plusMonths(1).atDay(1);
+            return TIME_FORMATTER.format(next.atStartOfDay());
+        }
         if ("WEEK".equals(basePeriod.type())) {
             LocalDate nextMonday = now.toLocalDate().with(DayOfWeek.MONDAY).plusWeeks(1);
             return TIME_FORMATTER.format(nextMonday.atStartOfDay());
         }
-        if ("DAY".equals(basePeriod.type())) {
-            return TIME_FORMATTER.format(now.toLocalDate().plusDays(1).atStartOfDay());
+        return "after the next VIP upgrade or admin reset";
+    }
+
+    private void grantChance(
+        UserEntity user,
+        String sourceKey,
+        String sourceType,
+        String vipLevel,
+        String periodType,
+        String periodKey
+    ) {
+        if (lotteryChanceRepository.existsBySourceKey(sourceKey)) {
+            return;
         }
-        return "After VIP upgrade or admin reset";
+        LotteryChanceEntity chance = new LotteryChanceEntity();
+        chance.setId(UUID.randomUUID().toString());
+        chance.setUser(user);
+        chance.setSourceKey(sourceKey);
+        chance.setSourceType(sourceType);
+        chance.setVipLevel(vipLevel);
+        chance.setPeriodType(periodType);
+        chance.setPeriodKey(periodKey);
+        chance.setGrantedAt(LocalDateTime.now());
+        lotteryChanceRepository.save(chance);
+    }
+
+    private int vipWeight(String vipLevel) {
+        if (vipLevel == null || !vipLevel.toUpperCase(Locale.ROOT).matches("VIP[0-5]")) {
+            return 0;
+        }
+        return Integer.parseInt(vipLevel.substring(3));
+    }
+
+    private UserEntity lockUser(String userId) {
+        return userRepository.findByIdForUpdate(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
     }
 
     private LotteryPrizeEntity choosePrize() {

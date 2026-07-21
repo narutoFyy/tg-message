@@ -29,6 +29,10 @@ public class LotteryDrawRecordEntity {
     @JoinColumn(name = "prize_id", nullable = false)
     private LotteryPrizeEntity prize;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lottery_chance_id")
+    private LotteryChanceEntity lotteryChance;
+
     @Column(name = "period_type", nullable = false, length = 16)
     private String periodType;
 
@@ -91,6 +95,9 @@ public class LotteryDrawRecordEntity {
     public void setPrize(LotteryPrizeEntity prize) {
         this.prize = prize;
     }
+
+    public LotteryChanceEntity getLotteryChance() { return lotteryChance; }
+    public void setLotteryChance(LotteryChanceEntity lotteryChance) { this.lotteryChance = lotteryChance; }
 
     public String getPeriodType() {
         return periodType;

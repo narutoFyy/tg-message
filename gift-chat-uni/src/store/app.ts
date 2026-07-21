@@ -8,6 +8,7 @@ import type {
   CurrencyExchangeRateItem,
   FriendProfile,
   FriendRequest,
+  GiftCardFaceCurrency,
   HiddenRecordItem,
   LoanApplicationItem,
   LotteryDrawResult,
@@ -31,6 +32,8 @@ import type {
   VideoSessionStatusEvent,
   VideoSessionItem,
   VipSummary,
+  VipBenefitClaimItem,
+  VipBenefitSummary,
   WithdrawalItem
 } from '@/types'
 import {
@@ -75,6 +78,12 @@ import {
   fetchVideoSessions,
   fetchWithdrawals,
   fetchVipSummary,
+  fetchVipBenefitSummary,
+  fetchMyVipBenefitClaims,
+  setVipBirthday as setVipBirthdayRequest,
+  claimVipBirthdayReward as claimVipBirthdayRewardRequest,
+  requestVipSupportRedPacket as requestVipSupportRedPacketRequest,
+  claimVipHolidayReward as claimVipHolidayRewardRequest,
   getStoredSessionUser,
   hideAccountRecord,
   loginWithPassword,
@@ -124,6 +133,8 @@ const state = reactive({
   transactions: [] as TransactionItem[],
   recentCompletedTransactions: [] as CompletedTransactionFeedItem[],
   vipSummary: null as VipSummary | null,
+  vipBenefits: null as VipBenefitSummary | null,
+  vipBenefitClaims: [] as VipBenefitClaimItem[],
   lotteryEligibility: null as LotteryEligibility | null,
   lotteryWinners: [] as LotteryWinnerItem[],
   lotteryRecords: [] as LotteryRecordItem[],
@@ -396,6 +407,8 @@ export function useAppStore() {
         videoSessions,
         registrationBonus,
         vipSummary,
+        vipBenefits,
+        vipBenefitClaims,
         lotteryEligibility,
         lotteryWinners,
         lotteryRecords,
@@ -414,6 +427,8 @@ export function useAppStore() {
         fetchVideoSessions(),
         fetchMyRegistrationBonus(),
         fetchVipSummary(),
+        fetchVipBenefitSummary(),
+        fetchMyVipBenefitClaims(),
         fetchLotteryEligibility(),
         fetchLotteryWinners(),
         fetchMyLotteryRecords(),
@@ -436,6 +451,8 @@ export function useAppStore() {
       state.videoSessions = videoSessions
       state.registrationBonusRecord = registrationBonus
       state.vipSummary = vipSummary
+      state.vipBenefits = vipBenefits
+      state.vipBenefitClaims = vipBenefitClaims
       state.lotteryEligibility = lotteryEligibility
       state.lotteryWinners = lotteryWinners
       state.lotteryRecords = lotteryRecords
@@ -571,7 +588,7 @@ export function useAppStore() {
     }
   }
 
-  async function addRate(payload: { cardName: string; cardCode?: string | null; region: string; rate: string; localPayoutPerUsd?: number }) {
+  async function addRate(payload: { cardName: string; cardCode?: string | null; region: string; rate: string; localPayoutPerUsd?: number; quotes: Partial<Record<GiftCardFaceCurrency, number>>; imageUrl?: string }) {
     const rate = await createRateRequest(payload)
     state.rates.unshift(rate)
     return rate
@@ -586,7 +603,7 @@ export function useAppStore() {
     return updated
   }
 
-  async function updateRate(rateId: string, payload: { cardName: string; cardCode?: string | null; region: string; rate: string; localPayoutPerUsd?: number }) {
+  async function updateRate(rateId: string, payload: { cardName: string; cardCode?: string | null; region: string; rate: string; localPayoutPerUsd?: number; quotes: Partial<Record<GiftCardFaceCurrency, number>>; imageUrl?: string }) {
     const updated = await updateRateRequest(rateId, payload)
     const index = state.rates.findIndex((item) => item.id === rateId)
     if (index >= 0) {
@@ -996,6 +1013,36 @@ export function useAppStore() {
     return summary
   }
 
+  async function refreshVipBenefits() {
+    const [summary, claims] = await Promise.all([fetchVipBenefitSummary(), fetchMyVipBenefitClaims()])
+    state.vipBenefits = summary
+    state.vipBenefitClaims = claims
+    return summary
+  }
+
+  async function setVipBirthday(birthDate: string) {
+    state.vipBenefits = await setVipBirthdayRequest(birthDate)
+    return state.vipBenefits
+  }
+
+  async function claimVipBirthdayReward() {
+    const claim = await claimVipBirthdayRewardRequest()
+    await Promise.all([refreshVipBenefits(), refreshBalanceSummary()])
+    return claim
+  }
+
+  async function requestVipSupportRedPacket() {
+    const claim = await requestVipSupportRedPacketRequest()
+    await refreshVipBenefits()
+    return claim
+  }
+
+  async function claimVipHolidayReward(holidayId: string) {
+    const claim = await claimVipHolidayRewardRequest(holidayId)
+    await Promise.all([refreshVipBenefits(), refreshBalanceSummary()])
+    return claim
+  }
+
   async function refreshLotteryEligibility() {
     const eligibility = await fetchLotteryEligibility()
     state.lotteryEligibility = eligibility
@@ -1258,6 +1305,11 @@ export function useAppStore() {
     refreshBalanceSummary,
     refreshRegistrationBonus,
     refreshVipSummary,
+    refreshVipBenefits,
+    setVipBirthday,
+    claimVipBirthdayReward,
+    requestVipSupportRedPacket,
+    claimVipHolidayReward,
     refreshLotteryEligibility,
     refreshLotteryWinners,
     refreshLotteryRecords,

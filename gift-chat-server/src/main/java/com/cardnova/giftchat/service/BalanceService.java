@@ -34,6 +34,7 @@ public class BalanceService {
     private final WithdrawalRequestRepository withdrawalRequestRepository;
     private final ReferralRewardService referralRewardService;
     private final RegistrationBonusService registrationBonusService;
+    private final VipBenefitService vipBenefitService;
 
     public BalanceService(
         CurrentUserService currentUserService,
@@ -42,7 +43,8 @@ public class BalanceService {
         TradeOrderRepository tradeOrderRepository,
         WithdrawalRequestRepository withdrawalRequestRepository,
         ReferralRewardService referralRewardService,
-        RegistrationBonusService registrationBonusService
+        RegistrationBonusService registrationBonusService,
+        VipBenefitService vipBenefitService
     ) {
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
@@ -51,6 +53,7 @@ public class BalanceService {
         this.withdrawalRequestRepository = withdrawalRequestRepository;
         this.referralRewardService = referralRewardService;
         this.registrationBonusService = registrationBonusService;
+        this.vipBenefitService = vipBenefitService;
     }
 
     public BalanceSummary summary() {
@@ -136,10 +139,12 @@ public class BalanceService {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal rewards = referralRewardService.availableRewardsForUsers(userIds);
         BigDecimal registrationBonuses = registrationBonusService.availableBonusesForUsers(userIds);
+        BigDecimal vipBenefits = vipBenefitService.availableCreditsForUsers(userIds);
 
         BigDecimal available = completed
             .add(rewards)
             .add(registrationBonuses)
+            .add(vipBenefits)
             .subtract(withdrawn)
             .subtract(pendingWithdrawal)
             .max(BigDecimal.ZERO);

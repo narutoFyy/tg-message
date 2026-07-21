@@ -82,7 +82,7 @@
           <view>
             <text class="row-title">{{ user.username }}</text>
             <text class="row-meta">{{ user.phone || '无手机号' }} / {{ user.email || '无邮箱' }}</text>
-            <text class="row-meta">{{ user.role }} / {{ user.status }} / {{ user.vipLevel }} / {{ user.vipPoints }} pts / {{ user.createdAt }}</text>
+            <text class="row-meta">{{ user.role }} / {{ user.status }} / {{ user.vipLevel }} / USD {{ user.vipPoints }} completed / {{ user.createdAt }}</text>
           </view>
           <text :class="['status-pill', user.blacklisted ? 'paused' : 'active']">
             {{ user.blacklisted ? '已拉黑' : '正常' }}
@@ -270,6 +270,10 @@
 
       <view v-if="activeTab === 'growth'" class="panel growth-summary-panel">
         <view class="growth-stat">
+          <text class="row-meta">VIP0</text>
+          <text class="balance-number">{{ vipCount('VIP0') }}</text>
+        </view>
+        <view class="growth-stat">
           <text class="row-meta">VIP1</text>
           <text class="balance-number">{{ vipCount('VIP1') }}</text>
         </view>
@@ -284,6 +288,10 @@
         <view class="growth-stat">
           <text class="row-meta">VIP4</text>
           <text class="balance-number">{{ vipCount('VIP4') }}</text>
+        </view>
+        <view class="growth-stat">
+          <text class="row-meta">VIP5</text>
+          <text class="balance-number">{{ vipCount('VIP5') }}</text>
         </view>
       </view>
 
@@ -306,12 +314,54 @@
           <view>
             <text class="row-title">{{ user.username }}</text>
             <text class="row-meta">{{ user.phone || 'No phone' }} / {{ user.email || 'No email' }}</text>
-            <text class="row-meta">{{ user.vipLevel }} / {{ user.vipPoints }} pts / {{ user.status }}</text>
+            <text class="row-meta">{{ user.vipLevel }} / USD {{ user.vipPoints }} completed / {{ user.status }}</text>
           </view>
-          <button class="ghost-button mini-button" @click="resetLotteryChance(user.id)">
-            Reset Draw
-          </button>
+          <view class="growth-user-actions">
+            <input v-model="birthdayDrafts[user.id]" class="field-input birthday-admin-input" placeholder="YYYY-MM-DD" />
+            <button class="ghost-button mini-button" @click="saveUserBirthday(user.id)">Save Birthday</button>
+            <button class="ghost-button mini-button" @click="resetLotteryChance(user.id)">Add Draw</button>
+          </view>
         </view>
+      </view>
+
+      <view v-if="activeTab === 'growth'" class="panel">
+        <view class="section-head-row">
+          <view><text class="section-title">VIP cash benefit settings</text><text class="row-meta">Amounts are maintained in NGN and converted to each user's bound currency.</text></view>
+          <switch :checked="benefitConfigForm.supportRewardEnabled" color="#002FA7" @change="handleSupportRewardToggle" />
+        </view>
+        <view class="benefit-config-grid">
+          <view><text class="row-meta">VIP4 monthly support red packet (NGN)</text><input v-model="benefitConfigForm.vip4SupportAmountNgn" class="field-input" type="number" /></view>
+          <view><text class="row-meta">VIP5 monthly support red packet (NGN)</text><input v-model="benefitConfigForm.vip5SupportAmountNgn" class="field-input" type="number" /></view>
+        </view>
+        <button class="primary-button benefit-save-button" @click="saveBenefitConfig">Save benefit settings</button>
+      </view>
+
+      <view v-if="activeTab === 'growth'" class="panel">
+        <view class="section-head-row"><view><text class="section-title">VIP5 country holidays</text><text class="row-meta">One reward per configured holiday and bound country.</text></view><button class="ghost-button mini-button" @click="resetHolidayForm">New holiday</button></view>
+        <view class="holiday-form">
+          <input v-model="holidayForm.countryCode" class="field-input" placeholder="Country code, e.g. NG" />
+          <input v-model="holidayForm.holidayCode" class="field-input" placeholder="Unique code, e.g. independence-day" />
+          <input v-model="holidayForm.holidayName" class="field-input" placeholder="Holiday name" />
+          <input v-model="holidayForm.holidayDate" class="field-input" placeholder="YYYY-MM-DD" />
+          <input v-model="holidayForm.rewardAmount" class="field-input" type="number" placeholder="Reward amount in country currency" />
+          <label class="holiday-enabled"><switch :checked="holidayForm.enabled" color="#002FA7" @change="handleHolidayEnabledToggle" /><text>Enabled</text></label>
+        </view>
+        <button class="primary-button benefit-save-button" @click="saveHoliday">{{ holidayForm.id ? 'Update holiday' : 'Add holiday' }}</button>
+        <view v-for="holiday in vipHolidays" :key="holiday.id" class="list-row">
+          <view><text class="row-title">{{ holiday.holidayName }}</text><text class="row-meta">{{ holiday.countryCode }} / {{ holiday.holidayDate }} / {{ holiday.rewardAmount }} {{ holiday.currencyCode }}</text></view>
+          <view class="row-actions"><text :class="['status-pill', holiday.enabled ? 'active' : 'paused']">{{ holiday.enabled ? 'Enabled' : 'Disabled' }}</text><button class="ghost-button mini-button" @click="editHoliday(holiday)">Edit</button></view>
+        </view>
+        <text v-if="vipHolidays.length === 0" class="row-meta">No country holidays configured.</text>
+      </view>
+
+      <view v-if="activeTab === 'growth'" class="panel">
+        <view class="section-head-row"><view><text class="section-title">Benefit claim review</text><text class="row-meta">Support red packets enter the wallet only after approval.</text></view><text class="section-count">{{ pendingBenefitClaims.length }}</text></view>
+        <view v-for="claim in vipBenefitClaims" :key="claim.id" class="list-row">
+          <view><text class="row-title">{{ claim.username }} / {{ benefitTypeLabel(claim.benefitType) }}</text><text class="row-meta">{{ claim.vipLevel }} / {{ claim.localAmount }} {{ claim.currencyCode }} / {{ claim.periodKey }}</text><text v-if="claim.reviewNote" class="row-meta">{{ claim.reviewNote }}</text></view>
+          <view v-if="claim.status === 'pending'" class="row-actions"><button class="ghost-button mini-button" @click="reviewBenefit(claim.id, 'rejected')">Reject</button><button class="primary-button mini-button" @click="reviewBenefit(claim.id, 'approved')">Approve</button></view>
+          <text v-else :class="['status-pill', claim.status === 'approved' ? 'active' : 'danger']">{{ claim.status }}</text>
+        </view>
+        <text v-if="vipBenefitClaims.length === 0" class="row-meta">No benefit claims yet.</text>
       </view>
 
       <view v-if="activeTab === 'growth'" class="panel">
@@ -623,6 +673,9 @@ import type {
   RegistrationBonusRecordItem,
   SupportConversationItem,
   TransactionItem,
+  VipBenefitClaimItem,
+  VipBenefitConfigItem,
+  VipHolidayRewardItem,
   WithdrawalItem
 } from '@/types'
 import {
@@ -636,6 +689,8 @@ import {
   fetchAdminLotteryRecords,
   fetchAdminSupportConversations,
   fetchAdminUsers,
+  fetchAdminVipBenefitConfig,
+  fetchAdminVipHolidays,
   fetchAgents,
   fetchBroadcasts,
   fetchLoans,
@@ -648,10 +703,13 @@ import {
   fetchLotteryPrizes,
   fetchTransactions,
   fetchWithdrawals,
+  fetchStaffVipBenefitClaims,
   resetAdminLotteryEligibility,
   updateAgentStatus,
   updateAgentWelcomeMessage,
   updateAdminLotteryRecordStatus,
+  updateAdminUserBirthday,
+  updateAdminVipBenefitConfig,
   updateLoanStatus,
   updateReferralRewardConfig,
   updateRegistrationBonusConfig,
@@ -659,7 +717,9 @@ import {
   updateLotteryFulfillmentStatus,
   updateWithdrawalStatus,
   uploadImage,
-  uploadVideo
+  uploadVideo,
+  reviewVipBenefitClaim,
+  saveAdminVipHoliday
 } from '@/utils/api'
 import { useAppStore } from '@/store/app'
 
@@ -680,6 +740,9 @@ const bankAccountRisks = ref<BankAccountRiskMatch[]>([])
 const loans = ref<LoanApplicationItem[]>([])
 const lotteryRecords = ref<LotteryRecordItem[]>([])
 const lotteryPrizes = ref<LotteryPrizeItem[]>([])
+const vipBenefitConfig = ref<VipBenefitConfigItem | null>(null)
+const vipHolidays = ref<VipHolidayRewardItem[]>([])
+const vipBenefitClaims = ref<VipBenefitClaimItem[]>([])
 const referralRewardConfig = ref<ReferralRewardConfigItem | null>(null)
 const referralRewards = ref<ReferralRewardItem[]>([])
 const registrationBonusConfigs = ref<RegistrationBonusConfigItem[]>([])
@@ -690,6 +753,7 @@ const assignDrafts = reactive<Record<string, string>>({})
 const welcomeDrafts = reactive<Record<string, { content: string; enabled: boolean }>>({})
 const editingWelcomeAgentId = ref('')
 const loanReviewDrafts = reactive<Record<string, string>>({})
+const birthdayDrafts = reactive<Record<string, string>>({})
 const registrationBonusDrafts = reactive<Record<string, {
   countryName: string
   currencyCode: string
@@ -701,11 +765,16 @@ const broadcastTypes = ['text', 'image', 'video', 'voice', 'gif', 'link'] as con
 const adminBroadcastCountryOptions = ['+234', '+91', '+237', '+233', '+254']
 const lotteryStatuses = ['pending', 'processing', 'fulfilled', 'canceled']
 const vipRules = [
-  { level: 'VIP1', threshold: '0-19 pts', draw: 'One welcome draw' },
-  { level: 'VIP2', threshold: '20-99 pts', draw: 'One draw per week' },
-  { level: 'VIP3', threshold: '100-499 pts', draw: 'One draw per day' },
-  { level: 'VIP4', threshold: '500+ pts', draw: 'One draw per day' }
+  { level: 'VIP0', threshold: 'New account', draw: 'One permanent registration draw' },
+  { level: 'VIP1', threshold: 'First completed trade', draw: 'One permanent upgrade draw' },
+  { level: 'VIP2', threshold: 'USD 1,000 lifetime', draw: 'One draw each calendar month' },
+  { level: 'VIP3', threshold: 'USD 5,000 lifetime', draw: 'One draw per half-month' },
+  { level: 'VIP4', threshold: 'USD 10,000 lifetime', draw: 'One weekly draw, birthday reward, monthly support reward, loans' },
+  { level: 'VIP5', threshold: 'USD 50,000 lifetime', draw: 'One weekly draw, larger rewards, loans, country holidays' }
 ]
+
+const benefitConfigForm = reactive({ vip4SupportAmountNgn: '0', vip5SupportAmountNgn: '0', supportRewardEnabled: true })
+const holidayForm = reactive({ id: '', countryCode: '', holidayCode: '', holidayName: '', holidayDate: '', rewardAmount: '', enabled: true })
 
 const broadcastForm = reactive({
   content: '',
@@ -783,7 +852,10 @@ async function refreshAll() {
       nextRewards,
       nextRegistrationBonusConfigs,
       nextRegistrationBonusRecords,
-      nextNotifications
+      nextNotifications,
+      nextBenefitConfig,
+      nextVipHolidays,
+      nextVipBenefitClaims
     ] = await Promise.all([
       fetchAdminUsers(),
       fetchAgents(),
@@ -801,7 +873,10 @@ async function refreshAll() {
       fetchReferralRewards(),
       fetchRegistrationBonusConfigs(),
       fetchRegistrationBonusRecords(),
-      fetchNotifications()
+      fetchNotifications(),
+      fetchAdminVipBenefitConfig(),
+      fetchAdminVipHolidays(),
+      fetchStaffVipBenefitClaims()
     ])
     users.value = nextUsers
     agents.value = nextAgents
@@ -822,6 +897,10 @@ async function refreshAll() {
     applyRewardConfig(nextRewardConfig)
     applyRegistrationBonusConfigs(nextRegistrationBonusConfigs)
     notifications.value = nextNotifications
+    vipBenefitConfig.value = nextBenefitConfig
+    vipHolidays.value = nextVipHolidays
+    vipBenefitClaims.value = nextVipBenefitClaims
+    applyBenefitConfig(nextBenefitConfig)
     applyWelcomeDrafts(nextAgents)
     await store.refreshBalanceSummary().catch(() => {})
     nextConversations.forEach((conversation) => {
@@ -1059,13 +1138,112 @@ const userVipRows = computed(() => users.value
 const pendingLotteryCount = computed(() => lotteryRecords.value
   .filter(record => record.fulfillmentStatus === 'pending')
   .length)
+const pendingBenefitClaims = computed(() => vipBenefitClaims.value.filter(claim => claim.status === 'pending'))
 
 function vipCount(level: string) {
   return users.value.filter(user => user.role === 'USER' && user.vipLevel === level).length
 }
 
 function vipLevelWeight(level: string) {
-  return { VIP1: 1, VIP2: 2, VIP3: 3, VIP4: 4 }[level as 'VIP1' | 'VIP2' | 'VIP3' | 'VIP4'] || 0
+  return { VIP0: 0, VIP1: 1, VIP2: 2, VIP3: 3, VIP4: 4, VIP5: 5 }[level as 'VIP0' | 'VIP1' | 'VIP2' | 'VIP3' | 'VIP4' | 'VIP5'] || 0
+}
+
+function applyBenefitConfig(config: VipBenefitConfigItem) {
+  benefitConfigForm.vip4SupportAmountNgn = config.vip4SupportAmountNgn
+  benefitConfigForm.vip5SupportAmountNgn = config.vip5SupportAmountNgn
+  benefitConfigForm.supportRewardEnabled = config.supportRewardEnabled
+}
+
+function handleSupportRewardToggle(event: Event) {
+  benefitConfigForm.supportRewardEnabled = switchValue(event)
+}
+
+function handleHolidayEnabledToggle(event: Event) {
+  holidayForm.enabled = switchValue(event)
+}
+
+async function saveBenefitConfig() {
+  try {
+    const config = await updateAdminVipBenefitConfig({
+      vip4SupportAmountNgn: Number(benefitConfigForm.vip4SupportAmountNgn),
+      vip5SupportAmountNgn: Number(benefitConfigForm.vip5SupportAmountNgn),
+      supportRewardEnabled: benefitConfigForm.supportRewardEnabled
+    })
+    vipBenefitConfig.value = config
+    applyBenefitConfig(config)
+    notice.value = 'VIP benefit settings saved.'
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Benefit settings update failed'
+  }
+}
+
+function resetHolidayForm() {
+  Object.assign(holidayForm, { id: '', countryCode: '', holidayCode: '', holidayName: '', holidayDate: '', rewardAmount: '', enabled: true })
+}
+
+function editHoliday(holiday: VipHolidayRewardItem) {
+  Object.assign(holidayForm, {
+    id: holiday.id,
+    countryCode: holiday.countryCode,
+    holidayCode: holiday.holidayCode,
+    holidayName: holiday.holidayName,
+    holidayDate: holiday.holidayDate,
+    rewardAmount: holiday.rewardAmount,
+    enabled: holiday.enabled
+  })
+}
+
+async function saveHoliday() {
+  if (!holidayForm.countryCode.trim() || !holidayForm.holidayCode.trim() || !holidayForm.holidayName.trim() || !holidayForm.holidayDate.trim() || !holidayForm.rewardAmount.trim()) {
+    notice.value = 'Complete every holiday field.'
+    return
+  }
+  try {
+    await saveAdminVipHoliday({
+      id: holidayForm.id || undefined,
+      countryCode: holidayForm.countryCode.trim().toUpperCase(),
+      holidayCode: holidayForm.holidayCode.trim(),
+      holidayName: holidayForm.holidayName.trim(),
+      holidayDate: holidayForm.holidayDate.trim(),
+      rewardAmount: Number(holidayForm.rewardAmount),
+      enabled: holidayForm.enabled
+    })
+    vipHolidays.value = await fetchAdminVipHolidays()
+    resetHolidayForm()
+    notice.value = 'Country holiday saved.'
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Holiday save failed'
+  }
+}
+
+async function reviewBenefit(claimId: string, status: 'approved' | 'rejected') {
+  try {
+    const updated = await reviewVipBenefitClaim(claimId, status, status === 'approved' ? 'Approved in admin console' : 'Rejected in admin console')
+    const index = vipBenefitClaims.value.findIndex(claim => claim.id === claimId)
+    if (index >= 0) vipBenefitClaims.value[index] = updated
+    notice.value = `Benefit claim ${status}.`
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Benefit review failed'
+  }
+}
+
+function benefitTypeLabel(type: string) {
+  return { birthday: 'Birthday reward', support_red_packet: 'Support red packet', holiday: 'Holiday reward' }[type] || type
+}
+
+async function saveUserBirthday(userId: string) {
+  const birthDate = (birthdayDrafts[userId] || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+    notice.value = 'Enter the birthday as YYYY-MM-DD.'
+    return
+  }
+  try {
+    await updateAdminUserBirthday(userId, birthDate)
+    birthdayDrafts[userId] = ''
+    notice.value = 'User birthday updated.'
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Birthday update failed'
+  }
 }
 
 function lotteryStatusClass(status: string) {
@@ -1127,7 +1305,7 @@ function resetLotteryChance(userId: string) {
   const user = users.value.find(item => item.id === userId)
   uni.showModal({
     title: 'Reset draw chance',
-    content: `Allow ${user?.username || 'this user'} to draw again for the current VIP period?`,
+    content: `Add one manual draw chance for ${user?.username || 'this user'}?`,
     confirmText: 'Reset',
     cancelText: 'Cancel',
     success: async (result) => {
@@ -1477,6 +1655,45 @@ async function assignConversation(conversationId: string) {
   font-size: 25rpx;
 }
 
+.growth-user-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10rpx;
+  flex-wrap: wrap;
+}
+
+.birthday-admin-input {
+  width: 210rpx;
+  height: 66rpx;
+}
+
+.benefit-config-grid,
+.holiday-form {
+  margin-top: 18rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.holiday-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.holiday-enabled {
+  min-height: 74rpx;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  color: #68727d;
+  font-size: 23rpx;
+}
+
+.benefit-save-button {
+  width: 100%;
+  margin-top: 18rpx;
+}
+
 .last-message {
   margin-top: 12rpx;
   padding: 16rpx;
@@ -1720,6 +1937,21 @@ async function assignConversation(conversationId: string) {
 
   .bonus-config-grid {
     grid-template-columns: 1fr;
+  }
+
+  .benefit-config-grid,
+  .holiday-form {
+    grid-template-columns: 1fr;
+  }
+
+  .growth-user-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .birthday-admin-input,
+  .growth-user-actions .mini-button {
+    width: 100%;
   }
 
   .balance-grid {

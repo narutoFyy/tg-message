@@ -9,11 +9,11 @@
             <text class="title">Sell gift card</text>
           </view>
         </view>
-        <text class="rate-reference">{{ activeRate?.rate || 'Rate unavailable' }}</text>
+        <text class="rate-reference">{{ selectedRateReference }}</text>
       </view>
 
       <view class="card-picker tone-market">
-        <image class="card-icon" :src="cardLogoFor(activeRate?.cardCode, activeRate?.cardName || 'Razer Gold')" mode="aspectFit" />
+        <image class="card-icon" :src="activeRate?.imageUrl || cardLogoFor(activeRate?.cardCode, activeRate?.cardName || 'Razer Gold')" mode="aspectFit" />
         <view class="card-copy">
           <text class="card-name">{{ form.cardName }}</text>
           <text class="muted">Settles in {{ accountCountryName }} ({{ accountCurrencyCode }})</text>
@@ -120,12 +120,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { uploadImage } from '@/utils/api'
 import { cardLogoFor, uiIcons } from '@/utils/art'
-import type { TransactionItem } from '@/types'
+import type { GiftCardFaceCurrency, TransactionItem } from '@/types'
 
 const store = useAppStore()
 const notice = ref('')
@@ -137,11 +137,11 @@ const balanceText = ref('100')
 const quickAmounts = [50, 100, 200, 500]
 const cardTypes = ['Physical', 'Code', 'Horizontal Image', 'Whiteboard']
 const speeds = ['Fast', 'Slow']
-const cardCountries = ['AUD', 'USD', 'EUR', 'GBP']
+const faceCurrencyOrder: GiftCardFaceCurrency[] = ['USD', 'EUR', 'GBP', 'AUD']
 
 const form = reactive({
   cardName: 'Razer Gold',
-  cardCountry: 'AUD',
+  cardCountry: 'USD' as GiftCardFaceCurrency,
   settlementCountry: store.state.currentUser?.countryCode || store.state.selectedCountryCode,
   quantity: 1,
   cardType: 'Physical',
@@ -154,8 +154,13 @@ const accountCountryCode = computed(() => store.state.currentUser?.countryCode |
 const accountCountryName = computed(() => store.state.currentUser?.countryName || store.selectedCountry().name)
 const accountCurrencyCode = computed(() => store.state.currentUser?.currencyCode || 'USD')
 const accountCurrencySymbol = computed(() => store.state.currentUser?.currencySymbol || accountCurrencyCode.value)
-const accountRates = computed(() => store.state.rates.filter((rate) => rate.region === accountCountryCode.value))
+const accountRates = computed(() => store.state.rates.filter((rate) => rate.region === accountCountryCode.value && rate.status === 'active' && Boolean(rate.quotes.USD)))
 const activeRate = computed(() => accountRates.value.find((rate) => rate.id === rateId.value) || accountRates.value[0])
+const availableCardCurrencies = computed(() => faceCurrencyOrder.filter((currency) => Boolean(activeRate.value?.quotes[currency])))
+const selectedQuote = computed(() => activeRate.value?.quotes[form.cardCountry] || '')
+const selectedRateReference = computed(() => selectedQuote.value
+  ? `1 ${form.cardCountry} card = ${selectedQuote.value} ${accountCurrencyCode.value}`
+  : 'Rate unavailable')
 
 onLoad((query) => {
   rateId.value = typeof query?.rateId === 'string' ? query.rateId : ''
@@ -165,18 +170,15 @@ onShow(async () => {
   await store.bootstrap()
   form.settlementCountry = accountCountryCode.value
   if (activeRate.value) {
-    form.cardName = activeRate.value.cardName
-    form.settlementCountry = activeRate.value.region
+    syncActiveRate()
   }
 })
 
 const numericRate = computed(() => {
-  const structuredRate = Number(activeRate.value?.localPayoutPerUsd || '0')
-  if (structuredRate > 0) return structuredRate
-  const value = activeRate.value?.rate || ''
-  const digits = value.match(/[\d.]+(?=\s*$)|[\d.]+/g)
-  return Number(digits?.[digits.length - 1] || '0')
+  return Number(selectedQuote.value || '0')
 })
+
+watch(activeRate, () => syncActiveRate())
 
 const settlementAmount = computed(() => {
   const total = Number(balanceText.value || '0') * form.quantity * numericRate.value
@@ -193,12 +195,28 @@ function changeQuantity(delta: number) {
 }
 
 function chooseCardCountry() {
+  const currencies = availableCardCurrencies.value
+  if (!currencies.length) {
+    notice.value = 'No card currencies are configured for this rate.'
+    return
+  }
   uni.showActionSheet({
-    itemList: cardCountries,
+    itemList: currencies,
     success(result) {
-      form.cardCountry = cardCountries[result.tapIndex] || form.cardCountry
+      form.cardCountry = currencies[result.tapIndex] || form.cardCountry
     }
   })
+}
+
+function syncActiveRate() {
+  const rate = activeRate.value
+  if (!rate) return
+  form.cardName = rate.cardName
+  form.settlementCountry = rate.region
+  const currencies = availableCardCurrencies.value
+  if (!currencies.includes(form.cardCountry)) {
+    form.cardCountry = currencies.includes('USD') ? 'USD' : currencies[0] || 'USD'
+  }
 }
 
 function chooseCard() {
@@ -213,8 +231,7 @@ function chooseCard() {
       const rate = rates[result.tapIndex]
       if (!rate) return
       rateId.value = rate.id
-      form.cardName = rate.cardName
-      form.settlementCountry = rate.region
+      syncActiveRate()
     }
   })
 }
@@ -239,6 +256,10 @@ async function uploadVoucher() {
 async function confirmSell() {
   if (!activeRate.value) {
     notice.value = 'Choose an available card rate first.'
+    return
+  }
+  if (!selectedQuote.value || numericRate.value <= 0) {
+    notice.value = `${form.cardCountry} is not configured for this card.`
     return
   }
   try {
@@ -283,12 +304,12 @@ function buildSellCardDraft(transaction: TransactionItem) {
   return [
     `Sell order ${transaction.orderNo}`,
     `Card: ${form.cardName}`,
-    `Country: ${form.cardCountry}`,
+    `Card currency: ${form.cardCountry}`,
     `Settlement country: ${accountCountryName.value}`,
     `Face value: ${balanceText.value || '0'} ${form.cardCountry} x${form.quantity}`,
     `Type: ${form.cardType}`,
     `Speed: ${form.speed}`,
-    `Rate: ${transaction.businessRate ? `$1 ≈ ${transaction.businessRate} ${transaction.currencyCode}` : activeRate.value?.rate || '-'}`,
+    `Rate: 1 ${transaction.faceCurrencyCode || form.cardCountry} card = ${transaction.businessRate || selectedQuote.value} ${transaction.currencyCode || accountCurrencyCode.value}`,
     `Settlement: ${transaction.payoutAmount}`,
     form.cardData ? `Card data: ${form.cardData}` : '',
     form.voucherImageUrl ? 'Voucher: Image attached below' : ''

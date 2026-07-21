@@ -3,8 +3,16 @@ package com.cardnova.giftchat.service;
 import com.cardnova.giftchat.api.ConflictException;
 import com.cardnova.giftchat.dto.CreateRateRequest;
 import com.cardnova.giftchat.entity.GiftCardRateEntity;
+import com.cardnova.giftchat.entity.GiftCardRateQuoteEntity;
+import com.cardnova.giftchat.entity.GiftCardArtworkEntity;
+import com.cardnova.giftchat.entity.UploadAssetEntity;
 import com.cardnova.giftchat.model.RateItem;
+import com.cardnova.giftchat.repository.GiftCardArtworkRepository;
 import com.cardnova.giftchat.repository.GiftCardRateRepository;
+import com.cardnova.giftchat.repository.GiftCardRateQuoteRepository;
+import com.cardnova.giftchat.repository.UploadAssetRepository;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -13,6 +21,7 @@ import java.time.format.DateTimeFormatter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Locale;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
@@ -26,6 +35,7 @@ public class PersistentRateService {
 
     private static final DateTimeFormatter RATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final Set<String> ALLOWED_STATUSES = Set.of("active", "paused");
+    private static final List<String> SUPPORTED_FACE_CURRENCIES = List.of("USD", "EUR", "GBP", "AUD");
     private static final Pattern NUMBER_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?)");
     private static final Map<String, String> REGION_ALIASES = Map.ofEntries(
         Map.entry("NG", "NG"),
@@ -54,15 +64,24 @@ public class PersistentRateService {
     );
 
     private final GiftCardRateRepository giftCardRateRepository;
+    private final GiftCardRateQuoteRepository quoteRepository;
+    private final GiftCardArtworkRepository artworkRepository;
+    private final UploadAssetRepository uploadAssetRepository;
     private final CurrentUserService currentUserService;
     private final CountryCodeService countryCodeService;
 
     public PersistentRateService(
         GiftCardRateRepository giftCardRateRepository,
+        GiftCardRateQuoteRepository quoteRepository,
+        GiftCardArtworkRepository artworkRepository,
+        UploadAssetRepository uploadAssetRepository,
         CurrentUserService currentUserService,
         CountryCodeService countryCodeService
     ) {
         this.giftCardRateRepository = giftCardRateRepository;
+        this.quoteRepository = quoteRepository;
+        this.artworkRepository = artworkRepository;
+        this.uploadAssetRepository = uploadAssetRepository;
         this.currentUserService = currentUserService;
         this.countryCodeService = countryCodeService;
     }
@@ -94,6 +113,23 @@ public class PersistentRateService {
         return entity;
     }
 
+    public RateQuote requireActiveQuote(String cardName, String countryCode, String faceCurrencyCode) {
+        GiftCardRateEntity rate = requireActiveRate(cardName, countryCode);
+        String currency = normalizeFaceCurrency(faceCurrencyCode);
+        GiftCardRateQuoteEntity quote = quoteRepository
+            .findByRate_IdAndFaceCurrencyCodeIgnoreCase(rate.getId(), currency)
+            .orElse(null);
+        if (quote != null) {
+            return new RateQuote(rate, currency, quote.getLocalPayoutPerUnit());
+        }
+        if ("USD".equals(currency)) {
+            BigDecimal legacy = rate.getLocalPayoutPerUsd() == null ? parseLegacyRate(rate.getRateValue()) : rate.getLocalPayoutPerUsd();
+            return new RateQuote(rate, currency, legacy.setScale(6, RoundingMode.HALF_UP));
+        }
+        throw new IllegalArgumentException(currency + " payout rate is not configured for this gift card");
+    }
+
+    @Transactional
     public RateItem create(CreateRateRequest request) {
         var currentUser = currentUserService.getCurrentUser();
         currentUserService.requireAdmin(currentUser);
@@ -109,9 +145,13 @@ public class PersistentRateService {
         entity.setStatusCode("ACTIVE");
         entity.setUpdatedAt(LocalDateTime.now());
         entity.setUpdatedBy(currentUser);
-        return toRateItem(saveWithUniqueIdentityGuard(entity));
+        GiftCardRateEntity saved = saveWithUniqueIdentityGuard(entity);
+        replaceQuotes(saved, normalizeQuotes(request));
+        updateArtwork(saved.getIdentityKey(), request.imageUrl(), currentUser);
+        return toRateItem(saved);
     }
 
+    @Transactional
     public RateItem updateStatus(String rateId, String status) {
         var currentUser = currentUserService.getCurrentUser();
         currentUserService.requireAdmin(currentUser);
@@ -129,6 +169,7 @@ public class PersistentRateService {
         return toRateItem(giftCardRateRepository.save(entity));
     }
 
+    @Transactional
     public RateItem update(String rateId, CreateRateRequest request) {
         var currentUser = currentUserService.getCurrentUser();
         currentUserService.requireAdmin(currentUser);
@@ -146,9 +187,13 @@ public class PersistentRateService {
         copyRateValues(proposed, entity);
         entity.setUpdatedAt(LocalDateTime.now());
         entity.setUpdatedBy(currentUser);
-        return toRateItem(saveWithUniqueIdentityGuard(entity));
+        GiftCardRateEntity saved = saveWithUniqueIdentityGuard(entity);
+        replaceQuotes(saved, normalizeQuotes(request));
+        updateArtwork(saved.getIdentityKey(), request.imageUrl(), currentUser);
+        return toRateItem(saved);
     }
 
+    @Transactional
     public RateItem delete(String rateId) {
         var currentUser = currentUserService.getCurrentUser();
         currentUserService.requireAdmin(currentUser);
@@ -156,15 +201,15 @@ public class PersistentRateService {
         GiftCardRateEntity entity = giftCardRateRepository.findById(rateId)
             .orElseThrow(() -> new IllegalArgumentException("Rate not found"));
         RateItem deleted = toRateItem(entity);
+        quoteRepository.deleteByRate_Id(entity.getId());
         giftCardRateRepository.delete(entity);
         return deleted;
     }
 
     private RateItem toRateItem(GiftCardRateEntity entity) {
         var country = countryCodeService.requireCountry(entity.getRegionCode());
-        BigDecimal amount = entity.getLocalPayoutPerUsd() == null
-            ? parseLegacyRate(entity.getRateValue())
-            : entity.getLocalPayoutPerUsd();
+        Map<String, String> quotes = quoteMap(entity);
+        BigDecimal amount = new BigDecimal(quotes.get("USD"));
         String displayRate = displayRate(country.currencySymbol(), amount);
         return new RateItem(
             entity.getId(),
@@ -173,6 +218,8 @@ public class PersistentRateService {
             entity.getRegionCode(),
             country.currencyCode(),
             decimal(amount),
+            quotes,
+            artworkRepository.findById(entity.getIdentityKey()).map(GiftCardArtworkEntity::getImageUrl).orElse(""),
             displayRate,
             entity.getStatusCode().equalsIgnoreCase("ACTIVE") ? "active" : "paused",
             RATE_TIME_FORMATTER.format(entity.getUpdatedAt())
@@ -200,17 +247,103 @@ public class PersistentRateService {
     private void applyPricing(GiftCardRateEntity entity, CreateRateRequest request) {
         String countryCode = normalizeRegionCode(request.region());
         var country = countryCodeService.requireCountry(countryCode);
-        BigDecimal amount = request.localPayoutPerUsd() != null
-            ? request.localPayoutPerUsd()
-            : parseLegacyRate(request.rate());
-        if (amount.signum() <= 0) {
-            throw new IllegalArgumentException("Gift card payout rate must be greater than zero");
-        }
-        amount = amount.setScale(6, RoundingMode.HALF_UP);
+        BigDecimal amount = normalizeQuotes(request).get("USD");
         entity.setRegionCode(country.code());
         entity.setCurrencyCode(country.currencyCode());
         entity.setLocalPayoutPerUsd(amount);
         entity.setRateValue(displayRate(country.currencySymbol(), amount));
+    }
+
+    private Map<String, BigDecimal> normalizeQuotes(CreateRateRequest request) {
+        Map<String, BigDecimal> normalized = new LinkedHashMap<>();
+        if (request.quotes() != null && !request.quotes().isEmpty()) {
+            request.quotes().forEach((currency, amount) -> {
+                String code = normalizeFaceCurrency(currency);
+                if (amount == null || amount.signum() <= 0) {
+                    throw new IllegalArgumentException(code + " payout rate must be greater than zero");
+                }
+                normalized.put(code, amount.setScale(6, RoundingMode.HALF_UP));
+            });
+        } else {
+            BigDecimal usd = request.localPayoutPerUsd() != null
+                ? request.localPayoutPerUsd()
+                : parseLegacyRate(request.rate());
+            normalized.put("USD", usd.setScale(6, RoundingMode.HALF_UP));
+        }
+        if (!normalized.containsKey("USD")) {
+            throw new IllegalArgumentException("USD payout rate is required for the home page");
+        }
+        return normalized;
+    }
+
+    private void replaceQuotes(GiftCardRateEntity rate, Map<String, BigDecimal> quotes) {
+        Map<String, GiftCardRateQuoteEntity> existing = quoteRepository.findByRate_IdOrderByFaceCurrencyCodeAsc(rate.getId()).stream()
+            .collect(java.util.stream.Collectors.toMap(GiftCardRateQuoteEntity::getFaceCurrencyCode, item -> item));
+        LocalDateTime now = LocalDateTime.now();
+        List<GiftCardRateQuoteEntity> saved = new ArrayList<>();
+        quotes.forEach((currency, amount) -> {
+            GiftCardRateQuoteEntity quote = existing.remove(currency);
+            if (quote == null) {
+                quote = new GiftCardRateQuoteEntity();
+                quote.setId(UUID.randomUUID().toString());
+                quote.setRate(rate);
+                quote.setFaceCurrencyCode(currency);
+                quote.setCreatedAt(now);
+            }
+            quote.setLocalPayoutPerUnit(amount);
+            quote.setUpdatedAt(now);
+            saved.add(quote);
+        });
+        if (!existing.isEmpty()) quoteRepository.deleteAll(existing.values());
+        quoteRepository.saveAll(saved);
+    }
+
+    private Map<String, String> quoteMap(GiftCardRateEntity rate) {
+        Map<String, BigDecimal> stored = quoteRepository.findByRate_IdOrderByFaceCurrencyCodeAsc(rate.getId()).stream()
+            .collect(java.util.stream.Collectors.toMap(GiftCardRateQuoteEntity::getFaceCurrencyCode, GiftCardRateQuoteEntity::getLocalPayoutPerUnit));
+        if (!stored.containsKey("USD")) {
+            BigDecimal legacy = rate.getLocalPayoutPerUsd() == null ? parseLegacyRate(rate.getRateValue()) : rate.getLocalPayoutPerUsd();
+            stored.put("USD", legacy);
+        }
+        Map<String, String> ordered = new LinkedHashMap<>();
+        SUPPORTED_FACE_CURRENCIES.forEach(currency -> {
+            BigDecimal amount = stored.get(currency);
+            if (amount != null && amount.signum() > 0) ordered.put(currency, decimal(amount));
+        });
+        return ordered;
+    }
+
+    private void updateArtwork(String identityKey, String requestedUrl, com.cardnova.giftchat.entity.UserEntity admin) {
+        if (requestedUrl == null) return;
+        String imageUrl = requestedUrl.trim();
+        if (imageUrl.isEmpty()) {
+            artworkRepository.deleteById(identityKey);
+            return;
+        }
+        UploadAssetEntity asset = uploadAssetRepository.findByPublicUrl(imageUrl)
+            .orElseThrow(() -> new IllegalArgumentException("Card image upload was not found"));
+        if (!asset.getOwnerUser().getId().equals(admin.getId()) || asset.getMimeType() == null || !asset.getMimeType().startsWith("image/")) {
+            throw new IllegalArgumentException("Card image must be an image uploaded by the current administrator");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        GiftCardArtworkEntity artwork = artworkRepository.findById(identityKey).orElseGet(() -> {
+            GiftCardArtworkEntity created = new GiftCardArtworkEntity();
+            created.setIdentityKey(identityKey);
+            created.setCreatedAt(now);
+            return created;
+        });
+        artwork.setImageUrl(asset.getPublicUrl());
+        artwork.setUpdatedBy(admin);
+        artwork.setUpdatedAt(now);
+        artworkRepository.save(artwork);
+    }
+
+    private String normalizeFaceCurrency(String value) {
+        String currency = StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : "";
+        if (!SUPPORTED_FACE_CURRENCIES.contains(currency)) {
+            throw new IllegalArgumentException("Unsupported gift card face currency");
+        }
+        return currency;
     }
 
     private BigDecimal parseLegacyRate(String value) {
@@ -290,4 +423,6 @@ public class PersistentRateService {
     private String value(String value) {
         return value == null ? "" : value;
     }
+
+    public record RateQuote(GiftCardRateEntity rate, String faceCurrencyCode, BigDecimal localPayoutPerUnit) {}
 }

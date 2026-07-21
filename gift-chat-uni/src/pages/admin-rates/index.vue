@@ -45,7 +45,7 @@
           <view class="panel-heading">
             <view>
               <text class="section-title">{{ editingId ? '编辑汇率' : '新增汇率' }}</text>
-              <text class="panel-note">预设卡片会自动绑定标准名称和品牌图标。</text>
+              <text class="panel-note">配置各卡面币种的回收价，并可上传统一品牌图片。</text>
             </view>
             <button v-if="editingId" class="text-button" @click="resetForm()">取消编辑</button>
           </view>
@@ -59,7 +59,7 @@
           <template v-if="cardMode === 'preset'">
             <text class="field-label field-gap">选择卡片</text>
             <button class="card-select-trigger" @click="openCardSelector">
-              <image class="selected-card-logo" :src="selectedCardLogo" mode="aspectFit" />
+              <image class="selected-card-logo" :src="artworkPreview" mode="aspectFit" />
               <view class="selected-card-copy">
                 <text :class="['selected-card-name', !selectedCard && 'placeholder']">{{ selectedCard?.name || '请选择预设卡片' }}</text>
                 <text class="selected-card-code">{{ selectedCard?.code || '11 个常用品牌' }}</text>
@@ -72,13 +72,28 @@
             <text class="field-label field-gap">卡种名称</text>
             <input v-model.trim="form.cardName" class="field-input" maxlength="128" placeholder="输入其他礼品卡名称" />
             <view class="custom-preview">
-              <image class="custom-preview-logo" :src="cardLogoFor(null, form.cardName)" mode="aspectFit" />
+              <image class="custom-preview-logo" :src="artworkPreview" mode="aspectFit" />
               <view>
                 <text class="preview-title">{{ matchedManualCard?.name || form.cardName || '自定义卡片' }}</text>
                 <text class="preview-note">{{ matchedManualCard ? '提交后将自动匹配预设品牌' : '无法匹配时使用默认卡片图标' }}</text>
               </view>
             </view>
           </template>
+
+          <text class="field-label field-gap">卡片图片</text>
+          <view class="artwork-editor">
+            <image class="artwork-preview" :src="artworkPreview" mode="aspectFit" />
+            <view class="artwork-copy">
+              <text class="preview-title">{{ form.imageUrl ? '已使用管理员上传图片' : '当前使用内置品牌图' }}</text>
+              <text class="preview-note">同一卡片在不同国家、不同卡面币种共用这张图片。</text>
+              <view class="artwork-actions">
+                <button class="ghost-button action-button" :disabled="uploadingArtwork" @click="chooseArtwork">
+                  {{ uploadingArtwork ? '上传中' : form.imageUrl ? '替换图片' : '上传图片' }}
+                </button>
+                <button v-if="form.imageUrl" class="ghost-button action-button danger-action" :disabled="uploadingArtwork" @click="removeArtwork">删除图片</button>
+              </view>
+            </view>
+          </view>
 
           <text class="field-label field-gap">地区</text>
           <picker mode="selector" :range="store.state.countries" range-key="name" :value="selectedRegionIndex" @change="handleRegionChange">
@@ -88,8 +103,17 @@
             </view>
           </picker>
 
-          <text class="field-label field-gap">礼品卡回收汇率（当地币 / 1 USD）</text>
-          <input v-model.trim="form.rate" class="field-input" type="number" placeholder="例如：999" />
+          <text class="field-label field-gap">卡面币种回收价</text>
+          <text class="quote-help">USD 必填；其他币种留空后，用户卖卡时不会显示该币种。</text>
+          <view class="quote-grid">
+            <label v-for="currency in faceCurrencies" :key="currency.code" class="quote-field">
+              <text class="quote-label">1 {{ currency.code }} 卡面 =</text>
+              <view class="quote-input-wrap">
+                <input v-model.trim="form.quotes[currency.code]" class="quote-input" type="number" :placeholder="currency.required ? '必填' : '可选'" />
+                <text class="quote-unit">{{ selectedRegionCurrency }}</text>
+              </view>
+            </label>
+          </view>
 
           <button class="primary-button submit-button" @click="submitRate">{{ editingId ? '更新汇率' : '创建汇率' }}</button>
           <text v-if="notice" class="form-notice">{{ notice }}</text>
@@ -99,7 +123,7 @@
           <view class="panel-heading list-heading">
             <view>
               <text class="section-title">汇率记录</text>
-              <text class="panel-note">卡片图标和标准名称将在用户端同步显示。</text>
+              <text class="panel-note">首页只显示 USD 报价；卖卡页按已配置币种显示。</text>
             </view>
             <button class="text-button" @click="store.refreshRates">刷新</button>
           </view>
@@ -111,7 +135,7 @@
 
           <view v-for="rate in store.state.rates" :key="rate.id" class="rate-row">
             <view class="rate-identity">
-              <image class="rate-logo" :src="cardLogoFor(rate.cardCode, rate.cardName)" mode="aspectFit" />
+              <image class="rate-logo" :src="rate.imageUrl || cardLogoFor(rate.cardCode, rate.cardName)" mode="aspectFit" />
               <view class="rate-copy">
                 <view class="rate-name-line">
                   <text class="rate-name">{{ rate.cardName }}</text>
@@ -122,7 +146,11 @@
               </view>
             </view>
             <view class="rate-side">
-              <text class="rate-value">{{ rate.rate }}</text>
+              <view class="quote-summary">
+                <text v-for="currency in faceCurrencies" :key="currency.code" :class="['quote-summary-item', !rate.quotes[currency.code] && 'missing']">
+                  {{ currency.code }} {{ rate.quotes[currency.code] || '未配置' }}
+                </text>
+              </view>
               <view class="rate-actions">
                 <button class="ghost-button action-button" @click="startEdit(rate)">编辑</button>
                 <button class="ghost-button action-button" @click="toggleRate(rate.id, rate.status === 'active' ? 'paused' : 'active')">
@@ -188,8 +216,8 @@
 import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref } from 'vue'
 import { useAppStore } from '@/store/app'
-import type { CurrencyExchangeRateItem, RateItem } from '@/types'
-import { fetchAdminCurrencyExchangeRates, updateAdminCurrencyExchangeRate } from '@/utils/api'
+import type { CurrencyExchangeRateItem, GiftCardFaceCurrency, RateItem } from '@/types'
+import { fetchAdminCurrencyExchangeRates, updateAdminCurrencyExchangeRate, uploadImage } from '@/utils/api'
 import { cardLogoFor, uiIcons } from '@/utils/art'
 import { findGiftCardByCode, findGiftCardByName, giftCardCatalog, matchesGiftCardSearch } from '@/utils/gift-card-catalog'
 
@@ -205,23 +233,38 @@ const cardSearch = ref('')
 const pendingCardCode = ref('')
 const generalRates = ref<CurrencyExchangeRateItem[]>([])
 const generalRateInputs = reactive<Record<string, string>>({})
+const uploadingArtwork = ref(false)
+const artworkDirty = ref(false)
+const faceCurrencies: Array<{ code: GiftCardFaceCurrency; required: boolean }> = [
+  { code: 'USD', required: true },
+  { code: 'EUR', required: false },
+  { code: 'GBP', required: false },
+  { code: 'AUD', required: false }
+]
 
 const form = reactive({
   cardName: '',
   cardCode: null as string | null,
   region: defaultRegionCode(),
-  rate: ''
+  quotes: {
+    USD: '',
+    EUR: '',
+    GBP: '',
+    AUD: ''
+  } as Record<GiftCardFaceCurrency, string>,
+  imageUrl: ''
 })
 
 const selectedCard = computed(() => findGiftCardByCode(form.cardCode))
 const matchedManualCard = computed(() => findGiftCardByName(form.cardName))
-const selectedCardLogo = computed(() => cardLogoFor(form.cardCode, form.cardName))
+const artworkPreview = computed(() => form.imageUrl || cardLogoFor(form.cardCode, form.cardName))
 const filteredCards = computed(() => giftCardCatalog.filter((card) => matchesGiftCardSearch(card, cardSearch.value)))
 const selectedRegionIndex = computed(() => {
   const index = store.state.countries.findIndex((country) => country.code === form.region)
   return index >= 0 ? index : 0
 })
 const selectedRegionLabel = computed(() => store.state.countries[selectedRegionIndex.value]?.name || '请选择地区')
+const selectedRegionCurrency = computed(() => generalRates.value.find((rate) => rate.countryCode === form.region)?.currencyCode || '当地币')
 
 async function submitRate() {
   const cardName = cardMode.value === 'preset' ? selectedCard.value?.name || '' : form.cardName.trim()
@@ -229,23 +272,32 @@ async function submitRate() {
     notice.value = cardMode.value === 'preset' ? '请选择预设卡片。' : '请输入卡片名称。'
     return
   }
-  if (!form.rate.trim()) {
-    notice.value = '请输入汇率。'
+  if (!form.quotes.USD.trim()) {
+    notice.value = '请输入 USD 卡面回收价。'
     return
   }
-  const localPayoutPerUsd = Number(form.rate)
-  if (!Number.isFinite(localPayoutPerUsd) || localPayoutPerUsd <= 0) {
-    notice.value = '汇率必须大于 0。'
-    return
+  const quotes: Partial<Record<GiftCardFaceCurrency, number>> = {}
+  for (const currency of faceCurrencies) {
+    const raw = form.quotes[currency.code].trim()
+    if (!raw) continue
+    const amount = Number(raw)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      notice.value = `${currency.code} 卡面回收价必须大于 0。`
+      return
+    }
+    quotes[currency.code] = amount
   }
+  const localPayoutPerUsd = quotes.USD as number
 
   try {
     const payload = {
       cardName,
       cardCode: cardMode.value === 'preset' ? form.cardCode : null,
       region: form.region || defaultRegionCode(),
-      rate: form.rate,
-      localPayoutPerUsd
+      rate: form.quotes.USD,
+      localPayoutPerUsd,
+      quotes,
+      ...(artworkDirty.value ? { imageUrl: form.imageUrl } : {})
     }
     if (editingId.value) {
       await store.updateRate(editingId.value, payload)
@@ -300,7 +352,11 @@ function startEdit(rate: RateItem) {
   form.cardCode = preset?.code || null
   form.cardName = preset?.name || rate.cardName
   form.region = resolveRegionCode(rate.region)
-  form.rate = rate.localPayoutPerUsd || rate.rate.replace(/[^0-9.]/g, '')
+  faceCurrencies.forEach((currency) => {
+    form.quotes[currency.code] = rate.quotes[currency.code] || ''
+  })
+  form.imageUrl = rate.imageUrl || ''
+  artworkDirty.value = false
   notice.value = `正在编辑 ${rate.cardName}。`
   uni.pageScrollTo({ scrollTop: 0, duration: 200 })
 }
@@ -311,13 +367,61 @@ function resetForm(clearNotice = true) {
   form.cardCode = null
   form.cardName = ''
   form.region = defaultRegionCode()
-  form.rate = ''
+  faceCurrencies.forEach((currency) => { form.quotes[currency.code] = '' })
+  form.imageUrl = ''
+  artworkDirty.value = false
   if (clearNotice) notice.value = ''
 }
 
 function handleRegionChange(event: { detail: { value: number | string } }) {
   const country = store.state.countries[Number(event.detail.value)]
   if (country) form.region = country.code
+}
+
+async function chooseArtwork() {
+  if (uploadingArtwork.value) return
+  uploadingArtwork.value = true
+  notice.value = ''
+  try {
+    const source = await chooseImageOnce()
+    if (!source) return
+    const asset = await uploadImage(source)
+    form.imageUrl = asset.publicUrl
+    artworkDirty.value = true
+    notice.value = '卡片图片已上传，保存汇率后生效。'
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : '图片上传失败'
+  } finally {
+    uploadingArtwork.value = false
+  }
+}
+
+function removeArtwork() {
+  form.imageUrl = ''
+  artworkDirty.value = true
+  notice.value = '卡片图片将在保存后恢复为内置图标。'
+}
+
+function chooseImageOnce() {
+  return new Promise<string | File | null>((resolve, reject) => {
+    uni.chooseImage({
+      count: 1,
+      sizeType: ['compressed'],
+      sourceType: ['album', 'camera'],
+      success(result) {
+        const files = Array.isArray(result.tempFiles) ? result.tempFiles : result.tempFiles ? [result.tempFiles] : []
+        const firstFile = files[0]
+        if (typeof File !== 'undefined' && firstFile instanceof File) {
+          resolve(firstFile)
+          return
+        }
+        const paths = Array.isArray(result.tempFilePaths) ? result.tempFilePaths : [result.tempFilePaths]
+        const objectPath = firstFile && 'path' in firstFile ? firstFile.path : ''
+        resolve(objectPath || paths[0] || null)
+      },
+      fail: reject
+    })
+  })
 }
 
 function defaultRegionCode() {
@@ -461,8 +565,19 @@ onShow(() => {
 .custom-preview-logo { width: 50rpx; height: 50rpx; }
 .preview-title { display: block; color: #111111; font-size: 23rpx; font-weight: 700; }
 .preview-note { display: block; margin-top: 3rpx; color: #667085; font-size: 19rpx; }
+.artwork-editor { padding: 14rpx; display: flex; align-items: center; gap: 16rpx; border: 1rpx solid #cfd4dc; background: #f7f7f8; }
+.artwork-preview { width: 104rpx; height: 78rpx; flex: 0 0 auto; border: 1rpx solid #e1e4e8; background: #ffffff; }
+.artwork-copy { min-width: 0; flex: 1; }
+.artwork-actions { margin-top: 10rpx; display: flex; flex-wrap: wrap; gap: 8rpx; }
 .select-field { display: flex; align-items: center; justify-content: space-between; }
 .select-code { color: #002fa7; font-weight: 800; }
+.quote-help { display: block; margin: -2rpx 0 12rpx; color: #667085; font-size: 20rpx; line-height: 1.45; }
+.quote-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12rpx; }
+.quote-field { min-width: 0; }
+.quote-label { display: block; margin-bottom: 7rpx; color: #475467; font-size: 20rpx; font-weight: 700; }
+.quote-input-wrap { height: 72rpx; padding: 0 12rpx; display: flex; align-items: center; gap: 8rpx; box-sizing: border-box; border: 1rpx solid #cfd4dc; background: #ffffff; }
+.quote-input { min-width: 0; height: 100%; flex: 1; color: #111111; font-size: 23rpx; }
+.quote-unit { flex: 0 0 auto; color: #667085; font-size: 18rpx; font-weight: 700; }
 .submit-button { width: 100%; margin-top: 28rpx; border-radius: 0; background: #002fa7; }
 .form-notice { display: block; margin-top: 14rpx; color: #475467; font-size: 22rpx; line-height: 1.45; }
 .list-heading { padding-bottom: 20rpx; border-bottom: 1rpx solid #d9dde3; }
@@ -479,7 +594,9 @@ onShow(() => {
 .status-badge.paused { border-color: #e5b5ad; color: #b42318; }
 .rate-meta { display: block; margin-top: 7rpx; color: #667085; font-size: 20rpx; }
 .rate-side { min-width: 260rpx; display: flex; flex-direction: column; align-items: flex-end; gap: 12rpx; }
-.rate-value { color: #111111; font-size: 24rpx; font-weight: 800; text-align: right; overflow-wrap: anywhere; }
+.quote-summary { display: grid; grid-template-columns: repeat(2, auto); justify-content: end; gap: 6rpx 12rpx; }
+.quote-summary-item { color: #111111; font-size: 20rpx; font-weight: 800; text-align: right; white-space: nowrap; }
+.quote-summary-item.missing { color: #98a2b3; font-weight: 600; }
 .rate-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8rpx; }
 .action-button { min-width: 92rpx; margin: 0; padding: 10rpx 14rpx; border-radius: 0; font-size: 20rpx; }
 .danger-action { border-color: #e4002b; color: #e4002b; }
@@ -521,9 +638,12 @@ onShow(() => {
   .editor-panel, .rates-panel { padding: 22rpx; }
   .rate-row { align-items: flex-start; flex-direction: column; }
   .rate-side { min-width: 0; width: 100%; align-items: flex-start; }
-  .rate-value { text-align: left; }
+  .quote-summary { justify-content: start; }
+  .quote-summary-item { text-align: left; }
   .rate-actions { width: 100%; justify-content: flex-start; }
   .selector-mask { padding: 0; align-items: flex-end; }
   .selector-dialog { width: 100%; height: 88vh; max-height: 88vh; border-right: 0; border-bottom: 0; border-left: 0; }
+  .quote-grid { grid-template-columns: 1fr; }
+  .artwork-editor { align-items: flex-start; }
 }
 </style>

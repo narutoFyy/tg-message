@@ -12,6 +12,7 @@ import type {
   CurrencyExchangeRateItem,
   FriendProfile,
   FriendRequest,
+  GiftCardFaceCurrency,
   HiddenRecordItem,
   LoanApplicationItem,
   LotteryDrawResult,
@@ -42,6 +43,10 @@ import type {
   VideoSessionBootstrap,
   VideoSessionItem,
   VipSummary,
+  VipBenefitClaimItem,
+  VipBenefitConfigItem,
+  VipBenefitSummary,
+  VipHolidayRewardItem,
   WithdrawalItem
 } from '@/types'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
@@ -471,6 +476,8 @@ export function createRate(payload: {
   region: string
   rate: string
   localPayoutPerUsd?: number
+  quotes: Partial<Record<GiftCardFaceCurrency, number>>
+  imageUrl?: string
 }) {
   return request<RateItem>('/admin/rates', 'POST', payload).then(normalizeRateItem)
 }
@@ -485,6 +492,8 @@ export function updateRate(rateId: string, payload: {
   region: string
   rate: string
   localPayoutPerUsd?: number
+  quotes: Partial<Record<GiftCardFaceCurrency, number>>
+  imageUrl?: string
 }) {
   return request<RateItem>(`/admin/rates/${rateId}`, 'POST', payload).then(normalizeRateItem)
 }
@@ -494,8 +503,15 @@ export function deleteRate(rateId: string) {
 }
 
 function normalizeRateItem(rate: RateItem) {
+  const quotes = rate.quotes && Object.keys(rate.quotes).length
+    ? rate.quotes
+    : rate.localPayoutPerUsd
+      ? { USD: rate.localPayoutPerUsd }
+      : {}
   return {
     ...rate,
+    quotes,
+    imageUrl: resolveMediaUrl(rate.imageUrl || ''),
     rate: normalizeRateText(rate.displayRate || rate.rate)
   }
 }
@@ -608,6 +624,58 @@ export function fetchMyRegistrationBonus() {
 
 export function fetchVipSummary() {
   return request<VipSummary>('/vip/me')
+}
+
+export function fetchVipBenefitSummary() {
+  return request<VipBenefitSummary>('/vip/benefits/me')
+}
+
+export function setVipBirthday(birthDate: string) {
+  return request<VipBenefitSummary>('/vip/benefits/birthday', 'POST', { birthDate })
+}
+
+export function claimVipBirthdayReward() {
+  return request<VipBenefitClaimItem>('/vip/benefits/birthday/claim', 'POST')
+}
+
+export function requestVipSupportRedPacket() {
+  return request<VipBenefitClaimItem>('/vip/benefits/support-red-packets', 'POST')
+}
+
+export function claimVipHolidayReward(holidayId: string) {
+  return request<VipBenefitClaimItem>(`/vip/benefits/holidays/${holidayId}/claim`, 'POST')
+}
+
+export function fetchMyVipBenefitClaims() {
+  return request<VipBenefitClaimItem[]>('/vip/benefits/claims/me')
+}
+
+export function fetchStaffVipBenefitClaims() {
+  return request<VipBenefitClaimItem[]>('/vip/benefits/staff/claims')
+}
+
+export function reviewVipBenefitClaim(claimId: string, status: 'approved' | 'rejected', reviewNote = '') {
+  return request<VipBenefitClaimItem>(`/vip/benefits/staff/claims/${claimId}/review`, 'POST', { status, reviewNote })
+}
+
+export function fetchAdminVipBenefitConfig() {
+  return request<VipBenefitConfigItem>('/admin/vip-benefits/config')
+}
+
+export function updateAdminVipBenefitConfig(payload: { vip4SupportAmountNgn: number; vip5SupportAmountNgn: number; supportRewardEnabled: boolean }) {
+  return request<VipBenefitConfigItem>('/admin/vip-benefits/config', 'POST', payload)
+}
+
+export function fetchAdminVipHolidays() {
+  return request<VipHolidayRewardItem[]>('/admin/vip-benefits/holidays')
+}
+
+export function saveAdminVipHoliday(payload: { id?: string; countryCode: string; holidayCode: string; holidayName: string; holidayDate: string; rewardAmount: number; enabled: boolean }) {
+  return request<VipHolidayRewardItem>('/admin/vip-benefits/holidays', 'POST', payload)
+}
+
+export function updateAdminUserBirthday(userId: string, birthDate: string) {
+  return request<VipBenefitSummary>(`/admin/vip-benefits/users/${userId}/birthday`, 'POST', { birthDate })
 }
 
 export function fetchLotteryEligibility() {

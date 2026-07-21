@@ -5,15 +5,20 @@
         <view class="page-header-copy"><text class="eyebrow">Finance</text><text class="title">Loan application</text><text class="subtitle">Submit an amount and repayment plan for review.</text></view>
       </view>
       <view class="form-section loan-form">
-        <view class="section-head"><text class="section-title">New application</text><text class="step-label">Required fields</text></view>
-        <view class="form-grid">
+        <view class="section-head"><text class="section-title">New application</text><text class="step-label">{{ vipLevel }} access</text></view>
+        <view v-if="!canApply" class="loan-lock">
+          <text class="lock-title">Loan access starts at VIP4</text>
+          <text class="lock-copy">Your current level is {{ vipLevel }}. Complete at least USD 10,000 in approved lifetime trades to unlock applications.</text>
+          <button class="ghost-button progress-button" @click="goVipProgress">View VIP progress</button>
+        </view>
+        <view v-else class="form-grid">
           <view class="form-field"><text class="field-label">Amount</text><input v-model="form.amount" class="field-input" placeholder="e.g. NGN 100,000" /></view>
           <view class="form-field"><text class="field-label">Country</text><input v-model="form.country" class="field-input" placeholder="Nigeria, India, Cameroon or Ghana" /></view>
           <view class="form-field form-wide"><text class="field-label">Purpose</text><input v-model="form.purpose" class="field-input" placeholder="Why do you need this loan?" /></view>
           <view class="form-field"><text class="field-label">Contact</text><input v-model="form.contact" class="field-input" placeholder="Phone or WhatsApp" /></view>
           <view class="form-field"><text class="field-label">Repayment plan</text><input v-model="form.repaymentPlan" class="field-input" placeholder="e.g. repay after next payout" /></view>
         </view>
-        <button class="primary-button submit-button" :disabled="submitting" @click="submitLoan">{{ submitting ? 'Submitting...' : 'Submit application' }}</button>
+        <button v-if="canApply" class="primary-button submit-button" :disabled="submitting" @click="submitLoan">{{ submitting ? 'Submitting...' : 'Submit application' }}</button>
         <text v-if="notice" class="notice-text">{{ notice }}</text>
       </view>
       <view class="records-section">
@@ -29,14 +34,17 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import type { LoanApplicationItem } from '@/types'
 const store = useAppStore(); const notice = ref(''); const submitting = ref(false)
 const form = reactive({ amount: '', country: '', purpose: '', contact: '', repaymentPlan: '' })
-onShow(() => { store.bootstrap() })
+onShow(() => { store.bootstrap().then(() => store.refreshVipSummary()).catch(() => undefined) })
+const vipLevel = computed(() => store.state.vipSummary?.level || 'VIP0')
+const canApply = computed(() => Number(vipLevel.value.replace(/\D/g, '')) >= 4)
 async function submitLoan() {
+  if (!canApply.value) { notice.value = 'Loan access requires VIP4 or VIP5.'; return }
   if (!form.amount.trim() || !form.country.trim() || !form.purpose.trim()) { notice.value = 'Amount, country, and purpose are required.'; return }
   submitting.value = true
   try {
@@ -47,6 +55,7 @@ async function submitLoan() {
   } catch (error) { notice.value = error instanceof Error ? error.message : 'Submit failed' } finally { submitting.value = false }
 }
 function buildLoanDraft(applicationNo: string) { return [`Loan application ${applicationNo}`, `Amount: ${form.amount}`, `Country: ${form.country}`, `Purpose: ${form.purpose}`, form.contact ? `Contact: ${form.contact}` : '', form.repaymentPlan ? `Repayment plan: ${form.repaymentPlan}` : ''].filter(Boolean).join('\n') }
+function goVipProgress() { uni.navigateTo({ url: '/pages/performance/index' }) }
 function statusClass(status: LoanApplicationItem['status']) { return { pending: 'warning', approved: 'active', rejected: 'danger' }[status] }
 </script>
 
@@ -61,6 +70,11 @@ function statusClass(status: LoanApplicationItem['status']) { return { pending: 
 .section-head { min-height: 76rpx; padding: 0 24rpx; display: flex; align-items: center; justify-content: space-between; gap: 20rpx; border-bottom: 1rpx solid #dedfe3; }
 .step-label, .record-count { color: #002fa7; font-size: 21rpx; font-weight: 700; }
 .form-grid { padding: 24rpx 24rpx 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20rpx; }
+.loan-lock { padding: 34rpx 24rpx 28rpx; border-left: 5rpx solid #c58a00; background: rgba(255, 255, 255, 0.55); }
+.lock-title, .lock-copy { display: block; }
+.lock-title { color: #111111; font-size: 28rpx; font-weight: 700; }
+.lock-copy { margin-top: 10rpx; color: #6f7178; font-size: 23rpx; line-height: 1.5; }
+.progress-button { width: 100%; margin-top: 22rpx; }
 .submit-button { width: calc(100% - 48rpx); margin: 26rpx 24rpx 24rpx; background: var(--cb-amber-strong); color: #382600; }
 .notice-text { display: block; padding: 0 24rpx 24rpx; color: #6f7178; font-size: 23rpx; text-align: center; }
 .loan-row { min-height: 102rpx; padding: 18rpx 24rpx; box-sizing: border-box; display: flex; align-items: flex-start; justify-content: space-between; gap: 18rpx; border-bottom: 1rpx solid #dedfe3; }

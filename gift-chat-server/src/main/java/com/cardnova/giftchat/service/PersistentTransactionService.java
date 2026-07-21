@@ -181,14 +181,20 @@ public class PersistentTransactionService {
             throw new IllegalArgumentException("No active support agent available");
         }
 
-        String faceValue = formatFaceValue(request.faceValue(), request.cardCountry(), request.quantity());
-        GiftCardRateEntity rate = persistentRateService.requireActiveRate(request.cardName(), currentUser.getCountryCode());
-        BigDecimal baseAmountUsd = BigDecimal.valueOf(request.faceValue())
-            .multiply(BigDecimal.valueOf(request.quantity()))
-            .setScale(6, RoundingMode.HALF_UP);
-        BigDecimal localAmount = baseAmountUsd.multiply(rate.getLocalPayoutPerUsd()).setScale(2, RoundingMode.HALF_UP);
+        String faceCurrency = normalizeFaceCurrency(request.cardCountry());
+        String faceValue = formatFaceValue(request.faceValue(), faceCurrency, request.quantity());
+        PersistentRateService.RateQuote selectedQuote = persistentRateService.requireActiveQuote(request.cardName(), currentUser.getCountryCode(), faceCurrency);
+        PersistentRateService.RateQuote usdQuote = "USD".equals(faceCurrency)
+            ? selectedQuote
+            : persistentRateService.requireActiveQuote(request.cardName(), currentUser.getCountryCode(), "USD");
+        BigDecimal faceAmount = BigDecimal.valueOf(request.faceValue()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal totalFaceAmount = faceAmount.multiply(BigDecimal.valueOf(request.quantity())).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal faceToUsdRate = selectedQuote.localPayoutPerUnit()
+            .divide(usdQuote.localPayoutPerUnit(), 6, RoundingMode.HALF_UP);
+        BigDecimal baseAmountUsd = totalFaceAmount.multiply(faceToUsdRate).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal localAmount = totalFaceAmount.multiply(selectedQuote.localPayoutPerUnit()).setScale(2, RoundingMode.HALF_UP);
         var country = countryCodeService.requireCountry(currentUser.getCountryCode());
-        String note = sellOrderNote(request, rate.getLocalPayoutPerUsd());
+        String note = sellOrderNote(request, selectedQuote.localPayoutPerUnit());
 
         TradeOrderEntity entity = new TradeOrderEntity();
         entity.setId(UUID.randomUUID().toString());
@@ -198,11 +204,15 @@ public class PersistentTransactionService {
         entity.setFriendship(null);
         entity.setCardName(request.cardName().trim());
         entity.setFaceValue(faceValue);
+        entity.setFaceCurrencyCode(faceCurrency);
+        entity.setFaceValueAmount(faceAmount);
+        entity.setQuantityValue(request.quantity());
         entity.setPayoutAmount(formatLocalAmount(country.currencySymbol(), localAmount));
         entity.setBaseAmountUsd(baseAmountUsd);
         entity.setLocalAmount(localAmount);
         entity.setCurrencyCode(country.currencyCode());
-        entity.setBusinessRateSnapshot(rate.getLocalPayoutPerUsd());
+        entity.setBusinessRateSnapshot(selectedQuote.localPayoutPerUnit());
+        entity.setFaceToUsdRateSnapshot(faceToUsdRate);
         entity.setClientRequestId(clientRequestId);
         entity.setClientRequestHash(requestHash);
         entity.setStatusCode("PENDING");
@@ -269,11 +279,15 @@ public class PersistentTransactionService {
             order.getOrderNo(),
             order.getCardName(),
             order.getFaceValue(),
+            order.getFaceCurrencyCode() == null ? "" : order.getFaceCurrencyCode(),
+            decimal(order.getFaceValueAmount()),
+            order.getQuantityValue() == null ? 1 : order.getQuantityValue(),
             order.getPayoutAmount(),
             decimal(order.getBaseAmountUsd()),
             decimal(order.getLocalAmount()),
             order.getCurrencyCode() == null ? "" : order.getCurrencyCode(),
             decimal(order.getBusinessRateSnapshot()),
+            decimal(order.getFaceToUsdRateSnapshot()),
             order.getStatusCode().toLowerCase(),
             counterpart.getUsername(),
             counterpart.getUsername(),
@@ -425,6 +439,16 @@ public class PersistentTransactionService {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
+    private String normalizeFaceCurrency(String value) {
+        String normalized = StringUtils.hasText(value)
+            ? value.trim().replaceAll("[\\s_-]+", "").toUpperCase(java.util.Locale.ROOT)
+            : "";
+        return switch (normalized) {
+            case "US", "USA", "UNITEDSTATES" -> "USD";
+            default -> normalized;
+        };
+    }
+
     private String normalizeClientRequestId(String value) {
         if (!StringUtils.hasText(value)) {
             return null;
@@ -439,7 +463,7 @@ public class PersistentTransactionService {
     private String sellOrderRequestHash(CreateSellOrderRequest request) {
         String canonical = String.join("\u001f",
             request.cardName().trim(),
-            request.cardCountry().trim(),
+            normalizeFaceCurrency(request.cardCountry()),
             request.settlementCountry().trim(),
             BigDecimal.valueOf(request.faceValue()).stripTrailingZeros().toPlainString(),
             String.valueOf(request.quantity()),

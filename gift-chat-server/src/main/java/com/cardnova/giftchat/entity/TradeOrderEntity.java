@@ -39,6 +39,15 @@ public class TradeOrderEntity {
     @Column(name = "face_value", nullable = false, length = 32)
     private String faceValue;
 
+    @Column(name = "face_currency_code", length = 3)
+    private String faceCurrencyCode;
+
+    @Column(name = "face_value_amount", precision = 18, scale = 6)
+    private BigDecimal faceValueAmount;
+
+    @Column(name = "quantity_value")
+    private Integer quantityValue;
+
     @Column(name = "payout_amount", nullable = false, length = 32)
     private String payoutAmount;
 
@@ -53,6 +62,9 @@ public class TradeOrderEntity {
 
     @Column(name = "business_rate_snapshot", precision = 18, scale = 6)
     private BigDecimal businessRateSnapshot;
+
+    @Column(name = "face_to_usd_rate_snapshot", precision = 18, scale = 6)
+    private BigDecimal faceToUsdRateSnapshot;
 
     @Column(name = "client_request_id", length = 64)
     private String clientRequestId;
@@ -144,6 +156,13 @@ public class TradeOrderEntity {
         this.faceValue = faceValue;
     }
 
+    public String getFaceCurrencyCode() { return faceCurrencyCode; }
+    public void setFaceCurrencyCode(String faceCurrencyCode) { this.faceCurrencyCode = faceCurrencyCode; }
+    public BigDecimal getFaceValueAmount() { return faceValueAmount; }
+    public void setFaceValueAmount(BigDecimal faceValueAmount) { this.faceValueAmount = faceValueAmount; }
+    public Integer getQuantityValue() { return quantityValue; }
+    public void setQuantityValue(Integer quantityValue) { this.quantityValue = quantityValue; }
+
     public String getPayoutAmount() {
         return payoutAmount;
     }
@@ -160,6 +179,8 @@ public class TradeOrderEntity {
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
     public BigDecimal getBusinessRateSnapshot() { return businessRateSnapshot; }
     public void setBusinessRateSnapshot(BigDecimal businessRateSnapshot) { this.businessRateSnapshot = businessRateSnapshot; }
+    public BigDecimal getFaceToUsdRateSnapshot() { return faceToUsdRateSnapshot; }
+    public void setFaceToUsdRateSnapshot(BigDecimal faceToUsdRateSnapshot) { this.faceToUsdRateSnapshot = faceToUsdRateSnapshot; }
     public String getClientRequestId() { return clientRequestId; }
     public void setClientRequestId(String clientRequestId) { this.clientRequestId = clientRequestId; }
     public String getClientRequestHash() { return clientRequestHash; }

@@ -7,6 +7,7 @@ import com.cardnova.giftchat.entity.LotteryPrizeEntity;
 import com.cardnova.giftchat.entity.GiftCardRateEntity;
 import com.cardnova.giftchat.entity.TradeOrderEntity;
 import com.cardnova.giftchat.entity.UserEntity;
+import com.cardnova.giftchat.entity.VipPointLedgerEntity;
 import com.cardnova.giftchat.repository.LotteryDrawRecordRepository;
 import com.cardnova.giftchat.repository.LotteryPrizeRepository;
 import com.cardnova.giftchat.repository.GiftCardRateRepository;
@@ -14,7 +15,9 @@ import com.cardnova.giftchat.repository.RegistrationBonusRecordRepository;
 import com.cardnova.giftchat.repository.ReferralRewardRepository;
 import com.cardnova.giftchat.repository.UserRepository;
 import com.cardnova.giftchat.repository.TradeOrderRepository;
+import com.cardnova.giftchat.repository.TradeOrderSettlementAuditRepository;
 import com.cardnova.giftchat.repository.UploadAssetRepository;
+import com.cardnova.giftchat.repository.VipPointLedgerRepository;
 import com.cardnova.giftchat.service.ReferralRewardService;
 import com.cardnova.giftchat.service.RegistrationBonusService;
 import com.cardnova.giftchat.service.WebSocketChannelAuthorizationService;
@@ -105,6 +108,12 @@ class GiftChatServerApplicationTests {
 
     @Autowired
     private TradeOrderRepository tradeOrderRepository;
+
+    @Autowired
+    private TradeOrderSettlementAuditRepository tradeOrderSettlementAuditRepository;
+
+    @Autowired
+    private VipPointLedgerRepository vipPointLedgerRepository;
 
     @Autowired
     private UploadAssetRepository uploadAssetRepository;
@@ -1440,7 +1449,7 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void transactionStatusCanAdvanceButNotReopenCompletedTrade() throws Exception {
+    void transactionStatusCanAdvanceButCannotBypassManualCompletion() throws Exception {
         String user1Token = loginToken("cardnova_user");
 
         mockMvc.perform(post("/api/transactions/trade-1/status")
@@ -1462,8 +1471,8 @@ class GiftChatServerApplicationTests {
                       "status": "completed"
                     }
                     """))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.status").value("completed"));
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Unsupported transaction status"));
 
         mockMvc.perform(post("/api/transactions/trade-3/status")
                 .header("Authorization", bearer(user1Token))
@@ -2643,7 +2652,7 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void completedUsdVolumeUpgradesVipAndAddsASecondPermanentDraw() throws Exception {
+    void assignedSupportManuallyCompletesSellOrderAndAwardsVipPoints() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String userToken = registerToken("vip_points_" + suffix);
 
@@ -2666,22 +2675,72 @@ class GiftChatServerApplicationTests {
                     """))
             .andExpect(status().isOk())
             .andReturn();
-        String orderId = objectMapper.readTree(createResult.getResponse().getContentAsString())
-            .at("/data/id")
-            .asText();
+        JsonNode createdOrder = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data");
+        String orderId = createdOrder.path("id").asText();
+        String assignedAgent = createdOrder.path("counterpartyUsername").asText();
 
-        for (int index = 0; index < 2; index++) {
-            mockMvc.perform(post("/api/transactions/%s/status".formatted(orderId))
-                    .header("Authorization", bearer(userToken))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""
-                        {
-                          "status": "completed"
-                        }
-                        """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("completed"));
-        }
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("\"type\":\"order\"")))
+            .andExpect(content().string(containsString("\"id\":\"" + orderId + "\"")))
+            .andExpect(content().string(containsString("\"status\":\"pending\"")));
+
+        mockMvc.perform(post("/api/transactions/%s/complete".formatted(orderId))
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"finalLocalAmount":24000,"vipPoints":50,"reason":"Manual rate adjustment"}
+                    """))
+            .andExpect(status().isForbidden());
+
+        String otherAgent = "support_luna".equals(assignedAgent) ? "support_angela" : "support_luna";
+        mockMvc.perform(post("/api/transactions/%s/complete".formatted(orderId))
+                .header("Authorization", bearer(loginToken(otherAgent)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"finalLocalAmount":24000,"vipPoints":50,"reason":"Manual rate adjustment"}
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Transaction not accessible"));
+
+        String agentToken = loginToken(assignedAgent);
+        mockMvc.perform(post("/api/transactions/%s/complete".formatted(orderId))
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"finalLocalAmount":24000,"vipPoints":50,"reason":"Manual rate adjustment"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("completed"))
+            .andExpect(jsonPath("$.data.localAmount").value("24000"))
+            .andExpect(jsonPath("$.data.finalLocalAmount").value("24000"))
+            .andExpect(jsonPath("$.data.manualVipPoints").value("50"))
+            .andExpect(jsonPath("$.data.settlementReason").value("Manual rate adjustment"))
+            .andExpect(jsonPath("$.data.settledBy").value(assignedAgent));
+
+        mockMvc.perform(post("/api/transactions/%s/complete".formatted(orderId))
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"finalLocalAmount":24000,"vipPoints":50,"reason":"Duplicate"}
+                    """))
+            .andExpect(status().isConflict());
+
+        assertTrue(tradeOrderSettlementAuditRepository.existsByTradeOrder_IdAndActionCode(orderId, "COMPLETED"));
+
+        mockMvc.perform(get("/api/balances/summary")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("24,000.00"))
+            .andExpect(jsonPath("$.data.pendingTotal").value("0.00"));
+
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("\"type\":\"order\"")))
+            .andExpect(content().string(containsString("\"finalLocalAmount\":\"24000\"")))
+            .andExpect(content().string(containsString("\"status\":\"completed\"")));
 
         mockMvc.perform(get("/api/vip/me")
                 .header("Authorization", bearer(userToken)))
@@ -2702,6 +2761,64 @@ class GiftChatServerApplicationTests {
                 .header("Authorization", bearer(userToken)))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message", containsString("Next chance available")));
+    }
+
+    @Test
+    void manualSettlementAllowsZeroPointsAndRequiresReasonForPayoutChange() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String userToken = registerToken("zero_points_" + suffix);
+        MvcResult createResult = mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "cardName":"Apple",
+                      "cardCountry":"USD",
+                      "settlementCountry":"Nigeria",
+                      "faceValue":25,
+                      "quantity":1,
+                      "rate":"500",
+                      "settlementAmount":"NGN 12500",
+                      "cardType":"physical",
+                      "speed":"standard",
+                      "sendChatMessage":false
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode order = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data");
+        String orderId = order.path("id").asText();
+        String estimated = order.path("estimatedLocalAmount").asText();
+        String agentToken = loginToken(order.path("counterpartyUsername").asText());
+
+        mockMvc.perform(post("/api/transactions/%s/complete".formatted(orderId))
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"finalLocalAmount":1,"vipPoints":0,"reason":""}
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Settlement reason is required when final payout differs from estimate"));
+
+        mockMvc.perform(get("/api/transactions/%s".formatted(orderId))
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("pending"));
+
+        mockMvc.perform(post("/api/transactions/%s/complete".formatted(orderId))
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"finalLocalAmount":%s,"vipPoints":0,"reason":""}
+                    """.formatted(estimated)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("completed"))
+            .andExpect(jsonPath("$.data.manualVipPoints").value("0"));
+
+        mockMvc.perform(get("/api/vip/me").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.level").value("VIP0"))
+            .andExpect(jsonPath("$.data.points").value("0"));
     }
 
     @Test
@@ -3282,7 +3399,7 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void referralTradeRewardIsIdempotentWhenCompletedRepeatedly() throws Exception {
+    void referralTradeRewardIsCreatedOnceAndDuplicateCompletionIsRejected() throws Exception {
         String referredToken = loginToken("gift_hunter");
 
         MvcResult createResult = mockMvc.perform(post("/api/transactions")
@@ -3305,18 +3422,23 @@ class GiftChatServerApplicationTests {
             .at("/data/id")
             .asText();
 
-        for (int index = 0; index < 2; index++) {
-            mockMvc.perform(post("/api/transactions/%s/status".formatted(tradeId))
-                    .header("Authorization", bearer(referredToken))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""
-                        {
-                          "status": "completed"
-                        }
-                        """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("completed"));
-        }
+        String adminToken = loginToken("admin_mia");
+        mockMvc.perform(post("/api/transactions/%s/complete".formatted(tradeId))
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"finalLocalAmount":100000,"vipPoints":0,"reason":"Manual settlement"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("completed"));
+
+        mockMvc.perform(post("/api/transactions/%s/complete".formatted(tradeId))
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"finalLocalAmount":100000,"vipPoints":0,"reason":"Duplicate"}
+                    """))
+            .andExpect(status().isConflict());
 
         org.junit.jupiter.api.Assertions.assertEquals(
             1,
@@ -3523,26 +3645,14 @@ class GiftChatServerApplicationTests {
 
     private void grantCompletedUsdVolume(String username, String amountUsd) {
         UserEntity owner = userRepository.findByUsername(username).orElseThrow();
-        UserEntity agent = userRepository.findByUsername("support_luna").orElseThrow();
-        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        BigDecimal baseAmount = new BigDecimal(amountUsd);
-        TradeOrderEntity order = new TradeOrderEntity();
-        order.setId(UUID.randomUUID().toString());
-        order.setOrderNo("VIP" + suffix);
-        order.setOwnerUser(owner);
-        order.setCounterpartyUser(agent);
-        order.setCardName("VIP volume fixture");
-        order.setFaceValue(amountUsd + " USD x1");
-        order.setPayoutAmount("NGN 0");
-        order.setBaseAmountUsd(baseAmount);
-        order.setLocalAmount(BigDecimal.ZERO);
-        order.setCurrencyCode("NGN");
-        order.setBusinessRateSnapshot(new BigDecimal("1000"));
-        order.setStatusCode("COMPLETED");
-        order.setNote("VIP benefit integration test");
-        order.setCreatedAt(LocalDateTime.now());
-        order.setUpdatedAt(LocalDateTime.now());
-        tradeOrderRepository.saveAndFlush(order);
+        VipPointLedgerEntity ledger = new VipPointLedgerEntity();
+        ledger.setId(UUID.randomUUID().toString());
+        ledger.setUser(owner);
+        ledger.setSourceKey("TEST_MANUAL_VIP:" + ledger.getId());
+        ledger.setPointsDelta(new BigDecimal(amountUsd));
+        ledger.setReasonCode("MANUAL_TEST");
+        ledger.setCreatedAt(LocalDateTime.now());
+        vipPointLedgerRepository.saveAndFlush(ledger);
     }
 
     private String sellOrderRequest(String clientRequestId, int faceValue) {

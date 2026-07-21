@@ -255,6 +255,7 @@ function copyableMessageContent(message: ChatMessage) {
   if (message.type === 'gif') return '[GIF]'
   if (message.type === 'voice') return '[Voice]'
   if (message.type === 'video') return isVideoFileMessage(message) ? '[Video]' : '[Video call]'
+  if (message.type === 'order') return `[Order] ${message.order?.orderNo || ''}`.trim()
   return message.content || ''
 }
 
@@ -754,19 +755,6 @@ function applyPendingSupportDraft() {
   uni.removeStorageSync('pending-support-draft')
 }
 
-async function sendPendingSupportImage() {
-  const pendingImage = uni.getStorageSync('pending-support-image') as string | undefined
-  if (!pendingImage) return false
-  try {
-    await store.sendSupport(pendingImage, 'image')
-    uni.removeStorageSync('pending-support-image')
-    return true
-  } catch (error) {
-    showNotice(error instanceof Error ? error.message : 'Image send failed')
-    return false
-  }
-}
-
 async function handlePasteImage(event: ClipboardEvent) {
   const item = Array.from(event.clipboardData?.items || []).find((entry) => entry.type.startsWith('image/'))
   const file = item?.getAsFile()
@@ -788,7 +776,6 @@ async function sendText(content: string) {
   try {
     const replyTo = replyTarget.value || undefined
     await store.sendSupport(value, 'text', replyTo)
-    await sendPendingSupportImage()
     startReadRefresh()
     draft.value = ''
     clearReplyTarget()

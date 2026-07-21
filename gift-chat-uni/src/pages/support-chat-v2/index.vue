@@ -230,11 +230,14 @@
               :can-answer-call="canAnswerVideoMessage(msg)"
               :can-reject-call="canRejectVideoMessage(msg)"
               :can-enter-call="canEnterVideoMessage(msg)"
+              :can-manage-order="isAgent || isAdmin"
               @preview="previewImage"
               @retry="retryMessage"
               @answer-call="answerVideoMessage"
               @reject-call="rejectVideoMessage"
               @enter-call="enterVideoMessage"
+              @complete-order="openSettlementDialog"
+              @cancel-order="cancelOrder"
               @message-menu="openMessageMenu"
             />
           </view>
@@ -498,9 +501,9 @@
             <text class="work-line strong">{{ selectedOrder.payoutAmount }}</text>
             <view class="work-actions">
               <button v-if="selectedOrder.status === 'pending'" class="mini-btn" @click="changeOrderStatus(selectedOrder.id, 'processing')">{{ workbenchText.process }}</button>
-              <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn primary" @click="changeOrderStatus(selectedOrder.id, 'completed')">{{ workbenchText.complete }}</button>
+              <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn primary" @click="openSettlementDialog(selectedOrder)">{{ workbenchText.complete }}</button>
               <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn danger" @click="changeOrderStatus(selectedOrder.id, 'disputed')">{{ workbenchText.dispute }}</button>
-              <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn danger" @click="cancelSelectedOrder">{{ workbenchText.cancelOrder }}</button>
+              <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn danger" @click="cancelOrder(selectedOrder)">{{ workbenchText.cancelOrder }}</button>
             </view>
             <text v-if="selectedOrder.status === 'canceled'" class="work-line">{{ selectedOrder.cancelReason }} {{ selectedOrder.cancelNote }}</text>
           </view>
@@ -653,6 +656,45 @@
       </view>
     </view>
 
+    <view v-if="settlementDialogOpen" class="settlement-mask" @click="closeSettlementDialog">
+      <view class="settlement-dialog" @click.stop>
+        <view class="settlement-dialog-head">
+          <view>
+            <text class="settlement-dialog-kicker">Manual settlement</text>
+            <text class="settlement-dialog-title">{{ settlementTarget?.orderNo }}</text>
+          </view>
+          <view class="settlement-dialog-close" title="Close" @click="closeSettlementDialog">×</view>
+        </view>
+
+        <view class="settlement-estimate">
+          <text>Estimated payout</text>
+          <text>{{ settlementCurrency }} {{ settlementEstimatedAmount }}</text>
+        </view>
+
+        <label class="settlement-field">
+          <text>Final payout</text>
+          <input v-model="settlementForm.finalLocalAmount" type="digit" placeholder="0.00" />
+        </label>
+        <label class="settlement-field">
+          <text>VIP points</text>
+          <input v-model="settlementForm.vipPoints" type="digit" placeholder="0" />
+        </label>
+        <label class="settlement-field">
+          <text>Adjustment reason</text>
+          <textarea v-model="settlementForm.reason" maxlength="255" placeholder="Required when final payout differs from estimate" />
+        </label>
+
+        <text v-if="settlementError" class="settlement-error">{{ settlementError }}</text>
+
+        <view class="settlement-dialog-actions">
+          <button class="settlement-button secondary" :disabled="settlementSubmitting" @click="closeSettlementDialog">Cancel</button>
+          <button class="settlement-button primary" :disabled="settlementSubmitting" @click="submitSettlement">
+            {{ settlementSubmitting ? 'Saving...' : 'Complete order' }}
+          </button>
+        </view>
+      </view>
+    </view>
+
     <view v-if="incomingVideoInvite" class="incoming-call-mask">
       <view class="incoming-call-dialog">
         <text class="incoming-call-title">Video call</text>
@@ -678,7 +720,7 @@ import { connectChatSocket } from '@/utils/realtime'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { notifyIncomingSupportMessage, requestMessageNotificationPermission, setAppUnreadBadge } from '@/utils/messageNotifications'
 import { cardLogoFor, uiIcons } from '@/utils/art'
-import type { AgentItem, ChatMessage, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
+import type { AgentItem, ChatMessage, ChatOrderItem, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
 import type { LotteryFulfillmentItem, TransactionItem, VipBenefitClaimItem, WithdrawalItem } from '@/types'
 
@@ -988,6 +1030,22 @@ onMounted(() => {
   startPresenceRefresh()
   window.addEventListener('resize', checkMobile)
 })
+type SettlementTarget = ChatOrderItem | TransactionItem
+const settlementDialogOpen = ref(false)
+const settlementTarget = ref<SettlementTarget | null>(null)
+const settlementSubmitting = ref(false)
+const settlementError = ref('')
+const settlementForm = reactive({
+  finalLocalAmount: '',
+  vipPoints: '0',
+  reason: ''
+})
+const settlementEstimatedAmount = computed(() => {
+  const target = settlementTarget.value
+  if (!target) return '0'
+  return target.estimatedLocalAmount || ('localAmount' in target ? target.localAmount : '') || numericAmount(target.payoutAmount) || '0'
+})
+const settlementCurrency = computed(() => settlementTarget.value?.currencyCode || '')
 
 watch(
   () => conversation.value.map((message) => `${message.id}:${message.content}`).join('|'),
@@ -1211,6 +1269,7 @@ function copyableMessageContent(message: ChatMessage) {
   if (message.type === 'gif') return '[GIF]'
   if (message.type === 'voice') return '[语音]'
   if (message.type === 'video') return isVideoFileMessage(message) ? '[视频]' : '[视频通话]'
+  if (message.type === 'order') return `[订单] ${message.order?.orderNo || ''}`.trim()
   return message.content || ''
 }
 
@@ -1384,9 +1443,70 @@ async function changeOrderStatus(orderId: string, status: TransactionItem['statu
   }
 }
 
-async function cancelSelectedOrder() {
-  const order = selectedOrder.value
-  if (!order) return
+function openSettlementDialog(order: SettlementTarget) {
+  if (order.status !== 'pending' && order.status !== 'processing') {
+    uni.showToast({ title: 'This order can no longer be changed.', icon: 'none' })
+    return
+  }
+  settlementTarget.value = order
+  settlementForm.finalLocalAmount = order.estimatedLocalAmount || ('localAmount' in order ? order.localAmount || '' : '') || numericAmount(order.payoutAmount)
+  settlementForm.vipPoints = '0'
+  settlementForm.reason = ''
+  settlementError.value = ''
+  settlementDialogOpen.value = true
+}
+
+function closeSettlementDialog() {
+  if (settlementSubmitting.value) return
+  settlementDialogOpen.value = false
+  settlementTarget.value = null
+  settlementError.value = ''
+}
+
+async function submitSettlement() {
+  const order = settlementTarget.value
+  if (!order || settlementSubmitting.value) return
+  const finalLocalAmount = Number(settlementForm.finalLocalAmount)
+  const vipPoints = Number(settlementForm.vipPoints || '0')
+  const estimated = Number(settlementEstimatedAmount.value)
+  if (!Number.isFinite(finalLocalAmount) || finalLocalAmount <= 0) {
+    settlementError.value = 'Final payout must be greater than zero.'
+    return
+  }
+  if (!Number.isFinite(vipPoints) || vipPoints < 0) {
+    settlementError.value = 'VIP points cannot be negative.'
+    return
+  }
+  if (Number.isFinite(estimated) && finalLocalAmount !== estimated && !settlementForm.reason.trim()) {
+    settlementError.value = 'Enter a reason for changing the payout.'
+    return
+  }
+
+  settlementSubmitting.value = true
+  settlementError.value = ''
+  try {
+    await store.completeTransaction(order.id, {
+      finalLocalAmount,
+      vipPoints,
+      reason: settlementForm.reason.trim() || undefined
+    })
+    settlementDialogOpen.value = false
+    settlementTarget.value = null
+    uni.showToast({ title: workbenchText.value.orderUpdated, icon: 'success' })
+  } catch (error) {
+    settlementError.value = error instanceof Error ? error.message : workbenchText.value.orderUpdateFailed
+  } finally {
+    settlementSubmitting.value = false
+  }
+}
+
+function numericAmount(value?: string) {
+  const normalized = (value || '').replace(/[^0-9.]/g, '')
+  return normalized || ''
+}
+
+async function cancelOrder(order: SettlementTarget) {
+  if (order.status !== 'pending' && order.status !== 'processing') return
   const reasons = ['Bad card', 'Wrong code', 'Unclear image', 'Customer canceled', 'Duplicate submission', 'Other']
   uni.showActionSheet({
     itemList: reasons,
@@ -1397,6 +1517,7 @@ async function cancelSelectedOrder() {
           reason,
           notifyCustomer: true
         })
+        await store.refreshSupport()
         uni.showToast({ title: workbenchText.value.orderCanceled, icon: 'success' })
       } catch (error) {
         uni.showToast({ title: error instanceof Error ? error.message : workbenchText.value.orderCancelFailed, icon: 'none' })
@@ -2111,19 +2232,6 @@ function applyPendingSupportDraft() {
   uni.removeStorageSync('pending-support-draft')
 }
 
-async function sendPendingSupportImage() {
-  const pendingImage = uni.getStorageSync('pending-support-image') as string | undefined
-  if (!pendingImage) return false
-  try {
-    await store.sendSupport(pendingImage, 'image')
-    uni.removeStorageSync('pending-support-image')
-    return true
-  } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : 'Image send failed', icon: 'none' })
-    return false
-  }
-}
-
 async function handlePasteImage(event: ClipboardEvent) {
   const item = Array.from(event.clipboardData?.items || []).find(entry => entry.type.startsWith('image/'))
   const file = item?.getAsFile()
@@ -2153,7 +2261,6 @@ async function handleSend() {
     await store.sendSupport(value, 'text', replyTo)
     draft.value = ''
     clearReplyTarget()
-    await sendPendingSupportImage()
     scrollMessagesToBottom()
     startReadRefresh()
   } catch (error) {
@@ -4672,6 +4779,147 @@ function previewImage(url: string) {
     line-height: 40px;
     font-size: 13px;
   }
+}
+
+.settlement-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: rgba(14, 21, 18, 0.55);
+}
+
+.settlement-dialog {
+  width: min(460px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 20px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 20px 56px rgba(8, 19, 14, 0.24);
+}
+
+.settlement-dialog-head,
+.settlement-estimate,
+.settlement-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settlement-dialog-kicker,
+.settlement-dialog-title,
+.settlement-field > text,
+.settlement-error {
+  display: block;
+}
+
+.settlement-dialog-kicker {
+  color: #748079;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.settlement-dialog-title {
+  margin-top: 4px;
+  color: #1a2921;
+  font-size: 19px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.settlement-dialog-close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  background: #eef1ef;
+  color: #526059;
+  font-size: 24px;
+  line-height: 32px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.settlement-estimate {
+  margin: 18px 0 14px;
+  padding: 11px 12px;
+  border-left: 4px solid #002fa7;
+  background: #eef3ff;
+  color: #26354e;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.settlement-field {
+  display: block;
+  margin-top: 13px;
+}
+
+.settlement-field > text {
+  margin-bottom: 6px;
+  color: #4e5d55;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settlement-field input,
+.settlement-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d9dfdb;
+  border-radius: 6px;
+  background: #fafbfa;
+  color: #18231d;
+  font-size: 15px;
+}
+
+.settlement-field input {
+  height: 44px;
+  padding: 0 11px;
+}
+
+.settlement-field textarea {
+  height: 84px;
+  padding: 10px 11px;
+}
+
+.settlement-error {
+  margin-top: 10px;
+  color: #a83232;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settlement-dialog-actions {
+  margin-top: 18px;
+}
+
+.settlement-button {
+  width: auto;
+  height: 42px;
+  margin: 0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 42px;
+}
+
+.settlement-button::after { border: 0; }
+.settlement-button.secondary { flex: 0 0 112px; background: #eef1ef; color: #35433b; }
+.settlement-button.primary { flex: 1; background: #176844; color: #ffffff; }
+.settlement-button[disabled] { opacity: 0.58; }
+
+@media (max-width: 480px) {
+  .settlement-mask { align-items: flex-end; padding-left: 0; padding-right: 0; padding-bottom: 0; }
+  .settlement-dialog { width: 100%; max-height: calc(100dvh - env(safe-area-inset-top)); border-radius: 8px 8px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
 }
 
 @media (max-width: 360px) {

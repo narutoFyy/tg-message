@@ -10,8 +10,16 @@
       <view v-if="message.replyTo" class="reply-preview">
         <text class="reply-preview-line">{{ replyPreviewText }}</text>
       </view>
+      <OrderMessageCard
+        v-if="message.type === 'order' && message.order"
+        :order="message.order"
+        :can-manage="canManageOrder"
+        @preview="$emit('preview', $event)"
+        @complete="$emit('completeOrder', $event)"
+        @cancel="$emit('cancelOrder', $event)"
+      />
       <MediaMessage
-        v-if="isImageAttachment"
+        v-else-if="isImageAttachment"
         :src="mediaSource"
         :media-type="imageMediaType"
         @preview="$emit('preview', $event)"
@@ -62,6 +70,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import CallMessageCard from './CallMessageCard.vue'
+import OrderMessageCard from './OrderMessageCard.vue'
 import MediaMessage from './MediaMessage.vue'
 import MessageDeliveryStatus from './MessageDeliveryStatus.vue'
 import type { ChatMessage, VideoSessionItem } from '@/types'
@@ -84,6 +93,7 @@ const props = withDefaults(defineProps<{
   canAnswerCall?: boolean
   canRejectCall?: boolean
   canEnterCall?: boolean
+  canManageOrder?: boolean
 }>(), {
   translation: '',
   voiceLabel: 'Voice message',
@@ -97,7 +107,8 @@ const props = withDefaults(defineProps<{
   callEnterLabel: 'Enter',
   canAnswerCall: false,
   canRejectCall: false,
-  canEnterCall: false
+  canEnterCall: false,
+  canManageOrder: false
 })
 
 const emit = defineEmits<{
@@ -108,6 +119,8 @@ const emit = defineEmits<{
   (event: 'rejectCall', message: ChatMessage): void
   (event: 'enterCall', message: ChatMessage): void
   (event: 'messageMenu', message: ChatMessage, point?: { clientX: number; clientY: number }): void
+  (event: 'completeOrder', order: NonNullable<ChatMessage['order']>): void
+  (event: 'cancelOrder', order: NonNullable<ChatMessage['order']>): void
 }>()
 
 const defaultCallTitle = 'Video call'
@@ -127,6 +140,7 @@ const mediaCaption = computed(() => {
 const bubbleKindClass = computed(() => {
   if (isImageAttachment.value || isVideoAttachment.value) return 'media-bubble'
   if (props.message.type === 'video') return 'call-bubble'
+  if (props.message.type === 'order') return 'order-bubble'
   return ''
 })
 
@@ -304,6 +318,14 @@ function emitMessageMenu(event: Event) {
   padding: 5px 8px 6px;
   background: rgba(255, 255, 255, 0.86);
   border-radius: 0 0 8px 8px;
+}
+
+.chat-bubble.order-bubble {
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  background: transparent !important;
+  box-shadow: none;
 }
 
 .video-message {

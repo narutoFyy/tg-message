@@ -2,6 +2,7 @@ package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.model.ChatMessage;
 import com.cardnova.giftchat.model.ChatMessageReply;
+import com.cardnova.giftchat.model.ChatOrderItem;
 import com.cardnova.giftchat.model.MessageAttachment;
 import com.cardnova.giftchat.model.RealtimeFanoutEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -138,6 +139,28 @@ public class RealtimeChatService {
         ChatMessageReply replyTo,
         List<MessageAttachment> attachments
     ) {
+        broadcast(channelKey, senderUserId, selfAuthor, otherAuthor, messageType, content, messageId, createdAt,
+            clientMessageId, serverSeq, deliveryStatus, deliveredAt, failedReason, replyTo, attachments, null);
+    }
+
+    public void broadcast(
+        String channelKey,
+        String senderUserId,
+        String selfAuthor,
+        String otherAuthor,
+        String messageType,
+        String content,
+        String messageId,
+        String createdAt,
+        String clientMessageId,
+        Long serverSeq,
+        String deliveryStatus,
+        String deliveredAt,
+        String failedReason,
+        ChatMessageReply replyTo,
+        List<MessageAttachment> attachments,
+        ChatOrderItem order
+    ) {
         ChatMessage payload = new ChatMessage(
             messageId,
             otherAuthor,
@@ -151,7 +174,8 @@ public class RealtimeChatService {
             deliveredAt == null ? "" : deliveredAt,
             failedReason == null ? "" : failedReason,
             attachments == null ? List.of() : attachments,
-            replyTo
+            replyTo,
+            order
         );
         broadcastAuthorAwareLocal(channelKey, senderUserId, selfAuthor, otherAuthor, payload);
         publish(channelKey, senderUserId, payload, true, selfAuthor, otherAuthor);
@@ -275,7 +299,8 @@ public class RealtimeChatService {
                     message.deliveredAt(),
                     message.failedReason(),
                     message.attachments(),
-                    message.replyTo()
+                    message.replyTo(),
+                    message.order()
                 );
             }
             sendSafely(session, sessionPayload);

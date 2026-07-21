@@ -125,7 +125,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { uploadImage } from '@/utils/api'
 import { cardLogoFor, uiIcons } from '@/utils/art'
-import type { GiftCardFaceCurrency, TransactionItem } from '@/types'
+import type { GiftCardFaceCurrency } from '@/types'
 
 const store = useAppStore()
 const notice = ref('')
@@ -275,20 +275,14 @@ async function confirmSell() {
       speed: form.speed,
       cardData: form.cardData || undefined,
       voucherImageUrl: form.voucherImageUrl || undefined,
-      sendChatMessage: false
+      sendChatMessage: true
     }
     const fingerprint = JSON.stringify(payload)
     if (fingerprint !== sellRequestFingerprint.value) {
       sellRequestFingerprint.value = fingerprint
       sellRequestId.value = createSellRequestId()
     }
-    const transaction = await store.createSellOrder({ ...payload, clientRequestId: sellRequestId.value })
-    uni.setStorageSync('pending-support-draft', buildSellCardDraft(transaction))
-    if (form.voucherImageUrl) {
-      uni.setStorageSync('pending-support-image', form.voucherImageUrl)
-    } else {
-      uni.removeStorageSync('pending-support-image')
-    }
+    await store.createSellOrder({ ...payload, clientRequestId: sellRequestId.value })
     uni.redirectTo({ url: '/pages/support/index' })
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Sell failed'
@@ -298,22 +292,6 @@ async function confirmSell() {
 function createSellRequestId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   return `sell-${Date.now()}-${Math.random().toString(36).slice(2, 14)}`
-}
-
-function buildSellCardDraft(transaction: TransactionItem) {
-  return [
-    `Sell order ${transaction.orderNo}`,
-    `Card: ${form.cardName}`,
-    `Card currency: ${form.cardCountry}`,
-    `Settlement country: ${accountCountryName.value}`,
-    `Face value: ${balanceText.value || '0'} ${form.cardCountry} x${form.quantity}`,
-    `Type: ${form.cardType}`,
-    `Speed: ${form.speed}`,
-    `Rate: 1 ${transaction.faceCurrencyCode || form.cardCountry} card = ${transaction.businessRate || selectedQuote.value} ${transaction.currencyCode || accountCurrencyCode.value}`,
-    `Settlement: ${transaction.payoutAmount}`,
-    form.cardData ? `Card data: ${form.cardData}` : '',
-    form.voucherImageUrl ? 'Voucher: Image attached below' : ''
-  ].filter(Boolean).join('\n')
 }
 
 function chooseImageOnce() {

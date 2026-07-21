@@ -760,6 +760,14 @@ export function updateTransactionStatus(transactionId: string, status: Transacti
   return request<TransactionItem>(`/transactions/${transactionId}/status`, 'POST', { status })
 }
 
+export function completeTransaction(transactionId: string, payload: {
+  finalLocalAmount: number
+  vipPoints: number
+  reason?: string
+}) {
+  return request<TransactionItem>(`/transactions/${transactionId}/complete`, 'POST', payload)
+}
+
 export function cancelTransaction(transactionId: string, payload: { reason: string; note?: string; notifyCustomer?: boolean }) {
   return request<TransactionItem>(`/transactions/${transactionId}/cancel`, 'POST', payload)
 }

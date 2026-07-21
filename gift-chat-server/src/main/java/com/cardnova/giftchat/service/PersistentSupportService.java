@@ -4,9 +4,11 @@ import com.cardnova.giftchat.dto.SendSupportMessageRequest;
 import com.cardnova.giftchat.entity.AgentWelcomeMessageEntity;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.SupportMessageEntity;
+import com.cardnova.giftchat.entity.TradeOrderEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.model.ChatMessage;
 import com.cardnova.giftchat.model.ChatMessageReply;
+import com.cardnova.giftchat.model.ChatOrderItem;
 import com.cardnova.giftchat.model.ChatMessageSync;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
@@ -21,6 +23,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -319,18 +322,56 @@ public class PersistentSupportService {
         UserEntity sender,
         String content
     ) {
+        return appendUserOrderMessage(conversation, sender, content, null);
+    }
+
+    @Transactional
+    public ChatMessage appendUserOrderMessage(
+        SupportConversationEntity conversation,
+        UserEntity sender,
+        String content,
+        TradeOrderEntity tradeOrder
+    ) {
         if (sender == null || !conversation.getCustomerUser().getId().equals(sender.getId())) {
             throw new IllegalArgumentException("Order message sender does not own the support conversation");
         }
-        SupportMessageEntity saved = appendMessageEntity(conversation, sender, "ME", "TEXT", content, "", null);
+        if (tradeOrder != null && !sender.getId().equals(tradeOrder.getOwnerUser().getId())) {
+            throw new IllegalArgumentException("Order message sender does not own the trade order");
+        }
+        SupportMessageEntity saved = appendMessageEntity(
+            conversation,
+            sender,
+            "ME",
+            tradeOrder == null ? "TEXT" : "ORDER",
+            content,
+            "",
+            null,
+            tradeOrder
+        );
         ChatMessage message = normalizeOwnSupportMessage(saved);
-        mirrorAfterCommit(saved);
-        realtimeChatService.broadcast(
-            RealtimeChatService.supportChannel(conversation.getId()),
-            sender.getId(),
+        if (tradeOrder == null) {
+            mirrorAfterCommit(saved);
+        }
+        broadcastOrderMessageAfterCommit(saved);
+        return message;
+    }
+
+    @Transactional
+    public void publishOrderUpdate(TradeOrderEntity tradeOrder) {
+        if (tradeOrder == null) {
+            return;
+        }
+        supportMessageRepository.findByTradeOrder_Id(tradeOrder.getId())
+            .ifPresent(this::broadcastOrderMessageAfterCommit);
+    }
+
+    private void broadcastOrderMessageAfterCommit(SupportMessageEntity saved) {
+        Runnable broadcast = () -> realtimeChatService.broadcast(
+            RealtimeChatService.supportChannel(saved.getConversation().getId()),
+            saved.getSenderUser() == null ? null : saved.getSenderUser().getId(),
             "me",
             "friend",
-            "text",
+            saved.getMessageType().toLowerCase(),
             saved.getContent(),
             saved.getId(),
             MESSAGE_TIME_FORMATTER.format(saved.getCreatedAt()),
@@ -339,9 +380,20 @@ public class PersistentSupportService {
             saved.getDeliveryStatus(),
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
             saved.getFailedReason(),
-            null
+            replyToChatMessage(saved),
+            messageAttachmentService.attachmentsFor("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent()),
+            toChatOrder(saved.getTradeOrder())
         );
-        return message;
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    broadcast.run();
+                }
+            });
+        } else {
+            broadcast.run();
+        }
     }
 
     @Transactional
@@ -497,11 +549,25 @@ public class PersistentSupportService {
         String clientMessageId,
         ChatMessageReply replyTo
     ) {
+        return appendMessageEntity(conversation, sender, senderRole, messageType, content, clientMessageId, replyTo, null);
+    }
+
+    private SupportMessageEntity appendMessageEntity(
+        SupportConversationEntity conversation,
+        UserEntity sender,
+        String senderRole,
+        String messageType,
+        String content,
+        String clientMessageId,
+        ChatMessageReply replyTo,
+        TradeOrderEntity tradeOrder
+    ) {
         LocalDateTime now = LocalDateTime.now();
         SupportMessageEntity entity = new SupportMessageEntity();
         entity.setId(UUID.randomUUID().toString());
         entity.setConversation(conversation);
         entity.setSenderUser(sender);
+        entity.setTradeOrder(tradeOrder);
         entity.setSenderRole(senderRole.trim().toUpperCase());
         entity.setMessageType(messageType.trim().toUpperCase());
         entity.setContent(content.trim());
@@ -642,7 +708,8 @@ public class PersistentSupportService {
             message.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(message.getDeliveredAt()),
             message.getFailedReason() == null ? "" : message.getFailedReason(),
             messageAttachmentService.attachmentsFor("SUPPORT", message.getId(), message.getMessageType(), message.getContent()),
-            replyToChatMessage(message)
+            replyToChatMessage(message),
+            toChatOrder(message.getTradeOrder())
         );
     }
 
@@ -660,8 +727,40 @@ public class PersistentSupportService {
             saved.getDeliveredAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(saved.getDeliveredAt()),
             saved.getFailedReason() == null ? "" : saved.getFailedReason(),
             messageAttachmentService.attachmentsFor("SUPPORT", saved.getId(), saved.getMessageType(), saved.getContent()),
-            replyToChatMessage(saved)
+            replyToChatMessage(saved),
+            toChatOrder(saved.getTradeOrder())
         );
+    }
+
+    private ChatOrderItem toChatOrder(TradeOrderEntity order) {
+        if (order == null) {
+            return null;
+        }
+        BigDecimal estimated = order.getEstimatedLocalAmount() == null ? order.getLocalAmount() : order.getEstimatedLocalAmount();
+        BigDecimal finalAmount = order.getFinalLocalAmount();
+        if (finalAmount == null && "COMPLETED".equalsIgnoreCase(order.getStatusCode())) {
+            finalAmount = order.getLocalAmount();
+        }
+        return new ChatOrderItem(
+            order.getId(),
+            order.getOrderNo(),
+            order.getCardName(),
+            order.getFaceValue(),
+            decimal(estimated),
+            decimal(finalAmount),
+            order.getPayoutAmount(),
+            order.getCurrencyCode() == null ? "" : order.getCurrencyCode(),
+            order.getStatusCode().toLowerCase(),
+            order.getVoucherImageUrl() == null ? "" : order.getVoucherImageUrl(),
+            decimal(order.getManualVipPoints()),
+            order.getSettlementReason() == null ? "" : order.getSettlementReason(),
+            order.getSettledByUser() == null ? "" : order.getSettledByUser().getUsername(),
+            order.getSettledAt() == null ? "" : MESSAGE_TIME_FORMATTER.format(order.getSettledAt())
+        );
+    }
+
+    private String decimal(BigDecimal value) {
+        return value == null ? "" : value.stripTrailingZeros().toPlainString();
     }
 
     private ChatMessageReply resolveReplyTo(SupportConversationEntity conversation, UserEntity currentUser, ChatMessageReply replyTo) {

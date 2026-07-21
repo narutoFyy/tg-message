@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS support_message (
     id VARCHAR(36) PRIMARY KEY,
     conversation_id VARCHAR(36) NOT NULL,
     sender_user_id VARCHAR(36),
+    trade_order_id VARCHAR(36),
     sender_role VARCHAR(32) NOT NULL,
     message_type VARCHAR(32) NOT NULL,
     content TEXT NOT NULL,
@@ -167,6 +168,12 @@ CREATE TABLE IF NOT EXISTS trade_order (
     payout_amount VARCHAR(32) NOT NULL,
     base_amount_usd DECIMAL(18, 6),
     local_amount DECIMAL(18, 2),
+    estimated_local_amount DECIMAL(18, 2),
+    final_local_amount DECIMAL(18, 2),
+    manual_vip_points DECIMAL(18, 2),
+    settlement_reason VARCHAR(255),
+    settled_by_user_id VARCHAR(36),
+    settled_at TIMESTAMP,
     currency_code VARCHAR(3),
     business_rate_snapshot DECIMAL(18, 6),
     face_to_usd_rate_snapshot DECIMAL(18, 6),
@@ -185,7 +192,26 @@ CREATE TABLE IF NOT EXISTS trade_order (
     CONSTRAINT fk_trade_counterparty FOREIGN KEY (counterparty_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_trade_friendship FOREIGN KEY (friendship_id) REFERENCES friendship (id),
     CONSTRAINT fk_trade_order_canceled_by FOREIGN KEY (canceled_by_user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_trade_order_settled_by FOREIGN KEY (settled_by_user_id) REFERENCES app_user (id),
     CONSTRAINT ux_trade_order_owner_request UNIQUE (owner_user_id, client_request_id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_support_message_trade_order ON support_message (trade_order_id);
+
+CREATE TABLE IF NOT EXISTS trade_order_settlement_audit (
+    id VARCHAR(36) PRIMARY KEY,
+    trade_order_id VARCHAR(36) NOT NULL,
+    operator_user_id VARCHAR(36) NOT NULL,
+    action_code VARCHAR(32) NOT NULL,
+    estimated_local_amount DECIMAL(18, 2),
+    final_local_amount DECIMAL(18, 2),
+    currency_code VARCHAR(3),
+    vip_points DECIMAL(18, 2) NOT NULL,
+    reason_note VARCHAR(255),
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_trade_settlement_audit_order FOREIGN KEY (trade_order_id) REFERENCES trade_order (id),
+    CONSTRAINT fk_trade_settlement_audit_operator FOREIGN KEY (operator_user_id) REFERENCES app_user (id),
+    CONSTRAINT ux_trade_settlement_audit_action UNIQUE (trade_order_id, action_code)
 );
 
 CREATE TABLE IF NOT EXISTS trade_order_number (

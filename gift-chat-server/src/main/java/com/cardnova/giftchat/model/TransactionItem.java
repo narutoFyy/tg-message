@@ -11,6 +11,8 @@ public record TransactionItem(
     String payoutAmount,
     String baseAmountUsd,
     String localAmount,
+    String estimatedLocalAmount,
+    String finalLocalAmount,
     String currencyCode,
     String businessRate,
     String faceToUsdRate,
@@ -24,6 +26,10 @@ public record TransactionItem(
     String cancelNote,
     String canceledBy,
     String canceledAt,
+    String manualVipPoints,
+    String settlementReason,
+    String settledBy,
+    String settledAt,
     String createdAt,
     String updatedAt
 ) {

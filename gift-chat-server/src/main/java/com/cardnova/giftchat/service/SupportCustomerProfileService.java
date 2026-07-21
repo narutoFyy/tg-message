@@ -129,6 +129,8 @@ public class SupportCustomerProfileService {
             order.getPayoutAmount(),
             decimal(order.getBaseAmountUsd()),
             decimal(order.getLocalAmount()),
+            decimal(order.getEstimatedLocalAmount() == null ? order.getLocalAmount() : order.getEstimatedLocalAmount()),
+            decimal(order.getFinalLocalAmount()),
             value(order.getCurrencyCode()),
             decimal(order.getBusinessRateSnapshot()),
             decimal(order.getFaceToUsdRateSnapshot()),
@@ -142,6 +144,10 @@ public class SupportCustomerProfileService {
             value(order.getCancelNote()),
             order.getCanceledByUser() == null ? "" : order.getCanceledByUser().getUsername(),
             order.getCanceledAt() == null ? "" : TIME_FORMATTER.format(order.getCanceledAt()),
+            decimal(order.getManualVipPoints()),
+            value(order.getSettlementReason()),
+            order.getSettledByUser() == null ? "" : order.getSettledByUser().getUsername(),
+            order.getSettledAt() == null ? "" : TIME_FORMATTER.format(order.getSettledAt()),
             TIME_FORMATTER.format(order.getCreatedAt()),
             TIME_FORMATTER.format(order.getUpdatedAt())
         );

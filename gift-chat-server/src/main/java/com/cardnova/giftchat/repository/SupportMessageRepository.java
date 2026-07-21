@@ -10,6 +10,8 @@ import java.util.Optional;
 
 public interface SupportMessageRepository extends JpaRepository<SupportMessageEntity, String> {
 
+    Optional<SupportMessageEntity> findByTradeOrder_Id(String tradeOrderId);
+
     List<SupportMessageEntity> findByConversation_IdOrderByCreatedAtAsc(String conversationId);
 
     List<SupportMessageEntity> findTop50ByTencentMirrorStatusOrderByCreatedAtAsc(String tencentMirrorStatus);

@@ -3,9 +3,11 @@ package com.cardnova.giftchat.service;
 import com.cardnova.giftchat.api.ConflictException;
 import com.cardnova.giftchat.dto.CreateTransactionRequest;
 import com.cardnova.giftchat.dto.CreateSellOrderRequest;
+import com.cardnova.giftchat.dto.CompleteTransactionRequest;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.FriendshipEntity;
 import com.cardnova.giftchat.entity.TradeOrderEntity;
+import com.cardnova.giftchat.entity.TradeOrderSettlementAuditEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.entity.GiftCardRateEntity;
 import com.cardnova.giftchat.model.TransactionItem;
@@ -14,6 +16,7 @@ import com.cardnova.giftchat.repository.BlacklistEntryRepository;
 import com.cardnova.giftchat.repository.FriendshipRepository;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
 import com.cardnova.giftchat.repository.TradeOrderRepository;
+import com.cardnova.giftchat.repository.TradeOrderSettlementAuditRepository;
 import com.cardnova.giftchat.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +39,7 @@ import java.util.UUID;
 public class PersistentTransactionService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final Set<String> ALLOWED_STATUSES = Set.of("pending", "processing", "completed", "disputed");
+    private static final Set<String> ALLOWED_STATUSES = Set.of("pending", "processing", "disputed");
     private static final Set<String> CANCELABLE_STATUSES = Set.of("PENDING", "PROCESSING");
 
     private final TradeOrderRepository tradeOrderRepository;
@@ -53,6 +56,7 @@ public class PersistentTransactionService {
     private final PersistentRateService persistentRateService;
     private final CountryCodeService countryCodeService;
     private final TradeOrderNumberService tradeOrderNumberService;
+    private final TradeOrderSettlementAuditRepository tradeOrderSettlementAuditRepository;
 
     public PersistentTransactionService(
         TradeOrderRepository tradeOrderRepository,
@@ -68,7 +72,8 @@ public class PersistentTransactionService {
         UserHiddenRecordService userHiddenRecordService,
         PersistentRateService persistentRateService,
         CountryCodeService countryCodeService,
-        TradeOrderNumberService tradeOrderNumberService
+        TradeOrderNumberService tradeOrderNumberService,
+        TradeOrderSettlementAuditRepository tradeOrderSettlementAuditRepository
     ) {
         this.tradeOrderRepository = tradeOrderRepository;
         this.currentUserService = currentUserService;
@@ -84,6 +89,7 @@ public class PersistentTransactionService {
         this.persistentRateService = persistentRateService;
         this.countryCodeService = countryCodeService;
         this.tradeOrderNumberService = tradeOrderNumberService;
+        this.tradeOrderSettlementAuditRepository = tradeOrderSettlementAuditRepository;
     }
 
     public List<TransactionItem> getTransactions() {
@@ -210,6 +216,7 @@ public class PersistentTransactionService {
         entity.setPayoutAmount(formatLocalAmount(country.currencySymbol(), localAmount));
         entity.setBaseAmountUsd(baseAmountUsd);
         entity.setLocalAmount(localAmount);
+        entity.setEstimatedLocalAmount(localAmount);
         entity.setCurrencyCode(country.currencyCode());
         entity.setBusinessRateSnapshot(selectedQuote.localPayoutPerUnit());
         entity.setFaceToUsdRateSnapshot(faceToUsdRate);
@@ -222,9 +229,7 @@ public class PersistentTransactionService {
         entity.setUpdatedAt(LocalDateTime.now());
 
         TradeOrderEntity saved = tradeOrderRepository.save(entity);
-        if (request.sendChatMessage() == null || request.sendChatMessage()) {
-            persistentSupportService.appendSystemMessage(conversation, sellOrderChatMessage(saved, request));
-        }
+        persistentSupportService.appendUserOrderMessage(conversation, currentUser, sellOrderChatMessage(saved, request), saved);
         notificationService.notifyUser(
             assignedAgent,
             currentUser,
@@ -249,7 +254,7 @@ public class PersistentTransactionService {
     @Transactional
     public TransactionItem updateStatus(String transactionId, String nextStatus) {
         UserEntity currentUser = currentUserService.getCurrentUser();
-        TradeOrderEntity order = tradeOrderRepository.findById(transactionId)
+        TradeOrderEntity order = tradeOrderRepository.findByIdForUpdate(transactionId)
             .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
 
         if (!canAccess(order, currentUser)) {
@@ -262,10 +267,59 @@ public class PersistentTransactionService {
         order.setStatusCode(normalizedStatus.toUpperCase());
         order.setUpdatedAt(LocalDateTime.now());
         TradeOrderEntity saved = tradeOrderRepository.save(order);
-        if ("completed".equals(normalizedStatus)) {
-            referralRewardService.rewardCompletedTrade(saved);
-            vipService.awardCompletedOrderPoints(saved);
+        persistentSupportService.publishOrderUpdate(saved);
+        return toTransactionItem(saved, currentUser.getId());
+    }
+
+    @Transactional
+    public TransactionItem completeTransaction(String transactionId, CompleteTransactionRequest request) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        currentUserService.requireAgentOrAdmin(currentUser);
+
+        TradeOrderEntity order = tradeOrderRepository.findByIdForUpdate(transactionId)
+            .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+        if (!canStaffOperate(order, currentUser)) {
+            throw new IllegalArgumentException("Transaction not accessible");
         }
+        if (!CANCELABLE_STATUSES.contains(order.getStatusCode().toUpperCase())) {
+            throw new ConflictException("Only pending or processing orders can be completed");
+        }
+
+        BigDecimal finalAmount = money(request.finalLocalAmount());
+        BigDecimal vipPoints = money(request.vipPoints());
+        if (finalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Final local payout must be greater than zero");
+        }
+        if (vipPoints.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("VIP points cannot be negative");
+        }
+
+        BigDecimal estimatedAmount = estimatedAmount(order);
+        String reason = normalizeSettlementReason(request.reason());
+        if (estimatedAmount != null && finalAmount.compareTo(estimatedAmount) != 0 && reason.isBlank()) {
+            throw new IllegalArgumentException("Settlement reason is required when final payout differs from estimate");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        order.setEstimatedLocalAmount(estimatedAmount);
+        order.setFinalLocalAmount(finalAmount);
+        order.setLocalAmount(finalAmount);
+        order.setPayoutAmount(formatLocalAmount(
+            countryCodeService.requireCountry(order.getOwnerUser().getCountryCode()).currencySymbol(),
+            finalAmount
+        ));
+        order.setManualVipPoints(vipPoints);
+        order.setSettlementReason(reason.isBlank() ? null : reason);
+        order.setSettledByUser(currentUser);
+        order.setSettledAt(now);
+        order.setStatusCode("COMPLETED");
+        order.setUpdatedAt(now);
+        TradeOrderEntity saved = tradeOrderRepository.save(order);
+
+        vipService.grantManualOrderPoints(saved, vipPoints);
+        referralRewardService.rewardCompletedTrade(saved);
+        saveSettlementAudit(saved, currentUser, "COMPLETED", estimatedAmount, finalAmount, vipPoints, reason, now);
+        persistentSupportService.publishOrderUpdate(saved);
         return toTransactionItem(saved, currentUser.getId());
     }
 
@@ -285,6 +339,8 @@ public class PersistentTransactionService {
             order.getPayoutAmount(),
             decimal(order.getBaseAmountUsd()),
             decimal(order.getLocalAmount()),
+            decimal(order.getEstimatedLocalAmount() == null ? order.getLocalAmount() : order.getEstimatedLocalAmount()),
+            decimal(order.getFinalLocalAmount()),
             order.getCurrencyCode() == null ? "" : order.getCurrencyCode(),
             decimal(order.getBusinessRateSnapshot()),
             decimal(order.getFaceToUsdRateSnapshot()),
@@ -298,6 +354,10 @@ public class PersistentTransactionService {
             order.getCancelNote() == null ? "" : order.getCancelNote(),
             order.getCanceledByUser() == null ? "" : order.getCanceledByUser().getUsername(),
             order.getCanceledAt() == null ? "" : TIME_FORMATTER.format(order.getCanceledAt()),
+            decimal(order.getManualVipPoints()),
+            order.getSettlementReason() == null ? "" : order.getSettlementReason(),
+            order.getSettledByUser() == null ? "" : order.getSettledByUser().getUsername(),
+            order.getSettledAt() == null ? "" : TIME_FORMATTER.format(order.getSettledAt()),
             TIME_FORMATTER.format(order.getCreatedAt()),
             TIME_FORMATTER.format(order.getUpdatedAt())
         );
@@ -320,7 +380,7 @@ public class PersistentTransactionService {
         UserEntity currentUser = currentUserService.getCurrentUser();
         currentUserService.requireAgentOrAdmin(currentUser);
 
-        TradeOrderEntity order = tradeOrderRepository.findById(transactionId)
+        TradeOrderEntity order = tradeOrderRepository.findByIdForUpdate(transactionId)
             .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
 
         if (!canAccess(order, currentUser)) {
@@ -339,6 +399,18 @@ public class PersistentTransactionService {
         order.setCanceledAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         TradeOrderEntity saved = tradeOrderRepository.save(order);
+
+        saveSettlementAudit(
+            saved,
+            currentUser,
+            "CANCELED",
+            estimatedAmount(saved),
+            null,
+            BigDecimal.ZERO.setScale(2),
+            normalizedReason + (normalizedNote.isBlank() ? "" : ": " + normalizedNote),
+            saved.getCanceledAt()
+        );
+        persistentSupportService.publishOrderUpdate(saved);
 
         if (notifyCustomer == null || notifyCustomer) {
             SupportConversationEntity conversation = persistentSupportService.ensureUserConversation(order.getOwnerUser());
@@ -365,6 +437,10 @@ public class PersistentTransactionService {
 
     private boolean isAdmin(UserEntity user) {
         return "ADMIN".equalsIgnoreCase(user.getRoleCode());
+    }
+
+    private boolean canStaffOperate(TradeOrderEntity order, UserEntity currentUser) {
+        return isAdmin(currentUser) || canAgentAccessCustomerOrder(order, currentUser);
     }
 
     private boolean shouldShowToCurrentUser(TradeOrderEntity order, UserEntity currentUser) {
@@ -458,6 +534,55 @@ public class PersistentTransactionService {
             throw new IllegalArgumentException("Invalid client request id");
         }
         return normalized;
+    }
+
+    private BigDecimal estimatedAmount(TradeOrderEntity order) {
+        return order.getEstimatedLocalAmount() == null ? order.getLocalAmount() : order.getEstimatedLocalAmount();
+    }
+
+    private BigDecimal money(BigDecimal value) {
+        return (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String normalizeSettlementReason(String reason) {
+        if (!StringUtils.hasText(reason)) {
+            return "";
+        }
+        String normalized = reason.trim();
+        if (normalized.length() > 255) {
+            throw new IllegalArgumentException("Settlement reason must be 255 characters or less");
+        }
+        return normalized;
+    }
+
+    private void saveSettlementAudit(
+        TradeOrderEntity order,
+        UserEntity operator,
+        String action,
+        BigDecimal estimatedAmount,
+        BigDecimal finalAmount,
+        BigDecimal vipPoints,
+        String reason,
+        LocalDateTime createdAt
+    ) {
+        if (tradeOrderSettlementAuditRepository.existsByTradeOrder_IdAndActionCode(order.getId(), action)) {
+            throw new ConflictException("Order action was already recorded");
+        }
+        TradeOrderSettlementAuditEntity audit = new TradeOrderSettlementAuditEntity();
+        audit.setId(UUID.randomUUID().toString());
+        audit.setTradeOrder(order);
+        audit.setOperatorUser(operator);
+        audit.setActionCode(action);
+        audit.setEstimatedLocalAmount(estimatedAmount);
+        audit.setFinalLocalAmount(finalAmount);
+        audit.setCurrencyCode(order.getCurrencyCode());
+        audit.setVipPoints(money(vipPoints));
+        String normalizedReason = StringUtils.hasText(reason) ? reason.trim() : null;
+        audit.setReasonNote(normalizedReason != null && normalizedReason.length() > 255
+            ? normalizedReason.substring(0, 255)
+            : normalizedReason);
+        audit.setCreatedAt(createdAt == null ? LocalDateTime.now() : createdAt);
+        tradeOrderSettlementAuditRepository.save(audit);
     }
 
     private String sellOrderRequestHash(CreateSellOrderRequest request) {

@@ -25,6 +25,10 @@ public class SupportMessageEntity {
     @JoinColumn(name = "sender_user_id")
     private UserEntity senderUser;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "trade_order_id")
+    private TradeOrderEntity tradeOrder;
+
     @Column(name = "sender_role", nullable = false, length = 32)
     private String senderRole;
 
@@ -95,6 +99,14 @@ public class SupportMessageEntity {
 
     public void setSenderUser(UserEntity senderUser) {
         this.senderUser = senderUser;
+    }
+
+    public TradeOrderEntity getTradeOrder() {
+        return tradeOrder;
+    }
+
+    public void setTradeOrder(TradeOrderEntity tradeOrder) {
+        this.tradeOrder = tradeOrder;
     }
 
     public String getSenderRole() {

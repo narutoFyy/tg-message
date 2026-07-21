@@ -235,7 +235,7 @@ public class LotteryService {
 
     private void ensureChances(UserEntity user, String vipLevel, LocalDateTime now) {
         grantChance(user, "WELCOME:" + user.getId(), "WELCOME", "VIP0", "ONCE", "WELCOME");
-        if (vipWeight(vipLevel) >= 1 && vipService.hasCompletedTrade(user.getId())) {
+        if (vipWeight(vipLevel) >= 1) {
             grantChance(user, "VIP1_UPGRADE:" + user.getId(), "VIP_UPGRADE", "VIP1", "ONCE", "VIP1-UPGRADE");
         }
         Period period = periodFor(vipLevel, now);

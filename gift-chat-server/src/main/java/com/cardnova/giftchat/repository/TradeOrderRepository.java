@@ -2,7 +2,10 @@ package com.cardnova.giftchat.repository;
 
 import com.cardnova.giftchat.entity.TradeOrderEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+
+import jakarta.persistence.LockModeType;
 
 import java.math.BigDecimal;
 
@@ -22,6 +25,10 @@ public interface TradeOrderRepository extends JpaRepository<TradeOrderEntity, St
     List<TradeOrderEntity> findTop12ByStatusCodeOrderByUpdatedAtDesc(String statusCode);
 
     Optional<TradeOrderEntity> findByOwnerUser_IdAndClientRequestId(String ownerUserId, String clientRequestId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select item from TradeOrderEntity item where item.id = :id")
+    Optional<TradeOrderEntity> findByIdForUpdate(String id);
 
     boolean existsByOwnerUser_IdAndStatusCodeIgnoreCase(String ownerUserId, String statusCode);
 

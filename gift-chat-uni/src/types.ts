@@ -19,7 +19,7 @@ export interface ChatMessage {
   id: string
   author: 'me' | 'support' | 'friend' | 'system'
   content: string
-  type: 'text' | 'image' | 'voice' | 'gif' | 'link' | 'video'
+  type: 'text' | 'image' | 'voice' | 'gif' | 'link' | 'video' | 'order'
   createdAt: string
   readState?: 'none' | 'sending' | 'sent' | 'read' | 'failed'
   clientMessageId?: string
@@ -29,6 +29,24 @@ export interface ChatMessage {
   failedReason?: string
   attachments?: MessageAttachment[]
   replyTo?: ChatMessageReply | null
+  order?: ChatOrderItem | null
+}
+
+export interface ChatOrderItem {
+  id: string
+  orderNo: string
+  cardName: string
+  faceValue: string
+  estimatedLocalAmount: string
+  finalLocalAmount: string
+  payoutAmount: string
+  currencyCode: string
+  status: TransactionItem['status']
+  voucherImageUrl: string
+  manualVipPoints: string
+  settlementReason: string
+  settledBy: string
+  settledAt: string
 }
 
 export interface ChatMessageReply {
@@ -145,6 +163,8 @@ export interface TransactionItem {
   payoutAmount: string
   baseAmountUsd?: string
   localAmount?: string
+  estimatedLocalAmount?: string
+  finalLocalAmount?: string
   currencyCode?: string
   businessRate?: string
   faceCurrencyCode?: string
@@ -161,6 +181,10 @@ export interface TransactionItem {
   cancelNote: string
   canceledBy: string
   canceledAt: string
+  manualVipPoints?: string
+  settlementReason?: string
+  settledBy?: string
+  settledAt?: string
   createdAt: string
   updatedAt: string
 }

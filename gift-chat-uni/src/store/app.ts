@@ -104,6 +104,7 @@ import {
   updateRateStatus as updateRateStatusRequest,
   updateRate as updateRateRequest,
   cancelTransaction as cancelTransactionRequest,
+  completeTransaction as completeTransactionRequest,
   updateTransactionStatus as updateTransactionStatusRequest,
   updateAccountAvatar as updateAccountAvatarRequest,
   updateVideoSessionStatus as updateVideoSessionStatusRequest,
@@ -223,6 +224,10 @@ function normalizeChatMessage(message: ChatMessage) {
   return {
     ...message,
     content: normalizeMediaMessageContent(message),
+    order: message.order ? {
+      ...message.order,
+      voucherImageUrl: message.order.voucherImageUrl ? resolveMediaUrl(message.order.voucherImageUrl) : ''
+    } : message.order,
     attachments: message.attachments?.map((attachment) => ({
       ...attachment,
       url: resolveMediaUrl(attachment.url),
@@ -260,7 +265,9 @@ function getInitialUser() {
 
 function mergeUniqueMessage(messages: ChatMessage[], incomingMessage: ChatMessage) {
   const incoming = normalizeChatMessage(incomingMessage)
-  if (messages.some((message) => message.id === incoming.id)) {
+  const existingIndex = messages.findIndex((message) => message.id === incoming.id)
+  if (existingIndex >= 0) {
+    messages.splice(existingIndex, 1, incoming)
     return
   }
   const pendingIndex = messages.findIndex((message) =>
@@ -1197,6 +1204,27 @@ export function useAppStore() {
     return updated
   }
 
+  async function completeTransaction(transactionId: string, payload: {
+    finalLocalAmount: number
+    vipPoints: number
+    reason?: string
+  }) {
+    const updated = await completeTransactionRequest(transactionId, payload)
+    const index = state.transactions.findIndex((item) => item.id === transactionId)
+    if (index >= 0) {
+      state.transactions.splice(index, 1, updated)
+    }
+    await Promise.all([
+      refreshSupport(),
+      refreshSupportCustomerProfile(state.supportConversationId, true),
+      refreshSupportLedger(),
+      refreshBalanceSummary(),
+      refreshVipSummary(),
+      refreshCompletedTransactionFeed()
+    ])
+    return updated
+  }
+
   async function refreshWithdrawals() {
     const withdrawals = await fetchWithdrawals()
     state.withdrawals = withdrawals
@@ -1221,9 +1249,7 @@ export function useAppStore() {
     }
     refreshSupportCustomerProfile(state.supportConversationId, true).catch(() => {})
     refreshSupportLedger().catch(() => {})
-    if (status === 'completed') {
-      refreshCompletedTransactionFeed().catch(() => {})
-    }
+    refreshSupport().catch(() => {})
     return updated
   }
 
@@ -1293,6 +1319,7 @@ export function useAppStore() {
     createTransaction,
     createSellOrder,
     updateTransactionStatus,
+    completeTransaction,
     refreshCompletedTransactionFeed,
     cancelTransaction,
     createWithdrawal,

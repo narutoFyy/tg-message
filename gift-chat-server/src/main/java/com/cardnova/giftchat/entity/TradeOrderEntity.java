@@ -57,6 +57,25 @@ public class TradeOrderEntity {
     @Column(name = "local_amount", precision = 18, scale = 2)
     private BigDecimal localAmount;
 
+    @Column(name = "estimated_local_amount", precision = 18, scale = 2)
+    private BigDecimal estimatedLocalAmount;
+
+    @Column(name = "final_local_amount", precision = 18, scale = 2)
+    private BigDecimal finalLocalAmount;
+
+    @Column(name = "manual_vip_points", precision = 18, scale = 2)
+    private BigDecimal manualVipPoints;
+
+    @Column(name = "settlement_reason", length = 255)
+    private String settlementReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "settled_by_user_id")
+    private UserEntity settledByUser;
+
+    @Column(name = "settled_at")
+    private LocalDateTime settledAt;
+
     @Column(name = "currency_code", length = 3)
     private String currencyCode;
 
@@ -175,6 +194,18 @@ public class TradeOrderEntity {
     public void setBaseAmountUsd(BigDecimal baseAmountUsd) { this.baseAmountUsd = baseAmountUsd; }
     public BigDecimal getLocalAmount() { return localAmount; }
     public void setLocalAmount(BigDecimal localAmount) { this.localAmount = localAmount; }
+    public BigDecimal getEstimatedLocalAmount() { return estimatedLocalAmount; }
+    public void setEstimatedLocalAmount(BigDecimal estimatedLocalAmount) { this.estimatedLocalAmount = estimatedLocalAmount; }
+    public BigDecimal getFinalLocalAmount() { return finalLocalAmount; }
+    public void setFinalLocalAmount(BigDecimal finalLocalAmount) { this.finalLocalAmount = finalLocalAmount; }
+    public BigDecimal getManualVipPoints() { return manualVipPoints; }
+    public void setManualVipPoints(BigDecimal manualVipPoints) { this.manualVipPoints = manualVipPoints; }
+    public String getSettlementReason() { return settlementReason; }
+    public void setSettlementReason(String settlementReason) { this.settlementReason = settlementReason; }
+    public UserEntity getSettledByUser() { return settledByUser; }
+    public void setSettledByUser(UserEntity settledByUser) { this.settledByUser = settledByUser; }
+    public LocalDateTime getSettledAt() { return settledAt; }
+    public void setSettledAt(LocalDateTime settledAt) { this.settledAt = settledAt; }
     public String getCurrencyCode() { return currencyCode; }
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
     public BigDecimal getBusinessRateSnapshot() { return businessRateSnapshot; }

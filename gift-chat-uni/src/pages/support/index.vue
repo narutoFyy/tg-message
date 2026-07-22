@@ -17,8 +17,11 @@
           <view class="action-btn delete-action" title="Delete chat" @click="hideCurrentConversation">
             <text>Del</text>
           </view>
-          <view class="action-btn icon-action" title="Video call" @click="startVideoCall">
-            <text class="icon-video"></text>
+          <view class="video-action" title="Video call" @click="startVideoCall">
+            <view class="action-btn icon-action">
+              <text class="icon-video"></text>
+            </view>
+            <text class="video-action-label">Video</text>
           </view>
         </view>
       </view>
@@ -1172,6 +1175,28 @@ function isVideoFileMessage(message: ChatMessage) {
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+}
+
+.video-action {
+  width: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: #0088cc;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.video-action:hover .action-btn {
+  background: rgba(0, 136, 204, 0.16);
+}
+
+.video-action-label {
+  color: #50695b;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .action-btn {

@@ -176,8 +176,11 @@
             <text class="icon-bell"></text>
             <view v-if="totalUnreadCount > 0" class="header-unread-badge">{{ totalUnreadCount > 99 ? '99+' : totalUnreadCount }}</view>
           </view>
-          <view class="icon-action primary" title="视频通话" @click="startVideoCall">
-            <text class="icon-video"></text>
+          <view class="video-header-action" title="视频通话" @click="startVideoCall">
+            <view class="icon-action primary">
+              <text class="icon-video"></text>
+            </view>
+            <text class="video-header-label">Video</text>
           </view>
           <view class="header-menu-wrap">
             <view class="icon-action" title="更多操作" @click="toggleMoreMenu">
@@ -3839,6 +3842,24 @@ function previewImage(url: string) {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.video-header-action {
+  width: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: #007d65;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.video-header-label {
+  color: #50695b;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .icon-action {

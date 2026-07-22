@@ -51,8 +51,12 @@ import type {
 } from '@/types'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || '/ws'
+let API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+let WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || '/ws'
+// #ifdef APP-PLUS
+API_BASE_URL = import.meta.env.VITE_APP_API_BASE_URL || 'https://stonetradex.com/api'
+WS_BASE_URL = import.meta.env.VITE_APP_WS_BASE_URL || 'wss://stonetradex.com/ws'
+// #endif
 const SESSION_TOKEN_KEY = 'gift-chat-access-token'
 const SESSION_USER_KEY = 'gift-chat-session-user'
 

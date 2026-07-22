@@ -1,4 +1,8 @@
 const UPLOAD_PATH_PATTERN = /\/uploads\/(images|voices|videos)\//
+let APP_MEDIA_BASE_URL = import.meta.env.VITE_APP_MEDIA_BASE_URL || ''
+// #ifdef APP-PLUS
+APP_MEDIA_BASE_URL = APP_MEDIA_BASE_URL || 'https://stonetradex.com'
+// #endif
 
 export function resolveMediaUrl(url: string) {
   const value = (url || '').trim()
@@ -14,17 +18,26 @@ export function resolveMediaUrl(url: string) {
   if (absoluteUrl) {
     const uploadPath = extractUploadPath(`${absoluteUrl.pathname}${absoluteUrl.search}${absoluteUrl.hash}`)
     if (uploadPath && shouldUseSameOriginUpload(absoluteUrl)) {
-      return uploadPath
+      return resolveUploadPath(uploadPath)
     }
     return value
   }
 
   const uploadPath = extractUploadPath(value)
   if (uploadPath) {
-    return uploadPath
+    return resolveUploadPath(uploadPath)
   }
 
   return value.startsWith('/') ? value : `/${value}`
+}
+
+function resolveUploadPath(path: string) {
+  // #ifdef APP-PLUS
+  if (APP_MEDIA_BASE_URL) {
+    return `${APP_MEDIA_BASE_URL.replace(/\/+$/, '')}${path}`
+  }
+  // #endif
+  return path
 }
 
 function extractUploadPath(value: string) {

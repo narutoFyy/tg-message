@@ -41,7 +41,7 @@ public class AccountProfileService {
     public LoginResponse updateAvatar(String avatarUrl) {
         UserEntity user = currentUserService.getCurrentUser();
         String normalizedAvatarUrl = avatarUrl == null ? "" : avatarUrl.trim();
-        UploadAssetEntity asset = uploadAssetRepository.findByPublicUrl(normalizedAvatarUrl)
+        UploadAssetEntity asset = findUploadAsset(normalizedAvatarUrl)
             .orElseThrow(() -> new IllegalArgumentException("Avatar image not found"));
         if (!asset.getOwnerUser().getId().equals(user.getId())) {
             throw new IllegalArgumentException("Avatar image is not owned by current user");
@@ -53,6 +53,32 @@ public class AccountProfileService {
         user.setAvatarUrl(asset.getPublicUrl());
         user.setUpdatedAt(LocalDateTime.now());
         return toSession(userRepository.save(user));
+    }
+
+    private java.util.Optional<UploadAssetEntity> findUploadAsset(String avatarUrl) {
+        var exact = uploadAssetRepository.findByPublicUrl(avatarUrl);
+        if (exact.isPresent()) {
+            return exact;
+        }
+
+        int uploadPathStart = avatarUrl.indexOf("/uploads/images/");
+        if (uploadPathStart < 0) {
+            return java.util.Optional.empty();
+        }
+        String uploadPath = avatarUrl.substring(uploadPathStart);
+        int queryStart = uploadPath.indexOf('?');
+        int fragmentStart = uploadPath.indexOf('#');
+        int pathEnd = uploadPath.length();
+        if (queryStart >= 0) {
+            pathEnd = Math.min(pathEnd, queryStart);
+        }
+        if (fragmentStart >= 0) {
+            pathEnd = Math.min(pathEnd, fragmentStart);
+        }
+        uploadPath = uploadPath.substring(0, pathEnd);
+
+        exact = uploadAssetRepository.findByPublicUrl(uploadPath);
+        return exact.isPresent() ? exact : uploadAssetRepository.findFirstByPublicUrlEndingWith(uploadPath);
     }
 
     public LoginResponse toSession(UserEntity user) {

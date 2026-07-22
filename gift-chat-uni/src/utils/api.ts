@@ -820,8 +820,5 @@ function uploadFile(url: string, source: string | File) {
 }
 
 function normalizeUploadAsset(asset: UploadAsset) {
-  return {
-    ...asset,
-    publicUrl: resolveMediaUrl(asset.publicUrl)
-  }
+  return asset
 }

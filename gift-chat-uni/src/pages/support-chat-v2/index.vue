@@ -477,7 +477,18 @@
         <view class="profile-section">
           <view class="section-head">
             <text class="section-title">{{ workbenchText.orders }}</text>
-            <text class="section-count">{{ profile.orders.length }}</text>
+            <view class="section-head-actions">
+              <text class="section-count">{{ profile.orders.length }}</text>
+              <button
+                :class="['order-refresh-button', orderRefreshLoading && 'refreshing']"
+                :disabled="orderRefreshLoading"
+                :aria-label="orderRefreshLabel"
+                :title="orderRefreshLabel"
+                @click.stop="refreshOrders"
+              >
+                <text class="order-refresh-icon"></text>
+              </button>
+            </view>
           </view>
           <view v-if="profile.orders.length === 0" class="mini-empty">{{ workbenchText.noOrders }}</view>
           <view v-else class="order-focus">
@@ -782,6 +793,7 @@ const lastContextMenuPoint = ref<{ clientX: number; clientY: number; time: numbe
 const unreadSnapshot = new Map<string, number>()
 let unreadSnapshotReady = false
 const vipBenefitClaims = ref<VipBenefitClaimItem[]>([])
+const orderRefreshLoading = ref(false)
 
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT' || store.state.currentUser?.roleCode === 'ADMIN')
@@ -895,6 +907,7 @@ const orderSelectorText = computed(() => workbenchLanguage.value === 'zh' ? '选
 const ledgerTitleText = computed(() => workbenchLanguage.value === 'zh' ? '客户账务' : 'Ledger')
 const ledgerLoadingText = computed(() => workbenchLanguage.value === 'zh' ? '正在加载账务...' : 'Loading ledger...')
 const ledgerEmptyText = computed(() => workbenchLanguage.value === 'zh' ? '暂无账务数据' : 'No ledger data')
+const orderRefreshLabel = computed(() => workbenchLanguage.value === 'zh' ? '刷新订单' : 'Refresh orders')
 const workbenchCopy = {
   zh: {
     customer: '客户',
@@ -1558,6 +1571,22 @@ function handleOrderPick(event: { detail: { value: number | string } }) {
   }
 }
 
+async function refreshOrders() {
+  const conversationId = activeConversationId.value
+  if (!conversationId || orderRefreshLoading.value) return
+  orderRefreshLoading.value = true
+  try {
+    await store.refreshSupportCustomerProfile(conversationId, true, false)
+  } catch (error) {
+    uni.showToast({
+      title: error instanceof Error ? error.message : 'Order refresh failed',
+      icon: 'none'
+    })
+  } finally {
+    orderRefreshLoading.value = false
+  }
+}
+
 function backToList() {
   showMobileProfile.value = false
   showChat.value = false
@@ -1950,7 +1979,6 @@ function refreshPresence() {
     rememberUnreadCounts()
     setAppUnreadBadge(store.state.supportUnreadCount)
   }).catch(() => {})
-  refreshActiveCustomerProfile()
 }
 
 function rememberUnreadCounts() {
@@ -2864,6 +2892,68 @@ function previewImage(url: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.section-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.order-refresh-button {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #c9d5ca;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #002fa7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.order-refresh-button::after {
+  border: 0;
+}
+
+.order-refresh-button[disabled] {
+  opacity: 0.55;
+}
+
+.order-refresh-icon {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-left-color: transparent;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.order-refresh-icon::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: -2px;
+  width: 5px;
+  height: 5px;
+  border-top: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: rotate(-18deg);
+  box-sizing: border-box;
+}
+
+.order-refresh-button.refreshing .order-refresh-icon {
+  animation: orderRefreshSpin 0.7s linear infinite;
+}
+
+@keyframes orderRefreshSpin {
+  to { transform: rotate(360deg); }
 }
 
 .order-focus {

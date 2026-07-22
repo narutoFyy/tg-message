@@ -225,12 +225,17 @@ function chooseAvatar() {
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
     async success(result) {
-      const filePath = result.tempFilePaths?.[0]
-      if (!filePath) return
+      const tempFiles = Array.isArray(result.tempFiles) ? result.tempFiles : [result.tempFiles]
+      const browserFile = tempFiles.find((item): item is File =>
+        typeof File !== 'undefined' && item instanceof File
+      )
+      const tempFilePaths = Array.isArray(result.tempFilePaths) ? result.tempFilePaths : [result.tempFilePaths]
+      const source = browserFile || tempFilePaths.find(Boolean)
+      if (!source) return
       avatarUploading.value = true
       notice.value = ''
       try {
-        const asset = await uploadImage(filePath)
+        const asset = await uploadImage(source)
         await store.updateAvatar(asset.publicUrl)
         notice.value = 'Avatar updated.'
       } catch (error) {

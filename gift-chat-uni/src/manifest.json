@@ -10,6 +10,12 @@
         "usingComponents" : true,
         "nvueStyleCompiler" : "uni-app",
         "compilerVersion" : 3,
+        "screenOrientation" : [
+            "portrait-primary",
+            "portrait-secondary",
+            "landscape-primary",
+            "landscape-secondary"
+        ],
         "splashscreen" : {
             "alwaysShowBeforeRender" : true,
             "waiting" : true,
@@ -51,7 +57,10 @@
                 "deploymentTarget" : "12.0",
                 "device" : "universal",
                 "orientation" : [
-                    "portrait-primary"
+                    "portrait-primary",
+                    "portrait-secondary",
+                    "landscape-primary",
+                    "landscape-secondary"
                 ],
                 "privacyDescription" : {
                     "NSCameraUsageDescription" : "Used to upload gift card and transaction images.",

@@ -63,7 +63,11 @@
         <button class="hangup-control" @click="hangup">
           <text class="icon-phone"></text>
         </button>
-        <button class="soft-control" @click="toggleVideo">
+        <button
+          :class="['soft-control', switchingCamera && 'is-busy']"
+          :disabled="!localVideoStarted || switchingCamera"
+          @click="switchCamera"
+        >
           <text class="icon-switch"></text>
         </button>
       </view>
@@ -101,6 +105,8 @@ const mutedAudio = ref(false)
 const mutedVideo = ref(false)
 const micLevel = ref(0)
 const speakerEnabled = ref(true)
+const usingFrontCamera = ref(true)
+const switchingCamera = ref(false)
 const trtc = ref<TRTC | null>(null)
 const joined = ref(false)
 const statusSocketTask = ref<UniApp.SocketTask | null>(null)
@@ -278,7 +284,10 @@ async function startLocalDevices(client: TRTC) {
   const failures: string[] = []
   localDeviceFailed.value = false
   try {
-    await client.startLocalVideo({ view: 'local-video-view' })
+    await client.startLocalVideo({
+      view: 'local-video-view',
+      option: { useFrontCamera: usingFrontCamera.value }
+    })
     localVideoStarted.value = true
     mutedVideo.value = false
   } catch (error) {
@@ -442,7 +451,10 @@ async function toggleVideo() {
   if (!trtc.value) return
   try {
     if (mutedVideo.value) {
-      await trtc.value.startLocalVideo({ view: 'local-video-view' })
+      await trtc.value.startLocalVideo({
+        view: 'local-video-view',
+        option: { useFrontCamera: usingFrontCamera.value }
+      })
       localVideoStarted.value = true
       mutedVideo.value = false
     } else {
@@ -453,6 +465,26 @@ async function toggleVideo() {
     localDeviceFailed.value = mutedAudio.value || mutedVideo.value
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Camera toggle failed'
+  }
+}
+
+async function switchCamera() {
+  if (!trtc.value || !localVideoStarted.value || switchingCamera.value) return
+  switchingCamera.value = true
+  notice.value = ''
+  const nextUseFrontCamera = !usingFrontCamera.value
+  try {
+    await trtc.value.updateLocalVideo({
+      option: {
+        useFrontCamera: nextUseFrontCamera,
+        mirror: nextUseFrontCamera ? 'view' : false
+      }
+    })
+    usingFrontCamera.value = nextUseFrontCamera
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'Unable to switch camera.'
+  } finally {
+    switchingCamera.value = false
   }
 }
 
@@ -541,6 +573,7 @@ async function cleanup(updateStatus = false) {
   remoteAudioAvailable.value = false
   remoteVideoAvailable.value = false
   micLevel.value = 0
+  switchingCamera.value = false
 
   if (updateStatus && sessionId.value) {
     try {
@@ -575,6 +608,10 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .video-page {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
   overflow: hidden;
   background: #1b1111;
   color: #ffffff;
@@ -610,7 +647,7 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .call-topbar {
   position: relative;
   z-index: 2;
-  padding: 38rpx 48rpx 0;
+  padding: calc(38rpx + env(safe-area-inset-top)) calc(48rpx + env(safe-area-inset-right)) 0 calc(48rpx + env(safe-area-inset-left));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -748,8 +785,8 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .local-video {
   position: absolute;
   z-index: 3;
-  right: 28rpx;
-  top: 150rpx;
+  right: calc(28rpx + env(safe-area-inset-right));
+  top: calc(150rpx + env(safe-area-inset-top));
   width: 156rpx;
   height: 214rpx;
   border: 2rpx solid rgba(255, 255, 255, 0.58);
@@ -772,8 +809,8 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   z-index: 4;
   left: 0;
   right: 0;
-  bottom: 44rpx;
-  padding: 0 58rpx;
+  bottom: calc(44rpx + env(safe-area-inset-bottom));
+  padding: 0 calc(58rpx + env(safe-area-inset-right)) 0 calc(58rpx + env(safe-area-inset-left));
 }
 
 .primary-controls,
@@ -857,6 +894,11 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
 .soft-control {
   background: rgba(28, 12, 12, 0.68);
   color: #ffffff;
+}
+
+.soft-control[disabled],
+.soft-control.is-busy {
+  opacity: 0.46;
 }
 
 .hangup-control {
@@ -1072,13 +1114,85 @@ async function runCleanupStep(label: string, step: () => void | Promise<void>, e
   transform: rotate(150deg);
 }
 
-@media (min-width: 760px) {
-  .video-page {
-    max-width: 430px;
-    min-height: 860px;
-    height: 100vh;
-    margin: 0 auto;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 24px 80px rgba(0, 0, 0, 0.3);
+@media (orientation: landscape) and (max-height: 600px) {
+  .call-topbar {
+    padding-top: calc(18rpx + env(safe-area-inset-top));
+  }
+
+  .caller-card {
+    position: absolute;
+    top: 50%;
+    left: calc(28rpx + env(safe-area-inset-left));
+    width: 30%;
+    margin-top: 0;
+    transform: translateY(-50%);
+  }
+
+  .caller-avatar {
+    width: 88rpx;
+    height: 88rpx;
+  }
+
+  .caller-name {
+    margin-top: 14rpx;
+    font-size: 30rpx;
+  }
+
+  .calling-dots,
+  .notice-text {
+    margin-top: 12rpx;
+  }
+
+  .local-video {
+    top: calc(18rpx + env(safe-area-inset-top));
+    width: 132rpx;
+    height: 96rpx;
+  }
+
+  .control-panel {
+    left: 32%;
+    right: calc(24rpx + env(safe-area-inset-right));
+    bottom: calc(16rpx + env(safe-area-inset-bottom));
+    padding: 0;
+  }
+
+  .round-control,
+  .soft-control,
+  .hangup-control {
+    width: 78rpx;
+    height: 78rpx;
+  }
+
+  .control-item,
+  .control-label {
+    width: 112rpx;
+  }
+
+  .control-label {
+    margin-top: 8rpx;
+    font-size: 18rpx;
+  }
+
+  .primary-controls,
+  .secondary-controls {
+    gap: 18rpx;
+  }
+
+  .secondary-controls {
+    margin-top: 12rpx;
+  }
+
+  .icon-mic,
+  .icon-speaker,
+  .icon-camera,
+  .icon-card,
+  .icon-phone,
+  .icon-switch {
+    transform: scale(0.68);
+  }
+
+  .home-indicator {
+    display: none;
   }
 }
 </style>

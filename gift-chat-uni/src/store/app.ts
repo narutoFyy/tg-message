@@ -838,7 +838,11 @@ export function useAppStore() {
     state.activeSupportCustomerProfile = state.supportCustomerProfileCache[conversationId] || null
   }
 
-  async function refreshSupportCustomerProfile(conversationId = state.supportConversationId, force = false) {
+  async function refreshSupportCustomerProfile(
+    conversationId = state.supportConversationId,
+    force = false,
+    showLoading = true
+  ) {
     if (!conversationId) {
       state.activeSupportCustomerProfile = null
       return null
@@ -847,7 +851,9 @@ export function useAppStore() {
       state.activeSupportCustomerProfile = state.supportCustomerProfileCache[conversationId]
       return state.activeSupportCustomerProfile
     }
-    state.supportCustomerProfileLoading = true
+    if (showLoading) {
+      state.supportCustomerProfileLoading = true
+    }
     try {
       const profile = await fetchSupportCustomerProfile(conversationId)
       state.supportCustomerProfileCache[conversationId] = profile
@@ -856,7 +862,9 @@ export function useAppStore() {
       }
       return profile
     } finally {
-      state.supportCustomerProfileLoading = false
+      if (showLoading) {
+        state.supportCustomerProfileLoading = false
+      }
     }
   }
 

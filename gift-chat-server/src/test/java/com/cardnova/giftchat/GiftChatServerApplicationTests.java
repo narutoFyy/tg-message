@@ -3513,6 +3513,46 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.avatarUrl").value(avatarUrl));
     }
 
+    @Test
+    void userCanUpdateAvatarWhenClientSubmitsRelativeProductionUploadUrl() throws Exception {
+        String userToken = loginToken("cardnova_user");
+        byte[] pngHeaderOnly = new byte[] {
+            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D
+        };
+        MockMultipartFile avatar = new MockMultipartFile(
+            "file",
+            "production-avatar.png",
+            "image/png",
+            pngHeaderOnly
+        );
+
+        MvcResult uploadResult = mockMvc.perform(multipart("/api/uploads/images")
+                .file(avatar)
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String relativeAvatarUrl = objectMapper.readTree(uploadResult.getResponse().getContentAsString())
+            .path("data")
+            .path("publicUrl")
+            .asText();
+        var uploadedAsset = uploadAssetRepository.findByPublicUrl(relativeAvatarUrl).orElseThrow();
+        String absoluteAvatarUrl = "https://stonetradex.com" + relativeAvatarUrl;
+        uploadedAsset.setPublicUrl(absoluteAvatarUrl);
+        uploadAssetRepository.saveAndFlush(uploadedAsset);
+
+        mockMvc.perform(post("/api/account/avatar")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "avatarUrl": "%s"
+                    }
+                    """.formatted(relativeAvatarUrl)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.avatarUrl").value(absoluteAvatarUrl));
+    }
+
     private String loginToken(String identifier) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)

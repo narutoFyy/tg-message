@@ -6,7 +6,7 @@
           <view class="back-btn" @click="goHome">
             <text>&lt;</text>
           </view>
-          <image class="header-avatar" :src="currentUserAvatar" mode="aspectFill" />
+          <image class="header-avatar" :src="supportAvatar" mode="aspectFill" />
           <view class="header-info">
             <text class="header-name">{{ headerTitle }}</text>
             <text class="header-note">{{ headerSubtitle }}</text>
@@ -40,7 +40,7 @@
             <ChatMessageBubble
               :message="message"
               :mine="isMine(message)"
-              :avatar-src="isMine(message) ? currentUserAvatar : uiIcons.user"
+              :avatar-src="isMine(message) ? currentUserAvatar : supportAvatar"
               :call-title="videoCallTitle(message)"
               :call-room="videoCallRoom(message)"
               :call-status="videoCallStatus(message)"
@@ -151,6 +151,7 @@ import { uiIcons } from '@/utils/art'
 import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 
 const store = useAppStore()
+const supportAvatar = '/static/pwa/icons/xcard-192.png'
 const draft = ref('')
 const notice = ref('')
 const socketTask = ref<UniApp.SocketTask | null>(null)

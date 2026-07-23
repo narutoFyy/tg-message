@@ -72,14 +72,15 @@
                     "Set :CFBundleDisplayName Xcard",
                     "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads false"
                 ],
-                "capabilities" : {}
+                "capabilities" : {},
+                "dSYMs" : false
             },
             "icons" : {
                 "android" : {
-                    "hdpi" : "static/app-icons/android/icon-72.png",
-                    "xhdpi" : "static/app-icons/android/icon-96.png",
-                    "xxhdpi" : "static/app-icons/android/icon-144.png",
-                    "xxxhdpi" : "static/app-icons/android/icon-192.png"
+                    "hdpi" : "src/static/app-icons/android/icon-72.png",
+                    "xhdpi" : "src/static/app-icons/android/icon-96.png",
+                    "xxhdpi" : "src/static/app-icons/android/icon-144.png",
+                    "xxxhdpi" : "src/static/app-icons/android/icon-192.png"
                 },
                 "ios" : {
                     "appstore" : "static/app-icons/ios/appstore.png",
@@ -127,8 +128,8 @@
     "mp-toutiao" : {
         "usingComponents" : true
     },
-    "uniStatistics": {  
-        "enable": false
+    "uniStatistics" : {
+        "enable" : false
     },
     "vueVersion" : "3"
 }

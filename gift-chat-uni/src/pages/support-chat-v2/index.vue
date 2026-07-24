@@ -220,7 +220,7 @@
             <ChatMessageBubble
               :message="msg"
               :mine="isMine(msg)"
-              :avatar-src="activeCustomer ? customerAvatar(activeCustomer) : uiIcons.user"
+              :avatar-src="isMine(msg) ? supportAvatar : (activeCustomer ? customerAvatar(activeCustomer) : uiIcons.user)"
               :translation="translationFor(msg)"
               :call-title="videoCallTitle(msg)"
               :call-room="videoCallRoom(msg)"
@@ -739,6 +739,7 @@ import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
 import type { LotteryFulfillmentItem, TransactionItem, VipBenefitClaimItem, WithdrawalItem } from '@/types'
 
 const store = useAppStore()
+const supportAvatar = '/static/pwa/icons/xcard-192.png'
 const draft = ref('')
 const searchKeyword = ref('')
 const searchMode = ref<'customers' | 'messages'>('customers')

@@ -11,5 +11,6 @@ RUN npm run build:h5
 
 FROM nginx:1.27-alpine
 COPY --from=build /app/dist/build/h5 /usr/share/nginx/html
+COPY gift-chat-uni/release/Xcard.apk /usr/share/nginx/html/static/install/Xcard.apk
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

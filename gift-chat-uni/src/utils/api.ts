@@ -59,6 +59,8 @@ WS_BASE_URL = import.meta.env.VITE_APP_WS_BASE_URL || 'wss://stonetradex.com/ws'
 // #endif
 const SESSION_TOKEN_KEY = 'gift-chat-access-token'
 const SESSION_USER_KEY = 'gift-chat-session-user'
+let unauthorizedHandler: (() => void) | undefined
+let handlingUnauthorized = false
 
 interface ApiEnvelope<T> {
   code: number
@@ -117,6 +119,21 @@ function toClientError(error: unknown, fallback: string) {
   return new Error(fallback)
 }
 
+function handleUnauthorized(token?: string) {
+  if (!token || handlingUnauthorized) return
+  handlingUnauthorized = true
+
+  if (unauthorizedHandler) {
+    unauthorizedHandler()
+    return
+  }
+
+  const previousUser = getStoredSessionUser()
+  setSessionToken(undefined)
+  setStoredSessionUser(null)
+  uni.reLaunch({ url: previousUser?.roleCode === 'ADMIN' ? '/pages/admin-login/index' : '/pages/login/index' })
+}
+
 function request<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', data?: Record<string, unknown>) {
   const token = getAccessToken()
 
@@ -131,6 +148,11 @@ function request<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GE
       },
       success(response) {
         const body = response.data as ApiEnvelope<T> | { message?: string } | string
+        if (response.statusCode === 401) {
+          handleUnauthorized(token)
+          reject(new Error(readErrorMessage(body, 'Session expired. Please sign in again.')))
+          return
+        }
         if (response.statusCode && response.statusCode >= 400) {
           reject(new Error(readErrorMessage(body, 'Request failed')))
           return
@@ -146,6 +168,7 @@ function request<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GE
 
 export function setSessionToken(token?: string) {
   if (token) {
+    handlingUnauthorized = false
     uni.setStorageSync(SESSION_TOKEN_KEY, token)
     return
   }
@@ -164,6 +187,10 @@ export function setStoredSessionUser(user?: SessionUser | null) {
   }
 
   uni.removeStorageSync(SESSION_USER_KEY)
+}
+
+export function setUnauthorizedHandler(handler?: () => void) {
+  unauthorizedHandler = handler
 }
 
 export function buildChatSocketUrl(channelType: 'friend' | 'support', channelId: string) {
@@ -804,6 +831,11 @@ function uploadFile(url: string, source: string | File) {
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
       success(response) {
+        if (response.statusCode === 401) {
+          handleUnauthorized(token)
+          reject(new Error('Session expired. Please sign in again.'))
+          return
+        }
         try {
           const body = JSON.parse(response.data) as ApiEnvelope<UploadAsset> | { message?: string }
           if (response.statusCode >= 400) {

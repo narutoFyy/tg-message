@@ -516,7 +516,6 @@
             <view class="work-actions">
               <button v-if="selectedOrder.status === 'pending'" class="mini-btn" @click="changeOrderStatus(selectedOrder.id, 'processing')">{{ workbenchText.process }}</button>
               <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn primary" @click="openSettlementDialog(selectedOrder)">{{ workbenchText.complete }}</button>
-              <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn danger" @click="changeOrderStatus(selectedOrder.id, 'disputed')">{{ workbenchText.dispute }}</button>
               <button v-if="selectedOrder.status === 'pending' || selectedOrder.status === 'processing'" class="mini-btn danger" @click="cancelOrder(selectedOrder)">{{ workbenchText.cancelOrder }}</button>
             </view>
             <text v-if="selectedOrder.status === 'canceled'" class="work-line">{{ selectedOrder.cancelReason }} {{ selectedOrder.cancelNote }}</text>

@@ -93,6 +93,7 @@ import {
   searchFriends,
   setSessionToken,
   setStoredSessionUser,
+  setUnauthorizedHandler,
   sendDirectMessage,
   sendSupportMessage,
   searchSupportCustomers as searchSupportCustomersRequest,
@@ -162,6 +163,54 @@ const state = reactive({
 
 const SUPPORT_READ_CACHE_KEY = 'support-read-message-cache'
 const CHAT_CURSOR_CACHE_KEY = 'chat-message-cursor-cache'
+
+function clearSessionState() {
+  closeAllChatSockets()
+  state.currentUser = null
+  state.friends = []
+  state.friendRequests = []
+  state.friendSearchResults = []
+  state.blacklist = []
+  state.supportMessages = []
+  state.supportUnreadCount = 0
+  state.supportConversations = []
+  state.transactions = []
+  state.recentCompletedTransactions = []
+  state.withdrawals = []
+  state.loans = []
+  state.broadcasts = []
+  state.registrationBonusRecord = null
+  state.balanceSummary = null
+  state.currencyExchangeRate = null
+  state.vipSummary = null
+  state.vipBenefits = null
+  state.vipBenefitClaims = []
+  state.lotteryEligibility = null
+  state.lotteryWinners = []
+  state.lotteryRecords = []
+  state.lotteryFulfillments = []
+  state.hiddenRecords = []
+  state.supportCustomerSearchResults = []
+  state.supportMessageSearchResults = []
+  state.activeSupportCustomerProfile = null
+  state.supportCustomerProfileCache = {}
+  state.supportLedger = null
+  state.videoSessions = []
+  state.ranking = null
+  state.supportConversationId = 'support-1'
+  state.activeFriendUsername = ''
+  setSessionToken(undefined)
+  setStoredSessionUser(null)
+  uni.removeStorageSync(CHAT_CURSOR_CACHE_KEY)
+  setAppUnreadBadge(0)
+}
+
+setUnauthorizedHandler(() => {
+  const loginUrl = state.currentUser?.roleCode === 'ADMIN' ? '/pages/admin-login/index' : '/pages/login/index'
+  clearSessionState()
+  uni.showToast({ title: 'Session expired. Please sign in again.', icon: 'none' })
+  uni.reLaunch({ url: loginUrl })
+})
 
 type ChannelType = 'friend' | 'support'
 
@@ -573,25 +622,7 @@ export function useAppStore() {
     } catch {
       // Local logout should still complete if the network request fails.
     } finally {
-      closeAllChatSockets()
-      state.currentUser = null
-      state.friendRequests = []
-      state.friendSearchResults = []
-      state.supportLedger = null
-      state.vipSummary = null
-      state.lotteryEligibility = null
-      state.lotteryWinners = []
-      state.lotteryRecords = []
-      state.lotteryFulfillments = []
-      state.hiddenRecords = []
-      state.supportCustomerSearchResults = []
-      state.supportMessageSearchResults = []
-      state.activeSupportCustomerProfile = null
-      state.supportCustomerProfileCache = {}
-      setSessionToken(undefined)
-      setStoredSessionUser(null)
-      uni.removeStorageSync(CHAT_CURSOR_CACHE_KEY)
-      setAppUnreadBadge(0)
+      clearSessionState()
     }
   }
 

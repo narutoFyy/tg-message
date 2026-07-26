@@ -48,8 +48,9 @@ public class CurrentUserService {
         if (demoFallback) {
             String demoUsername = request.getHeader(DEMO_USER_HEADER);
             if (StringUtils.hasText(demoUsername)) {
-                return userRepository.findByUsername(demoUsername.trim())
+                UserEntity user = userRepository.findByUsername(demoUsername.trim())
                     .orElseThrow(() -> new UnauthorizedException("Demo user not found"));
+                return requireActive(user);
             }
             return getDefaultUser();
         }
@@ -86,12 +87,21 @@ public class CurrentUserService {
         }
 
         DecodedJWT decodedJWT = jwtService.verify(token);
-        return userRepository.findById(decodedJWT.getSubject())
+        UserEntity user = userRepository.findById(decodedJWT.getSubject())
             .orElseThrow(() -> new UnauthorizedException("Token user not found"));
+        return requireActive(user);
     }
 
     private UserEntity getDefaultUser() {
-        return userRepository.findByUsername(DEFAULT_DEMO_USERNAME)
+        UserEntity user = userRepository.findByUsername(DEFAULT_DEMO_USERNAME)
             .orElseThrow(() -> new IllegalStateException("Default demo user not found"));
+        return requireActive(user);
+    }
+
+    private UserEntity requireActive(UserEntity user) {
+        if (!"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
+            throw new UnauthorizedException("Account is not active");
+        }
+        return user;
     }
 }

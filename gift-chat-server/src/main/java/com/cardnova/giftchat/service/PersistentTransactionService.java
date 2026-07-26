@@ -39,7 +39,7 @@ import java.util.UUID;
 public class PersistentTransactionService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    private static final Set<String> ALLOWED_STATUSES = Set.of("pending", "processing", "disputed");
+    private static final Set<String> ALLOWED_STATUSES = Set.of("processing");
     private static final Set<String> CANCELABLE_STATUSES = Set.of("PENDING", "PROCESSING");
 
     private final TradeOrderRepository tradeOrderRepository;
@@ -254,10 +254,11 @@ public class PersistentTransactionService {
     @Transactional
     public TransactionItem updateStatus(String transactionId, String nextStatus) {
         UserEntity currentUser = currentUserService.getCurrentUser();
+        currentUserService.requireAgentOrAdmin(currentUser);
         TradeOrderEntity order = tradeOrderRepository.findByIdForUpdate(transactionId)
             .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
 
-        if (!canAccess(order, currentUser)) {
+        if (!canStaffOperate(order, currentUser)) {
             throw new IllegalArgumentException("Transaction not accessible");
         }
 
@@ -479,8 +480,8 @@ public class PersistentTransactionService {
         }
 
         boolean valid = switch (current) {
-            case "pending" -> nextStatus.equals("processing") || nextStatus.equals("completed") || nextStatus.equals("disputed");
-            case "processing" -> nextStatus.equals("completed") || nextStatus.equals("disputed");
+            case "pending" -> nextStatus.equals("processing");
+            case "processing" -> false;
             case "completed", "disputed", "canceled" -> false;
             default -> false;
         };

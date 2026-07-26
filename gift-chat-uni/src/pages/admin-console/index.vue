@@ -450,6 +450,13 @@
             </button>
             <button
               v-if="order.status === 'pending' || order.status === 'processing'"
+              class="primary-button mini-button"
+              @click="completeOrderAtEstimate(order)"
+            >
+              Complete at estimate
+            </button>
+            <button
+              v-if="order.status === 'pending' || order.status === 'processing'"
               class="ghost-button mini-button danger-action"
               @click="cancelOrder(order.id)"
             >
@@ -681,6 +688,7 @@ import type {
 import {
   assignSupportConversation,
   cancelTransaction,
+  completeTransaction,
   createBroadcast,
   createAgent,
   fetchAdminDirectConversations,
@@ -1270,8 +1278,7 @@ function toggleAdminBroadcastCountry(code: string) {
 }
 
 function transactionStatuses(status: TransactionItem['status']) {
-  if (status === 'pending') return ['processing', 'disputed'] as TransactionItem['status'][]
-  if (status === 'processing') return ['completed', 'disputed'] as TransactionItem['status'][]
+  if (status === 'pending') return ['processing'] as TransactionItem['status'][]
   return [] as TransactionItem['status'][]
 }
 
@@ -1329,6 +1336,32 @@ async function updateOrderStatus(orderId: string, status: TransactionItem['statu
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Order update failed'
   }
+}
+
+function completeOrderAtEstimate(order: TransactionItem) {
+  const rawAmount = order.estimatedLocalAmount || order.localAmount || order.payoutAmount || ''
+  const match = String(rawAmount).replace(/,/g, '').match(/-?\d+(?:\.\d+)?/)
+  const finalLocalAmount = Number(match?.[0] || '')
+  if (!Number.isFinite(finalLocalAmount) || finalLocalAmount <= 0) {
+    notice.value = 'This order has no valid estimated payout. Complete it from the support workbench.'
+    return
+  }
+
+  uni.showModal({
+    title: 'Complete order',
+    content: `Settle ${order.orderNo} at ${order.currencyCode || ''} ${finalLocalAmount.toLocaleString()}?`,
+    confirmText: 'Complete',
+    success: async (result) => {
+      if (!result.confirm) return
+      try {
+        await completeTransaction(order.id, { finalLocalAmount, vipPoints: 0 })
+        notice.value = `Order ${order.orderNo} completed.`
+        await refreshAll()
+      } catch (error) {
+        notice.value = error instanceof Error ? error.message : 'Order completion failed'
+      }
+    }
+  })
 }
 
 async function cancelOrder(orderId: string) {

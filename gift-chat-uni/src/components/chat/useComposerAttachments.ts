@@ -16,7 +16,7 @@ export interface ComposerAttachment {
 }
 
 const MAX_IMAGE_ATTACHMENT_SIZE = 10 * 1024 * 1024
-const MAX_VIDEO_ATTACHMENT_SIZE = 20 * 1024 * 1024
+const MAX_VIDEO_ATTACHMENT_SIZE = 50 * 1024 * 1024
 
 function nextAttachmentId() {
   return `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -32,7 +32,7 @@ function inferKind(name = '', mimeType = ''): ComposerAttachmentKind {
 function assertAllowedSize(size: number, kind: ComposerAttachmentKind) {
   const maxSize = kind === 'video' ? MAX_VIDEO_ATTACHMENT_SIZE : MAX_IMAGE_ATTACHMENT_SIZE
   if (size > maxSize) {
-    throw new Error(kind === 'video' ? 'Video must be 20MB or smaller.' : 'Image or GIF must be 10MB or smaller.')
+    throw new Error(kind === 'video' ? 'Video must be 50MB or smaller.' : 'Image or GIF must be 10MB or smaller.')
   }
 }
 

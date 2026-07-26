@@ -1449,7 +1449,7 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void transactionStatusCanAdvanceButCannotBypassManualCompletion() throws Exception {
+    void customerCannotAdvanceTransactionStatusOrBypassManualCompletion() throws Exception {
         String user1Token = loginToken("cardnova_user");
 
         mockMvc.perform(post("/api/transactions/trade-1/status")
@@ -1460,11 +1460,27 @@ class GiftChatServerApplicationTests {
                       "status": "processing"
                     }
                     """))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.status").value("processing"));
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("Agent or admin access required"));
 
         mockMvc.perform(post("/api/transactions/trade-2/status")
                 .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "status": "disputed"
+                    }
+                    """))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("Agent or admin access required"));
+    }
+
+    @Test
+    void genericStatusEndpointRejectsCompletionAndDisabledDisputes() throws Exception {
+        String adminToken = loginToken("admin_mia");
+
+        mockMvc.perform(post("/api/transactions/trade-2/status")
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
@@ -1474,16 +1490,16 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Unsupported transaction status"));
 
-        mockMvc.perform(post("/api/transactions/trade-3/status")
-                .header("Authorization", bearer(user1Token))
+        mockMvc.perform(post("/api/transactions/trade-2/status")
+                .header("Authorization", bearer(adminToken))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "status": "processing"
+                      "status": "disputed"
                     }
                     """))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message").value("Invalid transaction status transition"));
+            .andExpect(jsonPath("$.message").value("Unsupported transaction status"));
     }
 
     @Test
@@ -1512,6 +1528,41 @@ class GiftChatServerApplicationTests {
                     """))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Transaction not accessible"));
+    }
+
+    @Test
+    void disablingAgentImmediatelyRejectsItsExistingAccessToken() throws Exception {
+        String adminToken = loginToken("admin_mia");
+        String username = "disabled_agent_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+
+        MvcResult createResult = mockMvc.perform(post("/api/admin/agents")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "username": "%s",
+                      "password": "demo12345"
+                    }
+                    """.formatted(username)))
+            .andExpect(status().isOk())
+            .andReturn();
+        String agentId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+        String agentToken = loginToken(username);
+
+        mockMvc.perform(post("/api/admin/agents/%s/status".formatted(agentId))
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"status":"DISABLED"}
+                    """))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/account/me")
+                .header("Authorization", bearer(agentToken)))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.message").value("Account is not active"));
     }
 
     @Test

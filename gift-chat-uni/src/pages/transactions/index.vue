@@ -68,15 +68,6 @@
               <text class="text-action" @click="openSupportChat">Chat</text>
               <text class="text-action danger-action" @click="hideTransaction(item)">Hide</text>
             </view>
-            <view class="status-actions">
-              <button
-                v-for="action in nextActions(item.status)"
-                :key="`${item.id}-${action}`"
-                :class="[action === 'disputed' ? 'ghost-button' : 'primary-button', 'action-button']"
-                :disabled="loadingId === item.id"
-                @click="advanceStatus(item.id, action)"
-              >{{ actionLabel(action) }}</button>
-            </view>
           </view>
         </view>
       </view>
@@ -126,7 +117,6 @@ import type { TransactionItem, WithdrawalItem } from '@/types'
 
 const store = useAppStore()
 const notice = ref('')
-const loadingId = ref('')
 type ActivityStatus = TransactionItem['status'] | WithdrawalItem['status']
 const activeFilter = ref<'all' | ActivityStatus>('all')
 const completedFeed = computed(() => store.state.recentCompletedTransactions)
@@ -182,34 +172,6 @@ function statusClass(status: ActivityStatus) {
     canceled: 'danger',
     rejected: 'danger'
   }[status]
-}
-
-function nextActions(status: TransactionItem['status']) {
-  if (status === 'pending') return ['processing', 'disputed'] as TransactionItem['status'][]
-  if (status === 'processing') return ['completed', 'disputed'] as TransactionItem['status'][]
-  return []
-}
-
-function actionLabel(status: TransactionItem['status']) {
-  return {
-    processing: 'Mark processing',
-    completed: 'Mark complete',
-    disputed: 'Raise dispute',
-    pending: 'Mark pending',
-    canceled: 'Canceled'
-  }[status]
-}
-
-async function advanceStatus(transactionId: string, status: TransactionItem['status']) {
-  loadingId.value = transactionId
-  try {
-    await store.updateTransactionStatus(transactionId, status)
-    notice.value = `Order moved to ${statusLabel(status)}.`
-  } catch (error) {
-    notice.value = error instanceof Error ? error.message : 'Update failed'
-  } finally {
-    loadingId.value = ''
-  }
 }
 
 function openSupportChat() {

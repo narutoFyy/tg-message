@@ -11,7 +11,7 @@
         </view>
         <view class="brand-copy">
           <text class="eyebrow">Gift card exchange</text>
-          <text class="brand-title">Your rates, orders and support in one place.</text>
+          <text class="brand-title">Professional, fast and honest. Video verification supported!</text>
           <text class="subtitle">Sign in to continue to your account.</text>
         </view>
       </view>

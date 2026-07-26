@@ -835,20 +835,15 @@ class GiftChatServerApplicationTests {
                     """))
             .andExpect(status().isForbidden());
 
-        mockMvc.perform(post("/api/admin/currency-rates")
-                .header("Authorization", bearer(adminToken))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                    {
-                      "countryCode": "NG",
-                      "localCurrencyPerUsd": 1510,
-                      "enabled": true,
-                      "note": "manual test rate"
-                    }
-                    """))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.localCurrencyPerUsd").value("1510"))
-            .andExpect(jsonPath("$.data.updatedBy").value("admin_mia"));
+        try {
+            updateNgCurrencyRate(adminToken, "1510", "manual test rate")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.localCurrencyPerUsd").value("1510"))
+                .andExpect(jsonPath("$.data.updatedBy").value("admin_mia"));
+        } finally {
+            updateNgCurrencyRate(adminToken, "1500", "restore test rate")
+                .andExpect(status().isOk());
+        }
     }
 
     @Test
@@ -2943,6 +2938,41 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void lotteryPrizeCatalogMatchesDrawablePoolAfterRateChange() throws Exception {
+        String userToken = registerToken("lottery_rate_" + UUID.randomUUID().toString().substring(0, 8));
+        String adminToken = loginToken("admin_mia");
+
+        try {
+            updateNgCurrencyRate(adminToken, "1600", "lottery pool consistency test")
+                .andExpect(status().isOk());
+
+            MvcResult catalogResult = mockMvc.perform(get("/api/lottery/prizes")
+                    .header("Authorization", bearer(userToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(3)))
+                .andReturn();
+            JsonNode catalog = objectMapper.readTree(catalogResult.getResponse().getContentAsString()).path("data");
+            List<String> drawablePrizeIds = new ArrayList<>();
+            for (JsonNode prize : catalog) {
+                assertTrue(prize.path("enabled").asBoolean());
+                assertEquals("cash", prize.path("prizeType").asText());
+                drawablePrizeIds.add(prize.path("id").asText());
+            }
+
+            JsonNode draw = spinLottery(userToken);
+            assertTrue(drawablePrizeIds.contains(draw.path("prize").path("id").asText()));
+
+            mockMvc.perform(get("/api/lottery/prizes")
+                    .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(10)));
+        } finally {
+            updateNgCurrencyRate(adminToken, "1500", "restore lottery pool test rate")
+                .andExpect(status().isOk());
+        }
+    }
+
+    @Test
     void supportSearchIsScopedAndFindsCustomersAndMessages() throws Exception {
         String agentToken = loginToken("support_luna");
         String otherAgentToken = loginToken("support_angela");
@@ -3600,6 +3630,20 @@ class GiftChatServerApplicationTests {
                     """.formatted(relativeAvatarUrl)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.avatarUrl").value(absoluteAvatarUrl));
+    }
+
+    private ResultActions updateNgCurrencyRate(String adminToken, String rate, String note) throws Exception {
+        return mockMvc.perform(post("/api/admin/currency-rates")
+            .header("Authorization", bearer(adminToken))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "countryCode": "NG",
+                  "localCurrencyPerUsd": %s,
+                  "enabled": true,
+                  "note": "%s"
+                }
+                """.formatted(rate, note)));
     }
 
     private String loginToken(String identifier) throws Exception {

@@ -145,7 +145,10 @@ public class LotteryService {
 
     public List<LotteryPrizeItem> prizes() {
         UserEntity currentUser = currentUserService.getCurrentUser();
-        return lotteryPrizeRepository.findAllByOrderBySortOrderAsc().stream()
+        List<LotteryPrizeEntity> prizes = "ADMIN".equalsIgnoreCase(currentUser.getRoleCode())
+            ? lotteryPrizeRepository.findAllByOrderBySortOrderAsc()
+            : drawablePrizes();
+        return prizes.stream()
             .map(prize -> toPrizeItem(prize, currentUser))
             .toList();
     }
@@ -338,20 +341,7 @@ public class LotteryService {
     }
 
     private LotteryPrizeEntity choosePrize() {
-        BigDecimal ngnLocalCurrencyPerUsd = currencyExchangeRateService
-            .requireEnabledRate("NG")
-            .getLocalCurrencyPerUsd();
-        List<LotteryPrizeEntity> prizes = lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
-            .filter(prize -> "CASH".equalsIgnoreCase(prize.getPrizeType()))
-            .filter(prize -> prize.getBaseAmountUsd() != null)
-            .filter(prize -> {
-                BigDecimal ngnAmount = prize.getBaseAmountUsd()
-                    .multiply(ngnLocalCurrencyPerUsd)
-                    .setScale(2, RoundingMode.HALF_UP);
-                return ngnAmount.compareTo(MIN_NGN_CASH_PRIZE) >= 0
-                    && ngnAmount.compareTo(MAX_NGN_CASH_PRIZE) <= 0;
-            })
-            .toList();
+        List<LotteryPrizeEntity> prizes = drawablePrizes();
         if (prizes.isEmpty()) {
             throw new IllegalArgumentException("No drawable lottery prize is enabled");
         }
@@ -368,6 +358,23 @@ public class LotteryService {
             }
         }
         return prizes.get(prizes.size() - 1);
+    }
+
+    private List<LotteryPrizeEntity> drawablePrizes() {
+        BigDecimal ngnLocalCurrencyPerUsd = currencyExchangeRateService
+            .requireEnabledRate("NG")
+            .getLocalCurrencyPerUsd();
+        return lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
+            .filter(prize -> "CASH".equalsIgnoreCase(prize.getPrizeType()))
+            .filter(prize -> prize.getBaseAmountUsd() != null)
+            .filter(prize -> {
+                BigDecimal ngnAmount = prize.getBaseAmountUsd()
+                    .multiply(ngnLocalCurrencyPerUsd)
+                    .setScale(2, RoundingMode.HALF_UP);
+                return ngnAmount.compareTo(MIN_NGN_CASH_PRIZE) >= 0
+                    && ngnAmount.compareTo(MAX_NGN_CASH_PRIZE) <= 0;
+            })
+            .toList();
     }
 
     private LotteryPrizeItem toPrizeItem(LotteryPrizeEntity prize, UserEntity user) {

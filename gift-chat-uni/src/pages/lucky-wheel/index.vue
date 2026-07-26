@@ -116,23 +116,10 @@ const featuredPrizes = computed(() => prizeCatalog.value.filter((prize) => prize
   image: prize.imageUrl
 })))
 const loadedWheelPrizes = computed(() => {
-  const enabledPrizes = prizeCatalog.value.filter((prize) => prize.enabled)
-  const cashPrizes = enabledPrizes.filter((prize) => prize.prizeType === 'cash')
-  const physicalPrizes = enabledPrizes.filter((prize) => prize.prizeType !== 'cash')
-  if (!cashPrizes.length || !physicalPrizes.length) return enabledPrizes.map((prize) => prize.displayAmount || prize.name)
-
-  const total = enabledPrizes.length
-  const spacing = total / physicalPrizes.length
-  const offset = Math.max(0, Math.floor(spacing) - 1)
-  const physicalBySlot = new Map(physicalPrizes.map((prize, index) => [
-    (Math.floor(index * spacing) + offset) % total,
-    prize
-  ]))
-  let cashIndex = 0
-  return Array.from({ length: total }, (_, index) => {
-    const prize = physicalBySlot.get(index) || cashPrizes[cashIndex++]
-    return prize.displayAmount || prize.name
-  })
+  return prizeCatalog.value
+    .filter((prize) => prize.enabled && prize.prizeType === 'cash')
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((prize) => prize.displayAmount || prize.name)
 })
 const wheelReady = computed(() => loadedWheelPrizes.value.length > 0)
 const wheelPrizes = computed(() => {

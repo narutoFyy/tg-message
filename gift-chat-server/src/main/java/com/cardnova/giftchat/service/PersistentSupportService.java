@@ -12,9 +12,11 @@ import com.cardnova.giftchat.model.ChatOrderItem;
 import com.cardnova.giftchat.model.ChatMessageSync;
 import com.cardnova.giftchat.model.SupportConversation;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
+import com.cardnova.giftchat.repository.SupportAssignmentGuardRepository;
 import com.cardnova.giftchat.repository.SupportMessageRepository;
 import com.cardnova.giftchat.repository.AgentWelcomeMessageRepository;
 import com.cardnova.giftchat.repository.UserRepository;
+import jakarta.persistence.EntityManager;
 import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,14 +35,16 @@ import java.util.UUID;
 public class PersistentSupportService {
 
     private static final DateTimeFormatter MESSAGE_TIME_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm");
+    private static final int ASSIGNMENT_GUARD_ID = 1;
 
     private final SupportConversationRepository supportConversationRepository;
+    private final SupportAssignmentGuardRepository supportAssignmentGuardRepository;
     private final SupportMessageRepository supportMessageRepository;
     private final AgentWelcomeMessageRepository agentWelcomeMessageRepository;
     private final CurrentUserService currentUserService;
     private final ConversationReadService conversationReadService;
     private final RealtimeChatService realtimeChatService;
-    private final TencentMessageMirrorService tencentMessageMirrorService;
+    private final TencentMessageMirrorDispatcher tencentMessageMirrorDispatcher;
     private final MessageRateLimitService messageRateLimitService;
     private final UserPresenceService userPresenceService;
     private final UserRepository userRepository;
@@ -50,15 +54,17 @@ public class PersistentSupportService {
     private final RegistrationBonusService registrationBonusService;
     private final VipService vipService;
     private final UserHiddenRecordService userHiddenRecordService;
+    private final EntityManager entityManager;
 
     public PersistentSupportService(
         SupportConversationRepository supportConversationRepository,
+        SupportAssignmentGuardRepository supportAssignmentGuardRepository,
         SupportMessageRepository supportMessageRepository,
         AgentWelcomeMessageRepository agentWelcomeMessageRepository,
         CurrentUserService currentUserService,
         ConversationReadService conversationReadService,
         RealtimeChatService realtimeChatService,
-        TencentMessageMirrorService tencentMessageMirrorService,
+        TencentMessageMirrorDispatcher tencentMessageMirrorDispatcher,
         MessageRateLimitService messageRateLimitService,
         UserPresenceService userPresenceService,
         UserRepository userRepository,
@@ -67,15 +73,17 @@ public class PersistentSupportService {
         PhoneCountryCodeResolver phoneCountryCodeResolver,
         RegistrationBonusService registrationBonusService,
         VipService vipService,
-        UserHiddenRecordService userHiddenRecordService
+        UserHiddenRecordService userHiddenRecordService,
+        EntityManager entityManager
     ) {
         this.supportConversationRepository = supportConversationRepository;
+        this.supportAssignmentGuardRepository = supportAssignmentGuardRepository;
         this.supportMessageRepository = supportMessageRepository;
         this.agentWelcomeMessageRepository = agentWelcomeMessageRepository;
         this.currentUserService = currentUserService;
         this.conversationReadService = conversationReadService;
         this.realtimeChatService = realtimeChatService;
-        this.tencentMessageMirrorService = tencentMessageMirrorService;
+        this.tencentMessageMirrorDispatcher = tencentMessageMirrorDispatcher;
         this.messageRateLimitService = messageRateLimitService;
         this.userPresenceService = userPresenceService;
         this.userRepository = userRepository;
@@ -85,6 +93,7 @@ public class PersistentSupportService {
         this.registrationBonusService = registrationBonusService;
         this.vipService = vipService;
         this.userHiddenRecordService = userHiddenRecordService;
+        this.entityManager = entityManager;
     }
 
     @Transactional
@@ -496,12 +505,27 @@ public class PersistentSupportService {
         SupportConversationEntity existing = supportConversationRepository.findFirstByCustomerUser_IdOrderByUpdatedAtDesc(user.getId())
             .orElse(null);
         if (existing != null) {
+            if (existing.getAssignedAgent() != null) {
+                sendAgentWelcomeMessageIfNeeded(existing);
+                return existing;
+            }
+
+            lockSupportAssignment();
+            entityManager.refresh(existing);
             if (existing.getAssignedAgent() == null) {
                 existing.setAssignedAgent(selectBalancedAgent());
                 existing.setAssignmentStatus("AUTO_ASSIGNED");
                 existing.setUpdatedAt(LocalDateTime.now());
                 existing = supportConversationRepository.save(existing);
             }
+            sendAgentWelcomeMessageIfNeeded(existing);
+            return existing;
+        }
+
+        lockSupportAssignment();
+        existing = supportConversationRepository.findFirstByCustomerUser_IdOrderByUpdatedAtDesc(user.getId())
+            .orElse(null);
+        if (existing != null) {
             sendAgentWelcomeMessageIfNeeded(existing);
             return existing;
         }
@@ -516,6 +540,11 @@ public class PersistentSupportService {
         SupportConversationEntity saved = supportConversationRepository.save(conversation);
         sendAgentWelcomeMessageIfNeeded(saved);
         return saved;
+    }
+
+    private void lockSupportAssignment() {
+        supportAssignmentGuardRepository.findByIdForUpdate(ASSIGNMENT_GUARD_ID)
+            .orElseThrow(() -> new IllegalStateException("Support assignment guard is not initialized"));
     }
 
     @Transactional
@@ -820,13 +849,13 @@ public class PersistentSupportService {
         }
         message.setTencentMirrorStatus("PENDING");
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            tencentMessageMirrorService.mirrorSupportMessage(message.getId());
+            tencentMessageMirrorDispatcher.dispatchSupportMessage(message.getId());
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                tencentMessageMirrorService.mirrorSupportMessage(message.getId());
+                tencentMessageMirrorDispatcher.dispatchSupportMessage(message.getId());
             }
         });
     }
@@ -844,7 +873,8 @@ public class PersistentSupportService {
         return userRepository.findByRoleCodeAndStatusCodeOrderByCreatedAtAsc("AGENT", "ACTIVE").stream()
             .min(Comparator
                 .comparingLong((UserEntity agent) -> supportConversationRepository.countByAssignedAgent_IdAndCustomerUser_StatusCode(agent.getId(), "ACTIVE"))
-                .thenComparing(UserEntity::getCreatedAt))
+                .thenComparing(UserEntity::getCreatedAt)
+                .thenComparing(UserEntity::getId))
             .orElse(null);
     }
 }

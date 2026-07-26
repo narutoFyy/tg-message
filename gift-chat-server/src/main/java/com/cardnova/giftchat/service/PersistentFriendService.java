@@ -41,7 +41,7 @@ public class PersistentFriendService {
     private final CurrentUserService currentUserService;
     private final ConversationReadService conversationReadService;
     private final RealtimeChatService realtimeChatService;
-    private final TencentMessageMirrorService tencentMessageMirrorService;
+    private final TencentMessageMirrorDispatcher tencentMessageMirrorDispatcher;
     private final MessageRateLimitService messageRateLimitService;
     private final MessageAttachmentService messageAttachmentService;
     private final UserHiddenRecordService userHiddenRecordService;
@@ -54,7 +54,7 @@ public class PersistentFriendService {
         CurrentUserService currentUserService,
         ConversationReadService conversationReadService,
         RealtimeChatService realtimeChatService,
-        TencentMessageMirrorService tencentMessageMirrorService,
+        TencentMessageMirrorDispatcher tencentMessageMirrorDispatcher,
         MessageRateLimitService messageRateLimitService,
         MessageAttachmentService messageAttachmentService,
         UserHiddenRecordService userHiddenRecordService
@@ -66,7 +66,7 @@ public class PersistentFriendService {
         this.currentUserService = currentUserService;
         this.conversationReadService = conversationReadService;
         this.realtimeChatService = realtimeChatService;
-        this.tencentMessageMirrorService = tencentMessageMirrorService;
+        this.tencentMessageMirrorDispatcher = tencentMessageMirrorDispatcher;
         this.messageRateLimitService = messageRateLimitService;
         this.messageAttachmentService = messageAttachmentService;
         this.userHiddenRecordService = userHiddenRecordService;
@@ -524,13 +524,13 @@ public class PersistentFriendService {
     private void mirrorAfterCommit(DirectMessageEntity message) {
         message.setTencentMirrorStatus("PENDING");
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            tencentMessageMirrorService.mirrorDirectMessage(message.getId());
+            tencentMessageMirrorDispatcher.dispatchDirectMessage(message.getId());
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                tencentMessageMirrorService.mirrorDirectMessage(message.getId());
+                tencentMessageMirrorDispatcher.dispatchDirectMessage(message.getId());
             }
         });
     }

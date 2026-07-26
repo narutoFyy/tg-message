@@ -2897,7 +2897,7 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦100", "₦200", "₦500").contains(prizeName));
+        assertTrue(List.of("₦200", "₦500", "₦800", "₦1000").contains(prizeName));
 
         mockMvc.perform(post("/api/lottery/spin")
                 .header("Authorization", bearer(userToken)))
@@ -2920,11 +2920,11 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦100", "₦200", "₦500").contains(forcedPrizeName));
+        assertTrue(List.of("₦200", "₦500", "₦800", "₦1000").contains(forcedPrizeName));
     }
 
     @Test
-    void lotteryPrizeCatalogExposesPhysicalPrizeImages() throws Exception {
+    void lotteryPrizeCatalogEnablesOnlyConfiguredCashRange() throws Exception {
         String userToken = registerToken("lottery_catalog_" + UUID.randomUUID().toString().substring(0, 8));
         MvcResult result = mockMvc.perform(get("/api/lottery/prizes")
                 .header("Authorization", bearer(userToken)))
@@ -2932,16 +2932,14 @@ class GiftChatServerApplicationTests {
             .andReturn();
 
         JsonNode prizes = objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
-        boolean hasIphone = false;
-        boolean hasComputer = false;
+        List<String> enabledPrizeNames = new ArrayList<>();
         for (JsonNode prize : prizes) {
-            hasIphone |= "physical".equals(prize.path("prizeType").asText())
-                && "/static/lottery/iphone.jpg".equals(prize.path("imageUrl").asText());
-            hasComputer |= "physical".equals(prize.path("prizeType").asText())
-                && "/static/lottery/diannao.jpg".equals(prize.path("imageUrl").asText());
+            if (prize.path("enabled").asBoolean()) {
+                assertEquals("cash", prize.path("prizeType").asText());
+                enabledPrizeNames.add(prize.path("name").asText());
+            }
         }
-        assertTrue(hasIphone);
-        assertTrue(hasComputer);
+        assertEquals(List.of("₦200", "₦500", "₦800", "₦1000"), enabledPrizeNames);
     }
 
     @Test
@@ -3684,7 +3682,7 @@ class GiftChatServerApplicationTests {
 
     private String createHistoricalLotteryRecord(String username, String prizeType) {
         UserEntity user = userRepository.findByUsername(username).orElseThrow();
-        LotteryPrizeEntity prize = lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
+        LotteryPrizeEntity prize = lotteryPrizeRepository.findAllByOrderBySortOrderAsc().stream()
             .filter(item -> prizeType.equalsIgnoreCase(item.getPrizeType()))
             .findFirst()
             .orElseThrow();

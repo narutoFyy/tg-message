@@ -41,7 +41,8 @@ public class LotteryService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final Set<String> FULFILLMENT_STATUSES = Set.of("PENDING", "PROCESSING", "FULFILLED", "CANCELED");
-    private static final BigDecimal MAX_NGN_CASH_PRIZE = BigDecimal.valueOf(500);
+    private static final BigDecimal MIN_NGN_CASH_PRIZE = BigDecimal.valueOf(200);
+    private static final BigDecimal MAX_NGN_CASH_PRIZE = BigDecimal.valueOf(1_000);
 
     private final LotteryPrizeRepository lotteryPrizeRepository;
     private final LotteryChanceRepository lotteryChanceRepository;
@@ -343,10 +344,13 @@ public class LotteryService {
         List<LotteryPrizeEntity> prizes = lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
             .filter(prize -> "CASH".equalsIgnoreCase(prize.getPrizeType()))
             .filter(prize -> prize.getBaseAmountUsd() != null)
-            .filter(prize -> prize.getBaseAmountUsd()
-                .multiply(ngnLocalCurrencyPerUsd)
-                .setScale(2, RoundingMode.HALF_UP)
-                .compareTo(MAX_NGN_CASH_PRIZE) <= 0)
+            .filter(prize -> {
+                BigDecimal ngnAmount = prize.getBaseAmountUsd()
+                    .multiply(ngnLocalCurrencyPerUsd)
+                    .setScale(2, RoundingMode.HALF_UP);
+                return ngnAmount.compareTo(MIN_NGN_CASH_PRIZE) >= 0
+                    && ngnAmount.compareTo(MAX_NGN_CASH_PRIZE) <= 0;
+            })
             .toList();
         if (prizes.isEmpty()) {
             throw new IllegalArgumentException("No drawable lottery prize is enabled");
@@ -449,9 +453,9 @@ public class LotteryService {
     private List<LotteryWinnerItem> demoWinners() {
         return List.of(
             new LotteryWinnerItem("+234 *** *** 4551", "₦1000", ""),
-            new LotteryWinnerItem("+233 *** *** 7905", "₦500", ""),
-            new LotteryWinnerItem("+234 *** *** 2866", "₦200", ""),
-            new LotteryWinnerItem("+91 *** *** 1024", "iPad", "")
+            new LotteryWinnerItem("+233 *** *** 7905", "₦800", ""),
+            new LotteryWinnerItem("+234 *** *** 2866", "₦500", ""),
+            new LotteryWinnerItem("+91 *** *** 1024", "₦200", "")
         );
     }
 

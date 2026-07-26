@@ -48,9 +48,15 @@ CREATE TABLE IF NOT EXISTS support_conversation (
     welcome_message_agent_id VARCHAR(36),
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT ux_support_conversation_customer UNIQUE (customer_user_id),
     CONSTRAINT fk_support_customer FOREIGN KEY (customer_user_id) REFERENCES app_user (id),
     CONSTRAINT fk_support_agent FOREIGN KEY (assigned_agent_id) REFERENCES app_user (id),
     CONSTRAINT fk_support_welcome_agent FOREIGN KEY (welcome_message_agent_id) REFERENCES app_user (id)
+);
+
+CREATE TABLE IF NOT EXISTS support_assignment_guard (
+    id INT PRIMARY KEY,
+    updated_at TIMESTAMP NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS gift_card_rate_quote (

@@ -61,6 +61,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -2888,8 +2889,7 @@ class GiftChatServerApplicationTests {
             .path("name")
             .asText();
         assertTrue(List.of(
-            "₦200", "₦500", "₦800", "₦1000", "₦3000", "₦5000", "₦8000",
-            "iPad", "iPhone 17", "Computer"
+            "₦200", "₦500", "₦800", "₦1000"
         ).contains(prizeName));
 
         mockMvc.perform(post("/api/lottery/spin")
@@ -2914,9 +2914,21 @@ class GiftChatServerApplicationTests {
             .path("name")
             .asText();
         assertTrue(List.of(
-            "₦200", "₦500", "₦800", "₦1000", "₦3000", "₦5000", "₦8000",
-            "iPad", "iPhone 17", "Computer"
+            "₦200", "₦500", "₦800", "₦1000"
         ).contains(forcedPrizeName));
+    }
+
+    @Test
+    void oneHundredLotteryDrawsOnlyReturnSmallCashPrizes() throws Exception {
+        Set<String> drawablePrizeNames = Set.of("₦200", "₦500", "₦800", "₦1000");
+
+        for (int index = 0; index < 100; index++) {
+            String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            String userToken = registerToken("lottery_100_" + index + "_" + suffix);
+            JsonNode draw = spinLottery(userToken);
+
+            assertTrue(drawablePrizeNames.contains(draw.path("prize").path("name").asText()));
+        }
     }
 
     @Test

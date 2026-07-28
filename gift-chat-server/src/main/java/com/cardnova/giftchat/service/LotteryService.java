@@ -41,6 +41,12 @@ public class LotteryService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final Set<String> FULFILLMENT_STATUSES = Set.of("PENDING", "PROCESSING", "FULFILLED", "CANCELED");
+    private static final Set<String> DRAWABLE_PRIZE_IDS = Set.of(
+        "lottery-prize-ngn-2000",
+        "lottery-prize-ngn-3000",
+        "lottery-prize-ngn-1000",
+        "lottery-prize-ngn-5000"
+    );
     private final LotteryPrizeRepository lotteryPrizeRepository;
     private final LotteryChanceRepository lotteryChanceRepository;
     private final LotteryDrawRecordRepository lotteryDrawRecordRepository;
@@ -144,7 +150,7 @@ public class LotteryService {
         UserEntity currentUser = currentUserService.getCurrentUser();
         List<LotteryPrizeEntity> prizes = "ADMIN".equalsIgnoreCase(currentUser.getRoleCode())
             ? lotteryPrizeRepository.findAllByOrderBySortOrderAsc()
-            : drawablePrizes();
+            : displayPrizes();
         return prizes.stream()
             .map(prize -> toPrizeItem(prize, currentUser))
             .toList();
@@ -358,6 +364,12 @@ public class LotteryService {
     }
 
     private List<LotteryPrizeEntity> drawablePrizes() {
+        return displayPrizes().stream()
+            .filter(prize -> DRAWABLE_PRIZE_IDS.contains(prize.getId()))
+            .toList();
+    }
+
+    private List<LotteryPrizeEntity> displayPrizes() {
         return lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
             .filter(prize -> "PHYSICAL".equalsIgnoreCase(prize.getPrizeType())
                 || ("CASH".equalsIgnoreCase(prize.getPrizeType()) && prize.getBaseAmountUsd() != null))

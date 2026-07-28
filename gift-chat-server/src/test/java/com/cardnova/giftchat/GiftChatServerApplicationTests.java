@@ -2887,7 +2887,10 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦200", "₦500", "₦800", "₦1000", "iPad", "iPhone 17", "Computer").contains(prizeName));
+        assertTrue(List.of(
+            "₦200", "₦500", "₦800", "₦1000", "₦3000", "₦5000", "₦8000",
+            "iPad", "iPhone 17", "Computer"
+        ).contains(prizeName));
 
         mockMvc.perform(post("/api/lottery/spin")
                 .header("Authorization", bearer(userToken)))
@@ -2910,11 +2913,14 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦200", "₦500", "₦800", "₦1000", "iPad", "iPhone 17", "Computer").contains(forcedPrizeName));
+        assertTrue(List.of(
+            "₦200", "₦500", "₦800", "₦1000", "₦3000", "₦5000", "₦8000",
+            "iPad", "iPhone 17", "Computer"
+        ).contains(forcedPrizeName));
     }
 
     @Test
-    void lotteryPrizeCatalogIncludesConfiguredCashRangeAndPhysicalPrizes() throws Exception {
+    void lotteryPrizeCatalogIncludesFullCashAndPhysicalPrizePool() throws Exception {
         String userToken = registerToken("lottery_catalog_" + UUID.randomUUID().toString().substring(0, 8));
         MvcResult result = mockMvc.perform(get("/api/lottery/prizes")
                 .header("Authorization", bearer(userToken)))
@@ -2929,7 +2935,10 @@ class GiftChatServerApplicationTests {
             }
         }
         assertEquals(
-            List.of("₦200", "₦500", "₦800", "₦1000", "iPad", "iPhone 17", "Computer"),
+            List.of(
+                "₦200", "₦500", "₦800", "₦1000", "₦3000", "₦5000", "₦8000",
+                "iPad", "iPhone 17", "Computer"
+            ),
             enabledPrizeNames
         );
     }
@@ -2946,7 +2955,7 @@ class GiftChatServerApplicationTests {
             MvcResult catalogResult = mockMvc.perform(get("/api/lottery/prizes")
                     .header("Authorization", bearer(userToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(6)))
+                .andExpect(jsonPath("$.data", hasSize(10)))
                 .andReturn();
             JsonNode catalog = objectMapper.readTree(catalogResult.getResponse().getContentAsString()).path("data");
             List<String> drawablePrizeIds = new ArrayList<>();

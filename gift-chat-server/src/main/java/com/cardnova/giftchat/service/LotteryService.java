@@ -41,9 +41,6 @@ public class LotteryService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final Set<String> FULFILLMENT_STATUSES = Set.of("PENDING", "PROCESSING", "FULFILLED", "CANCELED");
-    private static final BigDecimal MIN_NGN_CASH_PRIZE = BigDecimal.valueOf(200);
-    private static final BigDecimal MAX_NGN_CASH_PRIZE = BigDecimal.valueOf(1_000);
-
     private final LotteryPrizeRepository lotteryPrizeRepository;
     private final LotteryChanceRepository lotteryChanceRepository;
     private final LotteryDrawRecordRepository lotteryDrawRecordRepository;
@@ -361,23 +358,9 @@ public class LotteryService {
     }
 
     private List<LotteryPrizeEntity> drawablePrizes() {
-        BigDecimal ngnLocalCurrencyPerUsd = currencyExchangeRateService
-            .requireEnabledRate("NG")
-            .getLocalCurrencyPerUsd();
         return lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
-            .filter(prize -> {
-                if ("PHYSICAL".equalsIgnoreCase(prize.getPrizeType())) {
-                    return true;
-                }
-                if (!"CASH".equalsIgnoreCase(prize.getPrizeType()) || prize.getBaseAmountUsd() == null) {
-                    return false;
-                }
-                BigDecimal ngnAmount = prize.getBaseAmountUsd()
-                    .multiply(ngnLocalCurrencyPerUsd)
-                    .setScale(2, RoundingMode.HALF_UP);
-                return ngnAmount.compareTo(MIN_NGN_CASH_PRIZE) >= 0
-                    && ngnAmount.compareTo(MAX_NGN_CASH_PRIZE) <= 0;
-            })
+            .filter(prize -> "PHYSICAL".equalsIgnoreCase(prize.getPrizeType())
+                || ("CASH".equalsIgnoreCase(prize.getPrizeType()) && prize.getBaseAmountUsd() != null))
             .toList();
     }
 

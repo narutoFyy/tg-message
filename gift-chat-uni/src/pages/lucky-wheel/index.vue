@@ -117,7 +117,7 @@ const featuredPrizes = computed(() => prizeCatalog.value.filter((prize) => prize
 })))
 const loadedWheelPrizes = computed(() => {
   return prizeCatalog.value
-    .filter((prize) => prize.enabled && prize.prizeType === 'cash')
+    .filter((prize) => prize.enabled)
     .sort((left, right) => left.sortOrder - right.sortOrder)
     .map((prize) => prize.displayAmount || prize.name)
 })

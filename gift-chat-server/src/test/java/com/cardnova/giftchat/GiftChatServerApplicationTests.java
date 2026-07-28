@@ -532,7 +532,7 @@ class GiftChatServerApplicationTests {
         bindBankAccount(userToken, "Nigeria", "Lucky User", "Prize Bank", "7000 8888")
             .andExpect(status().isOk());
 
-        JsonNode spin = spinLottery(userToken);
+        JsonNode spin = spinCashLottery(userToken);
         String recordId = spin.path("recordId").asText();
 
         MvcResult claimResult = mockMvc.perform(post("/api/lottery/records/%s/withdrawal-request".formatted(recordId))
@@ -562,7 +562,7 @@ class GiftChatServerApplicationTests {
     void lotteryCashClaimBindsOnceStaysOutsideWalletAndAllowsReplacementAfterCompletion() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String userToken = registerToken("cash_claim_" + suffix);
-        JsonNode spin = spinLottery(userToken);
+        JsonNode spin = spinCashLottery(userToken);
         String recordId = spin.path("recordId").asText();
 
         MvcResult claimResult = mockMvc.perform(post("/api/lottery/records/%s/withdrawal-request".formatted(recordId))
@@ -2008,16 +2008,11 @@ class GiftChatServerApplicationTests {
     @Test
     void lotteryCashDrawStoresCurrencySnapshot() throws Exception {
         String token = registerToken("lottery_snapshot_" + UUID.randomUUID().toString().substring(0, 8));
-        MvcResult result = mockMvc.perform(post("/api/lottery/spin")
-                .header("Authorization", bearer(token)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.prize.baseAmountUsd").isNotEmpty())
-            .andExpect(jsonPath("$.data.prize.localAmount").isNotEmpty())
-            .andExpect(jsonPath("$.data.prize.currencyCode").value("NGN"))
-            .andExpect(jsonPath("$.data.prize.exchangeRate").isNotEmpty())
-            .andReturn();
-
-        JsonNode draw = objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+        JsonNode draw = spinCashLottery(token);
+        assertFalse(draw.path("prize").path("baseAmountUsd").asText().isBlank());
+        assertFalse(draw.path("prize").path("localAmount").asText().isBlank());
+        assertEquals("NGN", draw.path("prize").path("currencyCode").asText());
+        assertFalse(draw.path("prize").path("exchangeRate").asText().isBlank());
         String recordId = draw.path("recordId").asText();
         LotteryDrawRecordEntity record = lotteryDrawRecordRepository.findById(recordId).orElseThrow();
         assertNotNull(record.getBaseAmountUsd());
@@ -2892,7 +2887,7 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦200", "₦500", "₦800", "₦1000").contains(prizeName));
+        assertTrue(List.of("₦200", "₦500", "₦800", "₦1000", "iPad", "iPhone 17", "Computer").contains(prizeName));
 
         mockMvc.perform(post("/api/lottery/spin")
                 .header("Authorization", bearer(userToken)))
@@ -2915,11 +2910,11 @@ class GiftChatServerApplicationTests {
             .path("prize")
             .path("name")
             .asText();
-        assertTrue(List.of("₦200", "₦500", "₦800", "₦1000").contains(forcedPrizeName));
+        assertTrue(List.of("₦200", "₦500", "₦800", "₦1000", "iPad", "iPhone 17", "Computer").contains(forcedPrizeName));
     }
 
     @Test
-    void lotteryPrizeCatalogEnablesOnlyConfiguredCashRange() throws Exception {
+    void lotteryPrizeCatalogIncludesConfiguredCashRangeAndPhysicalPrizes() throws Exception {
         String userToken = registerToken("lottery_catalog_" + UUID.randomUUID().toString().substring(0, 8));
         MvcResult result = mockMvc.perform(get("/api/lottery/prizes")
                 .header("Authorization", bearer(userToken)))
@@ -2930,11 +2925,13 @@ class GiftChatServerApplicationTests {
         List<String> enabledPrizeNames = new ArrayList<>();
         for (JsonNode prize : prizes) {
             if (prize.path("enabled").asBoolean()) {
-                assertEquals("cash", prize.path("prizeType").asText());
                 enabledPrizeNames.add(prize.path("name").asText());
             }
         }
-        assertEquals(List.of("₦200", "₦500", "₦800", "₦1000"), enabledPrizeNames);
+        assertEquals(
+            List.of("₦200", "₦500", "₦800", "₦1000", "iPad", "iPhone 17", "Computer"),
+            enabledPrizeNames
+        );
     }
 
     @Test
@@ -2949,13 +2946,13 @@ class GiftChatServerApplicationTests {
             MvcResult catalogResult = mockMvc.perform(get("/api/lottery/prizes")
                     .header("Authorization", bearer(userToken)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(3)))
+                .andExpect(jsonPath("$.data", hasSize(6)))
                 .andReturn();
             JsonNode catalog = objectMapper.readTree(catalogResult.getResponse().getContentAsString()).path("data");
             List<String> drawablePrizeIds = new ArrayList<>();
             for (JsonNode prize : catalog) {
                 assertTrue(prize.path("enabled").asBoolean());
-                assertEquals("cash", prize.path("prizeType").asText());
+                assertTrue(List.of("cash", "physical").contains(prize.path("prizeType").asText()));
                 drawablePrizeIds.add(prize.path("id").asText());
             }
 
@@ -3722,6 +3719,20 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+    }
+
+    private JsonNode spinCashLottery(String token) throws Exception {
+        List<LotteryPrizeEntity> physicalPrizes = lotteryPrizeRepository.findAllByOrderBySortOrderAsc().stream()
+            .filter(prize -> "PHYSICAL".equalsIgnoreCase(prize.getPrizeType()))
+            .toList();
+        physicalPrizes.forEach(prize -> prize.setEnabled(false));
+        lotteryPrizeRepository.saveAllAndFlush(physicalPrizes);
+        try {
+            return spinLottery(token);
+        } finally {
+            physicalPrizes.forEach(prize -> prize.setEnabled(true));
+            lotteryPrizeRepository.saveAllAndFlush(physicalPrizes);
+        }
     }
 
     private String createHistoricalLotteryRecord(String username, String prizeType) {

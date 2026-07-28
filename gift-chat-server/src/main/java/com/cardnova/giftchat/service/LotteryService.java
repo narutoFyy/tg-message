@@ -365,9 +365,13 @@ public class LotteryService {
             .requireEnabledRate("NG")
             .getLocalCurrencyPerUsd();
         return lotteryPrizeRepository.findByEnabledTrueOrderBySortOrderAsc().stream()
-            .filter(prize -> "CASH".equalsIgnoreCase(prize.getPrizeType()))
-            .filter(prize -> prize.getBaseAmountUsd() != null)
             .filter(prize -> {
+                if ("PHYSICAL".equalsIgnoreCase(prize.getPrizeType())) {
+                    return true;
+                }
+                if (!"CASH".equalsIgnoreCase(prize.getPrizeType()) || prize.getBaseAmountUsd() == null) {
+                    return false;
+                }
                 BigDecimal ngnAmount = prize.getBaseAmountUsd()
                     .multiply(ngnLocalCurrencyPerUsd)
                     .setScale(2, RoundingMode.HALF_UP);

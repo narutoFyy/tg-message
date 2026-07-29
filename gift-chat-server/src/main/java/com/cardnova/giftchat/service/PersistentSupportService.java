@@ -34,6 +34,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class PersistentSupportService {
 
+    private static final int MAX_SUPPORT_TEXT_LENGTH = 2_000;
+
     private static final DateTimeFormatter MESSAGE_TIME_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm");
     private static final int ASSIGNMENT_GUARD_ID = 1;
 
@@ -270,8 +272,6 @@ public class PersistentSupportService {
         if (!canAccessConversation(currentUser, conversation)) {
             throw new IllegalArgumentException("Support conversation not accessible");
         }
-        messageRateLimitService.checkSendAllowed(currentUser.getId());
-
         String clientMessageId = normalizeClientMessageId(request.clientMessageId());
         if (!clientMessageId.isEmpty()) {
             SupportMessageEntity existing = supportMessageRepository
@@ -282,7 +282,10 @@ public class PersistentSupportService {
             }
         }
 
+        validateSupportTextLength(request.messageType(), request.content());
         String outgoingContent = normalizeOutgoingSupportContent(currentUser, request.messageType(), request.content());
+        validateSupportTextLength(request.messageType(), outgoingContent);
+        messageRateLimitService.checkSupportSendAllowed(currentUser.getId(), currentUser.getRoleCode());
         ChatMessageReply replyTo = resolveReplyTo(conversation, currentUser, request.replyTo());
 
         SupportMessageEntity saved = appendMessageEntity(
@@ -323,6 +326,14 @@ public class PersistentSupportService {
             return content;
         }
         return translationService.translateToEnglish(content).translatedText();
+    }
+
+    private void validateSupportTextLength(String messageType, String content) {
+        if ("TEXT".equalsIgnoreCase(messageType == null ? "" : messageType.trim())
+            && content != null
+            && content.length() > MAX_SUPPORT_TEXT_LENGTH) {
+            throw new IllegalArgumentException("Text messages are limited to 2,000 characters.");
+        }
     }
 
     @Transactional

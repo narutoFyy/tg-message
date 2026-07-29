@@ -286,11 +286,12 @@
               </view>
             </view>
           </view>
-          <input v-model="draft" class="message-input" placeholder="输入消息..." @focus="closeComposerTools" @confirm="handleSend" />
+          <input v-model="draft" class="message-input" maxlength="2000" placeholder="输入消息..." @focus="closeComposerTools" @confirm="handleSend" />
           <view class="send-btn" :class="{ 'active': canSend }" @click="handleSend">
             <text>发送</text>
           </view>
         </view>
+        <text :class="['message-limit', draft.length >= 1800 && 'warning']">{{ draft.length }}/2000</text>
         <view v-if="showComposerTools && isMobile" class="composer-panel">
           <view class="composer-panel-grid">
             <view class="composer-panel-item" @click="chooseComposerTool('image')">
@@ -802,7 +803,7 @@ const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT' || store.state.currentUser?.roleCode === 'ADMIN')
 const isAdmin = computed(() => store.state.currentUser?.roleCode === 'ADMIN')
 const balanceSummary = computed(() => store.state.balanceSummary)
-const canSend = computed(() => draft.value.trim().length > 0 || hasAttachment.value)
+const canSend = computed(() => (draft.value.trim().length > 0 && draft.value.length <= 2000) || hasAttachment.value)
 const replyTargetText = computed(() => previewMessageContent(replyTarget.value?.content || ''))
 const messageMenuStyle = computed(() => {
   const menu = messageContextMenu.value
@@ -2293,6 +2294,10 @@ async function handleSend() {
   }
   const value = draft.value.trim()
   if (!value) return
+  if (value.length > 2000) {
+    uni.showToast({ title: '消息最多 2000 个字符', icon: 'none' })
+    return
+  }
 
   try {
     const replyTo = replyTarget.value || undefined
@@ -2302,7 +2307,7 @@ async function handleSend() {
     scrollMessagesToBottom()
     startReadRefresh()
   } catch (error) {
-    uni.showToast({ title: 'Send failed. Tap Retry.', icon: 'none' })
+    uni.showToast({ title: error instanceof Error ? error.message : '发送失败，请重试', icon: 'none' })
   }
 }
 
@@ -4493,6 +4498,20 @@ function previewImage(url: string) {
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0;
+}
+
+.message-limit {
+  display: block;
+  margin-top: 4px;
+  padding-right: 58px;
+  color: #7a8792;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: right;
+}
+
+.message-limit.warning {
+  color: #c96c18;
 }
 
 .composer-option-icon.video::before {

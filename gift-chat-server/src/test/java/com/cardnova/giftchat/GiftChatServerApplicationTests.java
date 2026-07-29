@@ -60,7 +60,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.time.Duration;
 import java.time.Instant;
@@ -1032,6 +1034,39 @@ class GiftChatServerApplicationTests {
                 .header("Authorization", bearer(user1Token)))
             .andExpect(status().isOk())
             .andExpect(content().string(containsString("Need payout help")));
+    }
+
+    @Test
+    void supportTextMessageLengthBoundaryIsEnforced() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String userToken = registerToken("message_length_" + suffix);
+        String conversationId = supportConversations(userToken).get(0).path("conversationId").asText();
+
+        sendSupportText(userToken, conversationId, "x".repeat(2_000), "length-2000-" + suffix)
+            .andExpect(status().isOk());
+        sendSupportText(userToken, conversationId, "x".repeat(2_001), "length-2001-" + suffix)
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Text messages are limited to 2,000 characters."));
+    }
+
+    @Test
+    void supportUserMessageRateLimitIsPerAccount() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String firstToken = registerToken("message_rate_a_" + suffix);
+        String secondToken = registerToken("message_rate_b_" + suffix);
+        String firstConversationId = supportConversations(firstToken).get(0).path("conversationId").asText();
+        String secondConversationId = supportConversations(secondToken).get(0).path("conversationId").asText();
+
+        for (int index = 0; index < 20; index++) {
+            sendSupportText(firstToken, firstConversationId, "rate message " + index, "rate-a-" + suffix + "-" + index)
+                .andExpect(status().isOk());
+        }
+        sendSupportText(firstToken, firstConversationId, "rate message blocked", "rate-a-" + suffix + "-blocked")
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.message").value("Message limit reached: up to 20 messages per minute."));
+
+        sendSupportText(secondToken, secondConversationId, "independent account", "rate-b-" + suffix)
+            .andExpect(status().isOk());
     }
 
     @Test
@@ -2920,14 +2955,31 @@ class GiftChatServerApplicationTests {
 
     @Test
     void oneHundredLotteryDrawsOnlyReturnSmallCashPrizes() throws Exception {
-        Set<String> drawablePrizeNames = Set.of("₦200", "₦500", "₦800", "₦1000");
+        Set<String> drawablePrizeIds = Set.of(
+            "lottery-prize-ngn-2000",
+            "lottery-prize-ngn-3000",
+            "lottery-prize-ngn-1000",
+            "lottery-prize-ngn-5000"
+        );
+        List<String> countryCodes = List.of("NG", "IN", "CM", "GH", "KE", "US");
+        Map<String, String> currencyCodes = Map.of(
+            "NG", "NGN",
+            "IN", "INR",
+            "CM", "XAF",
+            "GH", "GHS",
+            "KE", "KES",
+            "US", "USD"
+        );
 
         for (int index = 0; index < 100; index++) {
             String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-            String userToken = registerToken("lottery_100_" + index + "_" + suffix);
+            String countryCode = countryCodes.get(index % countryCodes.size());
+            String userToken = registerToken("lottery_100_" + index + "_" + suffix, countryCode);
             JsonNode draw = spinLottery(userToken);
 
-            assertTrue(drawablePrizeNames.contains(draw.path("prize").path("name").asText()));
+            assertTrue(drawablePrizeIds.contains(draw.path("prize").path("id").asText()));
+            assertEquals("cash", draw.path("prize").path("prizeType").asText());
+            assertEquals(currencyCodes.get(countryCode), draw.path("prize").path("currencyCode").asText());
         }
     }
 
@@ -2959,6 +3011,12 @@ class GiftChatServerApplicationTests {
     void lotteryPrizeCatalogMatchesDrawablePoolAfterRateChange() throws Exception {
         String userToken = registerToken("lottery_rate_" + UUID.randomUUID().toString().substring(0, 8));
         String adminToken = loginToken("admin_mia");
+        Set<String> drawablePrizeIds = Set.of(
+            "lottery-prize-ngn-2000",
+            "lottery-prize-ngn-3000",
+            "lottery-prize-ngn-1000",
+            "lottery-prize-ngn-5000"
+        );
 
         try {
             updateNgCurrencyRate(adminToken, "1600", "lottery pool consistency test")
@@ -2970,15 +3028,29 @@ class GiftChatServerApplicationTests {
                 .andExpect(jsonPath("$.data", hasSize(10)))
                 .andReturn();
             JsonNode catalog = objectMapper.readTree(catalogResult.getResponse().getContentAsString()).path("data");
-            List<String> drawablePrizeIds = new ArrayList<>();
+            List<String> displayedPrizeIds = new ArrayList<>();
             for (JsonNode prize : catalog) {
                 assertTrue(prize.path("enabled").asBoolean());
                 assertTrue(List.of("cash", "physical").contains(prize.path("prizeType").asText()));
-                drawablePrizeIds.add(prize.path("id").asText());
+                displayedPrizeIds.add(prize.path("id").asText());
             }
+            assertTrue(displayedPrizeIds.containsAll(drawablePrizeIds));
+            assertTrue(displayedPrizeIds.containsAll(List.of(
+                "lottery-prize-ipad",
+                "lottery-prize-iphone-17",
+                "lottery-prize-computer"
+            )));
 
             JsonNode draw = spinLottery(userToken);
-            assertTrue(drawablePrizeIds.contains(draw.path("prize").path("id").asText()));
+            JsonNode prize = draw.path("prize");
+            assertTrue(drawablePrizeIds.contains(prize.path("id").asText()));
+            assertEquals("cash", prize.path("prizeType").asText());
+            assertEquals("NGN", prize.path("currencyCode").asText());
+            assertEquals(0, new BigDecimal(prize.path("exchangeRate").asText()).compareTo(new BigDecimal("1600")));
+            BigDecimal expectedLocalAmount = new BigDecimal(prize.path("baseAmountUsd").asText())
+                .multiply(new BigDecimal("1600"))
+                .setScale(2, RoundingMode.HALF_UP);
+            assertEquals(0, expectedLocalAmount.compareTo(new BigDecimal(prize.path("localAmount").asText())));
 
             mockMvc.perform(get("/api/lottery/prizes")
                     .header("Authorization", bearer(adminToken)))
@@ -2987,6 +3059,53 @@ class GiftChatServerApplicationTests {
         } finally {
             updateNgCurrencyRate(adminToken, "1500", "restore lottery pool test rate")
                 .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void lotteryWinnerActivityIsLocalizedAndDisplayOnlyItemsAreNotPersisted() throws Exception {
+        Map<String, String> countryPrefixes = Map.of(
+            "NG", "+234 ",
+            "IN", "+91 ",
+            "CM", "+237 ",
+            "GH", "+233 ",
+            "KE", "+254 ",
+            "US", "+1 "
+        );
+        Set<String> physicalPrizeNames = Set.of("iPad", "iPhone 17", "Computer");
+
+        for (Map.Entry<String, String> country : countryPrefixes.entrySet()) {
+            String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            String userToken = registerToken("winner_" + country.getKey().toLowerCase() + "_" + suffix, country.getKey());
+            spinLottery(userToken);
+            long recordCountBeforeFeed = lotteryDrawRecordRepository.count();
+
+            MvcResult result = mockMvc.perform(get("/api/lottery/winners")
+                    .header("Authorization", bearer(userToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(24)))
+                .andReturn();
+
+            assertEquals(recordCountBeforeFeed, lotteryDrawRecordRepository.count());
+            JsonNode activity = objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+            List<Integer> physicalPositions = new ArrayList<>();
+            boolean foundRealRecord = false;
+            for (int index = 0; index < activity.size(); index++) {
+                JsonNode item = activity.get(index);
+                assertTrue(item.path("displayName").asText().startsWith(country.getValue()));
+                if (physicalPrizeNames.contains(item.path("prizeName").asText())) {
+                    assertTrue(item.path("displayOnly").asBoolean());
+                    physicalPositions.add(index + 1);
+                } else if (!item.path("displayOnly").asBoolean()) {
+                    foundRealRecord = true;
+                }
+            }
+            assertTrue(foundRealRecord);
+            assertTrue(physicalPositions.get(0) >= 8 && physicalPositions.get(0) <= 12);
+            for (int index = 1; index < physicalPositions.size(); index++) {
+                int gap = physicalPositions.get(index) - physicalPositions.get(index - 1);
+                assertTrue(gap >= 8 && gap <= 12);
+            }
         }
     }
 
@@ -3702,6 +3821,22 @@ class GiftChatServerApplicationTests {
         return objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
     }
 
+    private ResultActions sendSupportText(
+        String token,
+        String conversationId,
+        String content,
+        String clientMessageId
+    ) throws Exception {
+        return mockMvc.perform(post("/api/support/conversations/%s/messages".formatted(conversationId))
+            .header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(Map.of(
+                "content", content,
+                "messageType", "text",
+                "clientMessageId", clientMessageId
+            ))));
+    }
+
     private int countSupportMessagesWithContent(JsonNode conversations, String content) {
         int count = 0;
         for (JsonNode conversation : conversations) {
@@ -3791,16 +3926,20 @@ class GiftChatServerApplicationTests {
     }
 
     private String registerToken(String username) throws Exception {
+        return registerToken(username, "NG");
+    }
+
+    private String registerToken(String username, String countryCode) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "countryCode": "NG",
+                      "countryCode": "%s",
                       "username": "%s",
                       "email": "%s@example.com",
                       "password": "demo12345"
                     }
-                    """.formatted(username, username)))
+                    """.formatted(countryCode, username, username)))
             .andExpect(status().isOk())
             .andReturn();
 

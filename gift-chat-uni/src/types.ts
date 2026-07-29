@@ -307,6 +307,7 @@ export interface LotteryWinnerItem {
   displayName: string
   prizeName: string
   drawnAt: string
+  displayOnly: boolean
 }
 
 export interface LotteryRecordItem {

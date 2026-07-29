@@ -35,7 +35,7 @@
           </view>
         </view>
         <view class="winner-section">
-          <view class="section-head"><view><text class="section-title">Live draw activity</text><text class="live-label">Real winner feed</text></view><text class="section-count">{{ recentWinners.length }}</text></view>
+          <view class="section-head"><view><text class="section-title">Live draw activity</text><text class="live-label">Recent prize activity</text></view><text class="section-count">{{ recentWinners.length }}</text></view>
           <swiper v-if="recentWinners.length" class="winner-ticker" vertical autoplay circular :interval="2800" :duration="500" :disable-touch="recentWinners.length < 2">
             <swiper-item v-for="winner in recentWinners" :key="`${winner.displayName}-${winner.prizeName}-${winner.drawnAt}`">
               <view class="winner-row"><view><text class="winner-prize">{{ winner.prizeName }}</text><text class="winner-time">{{ winner.drawnAt || 'Recent draw' }}</text></view><text class="winner-name">{{ winner.displayName }}</text></view>
@@ -150,7 +150,7 @@ onShow(() => {
   refreshBankAccount()
 })
 const eligibility = computed(() => store.state.lotteryEligibility)
-const recentWinners = computed(() => store.state.lotteryWinners.slice(0, 6))
+const recentWinners = computed(() => store.state.lotteryWinners)
 const lotteryRecords = computed(() => store.state.lotteryRecords)
 const chanceLabel = computed(() => eligibility.value ? `${eligibility.value.availableChances} available` : 'Checking')
 const eligibilityText = computed(() => { if (!eligibility.value) return 'Checking your draw chance.'; if (eligibility.value.eligible) return `${eligibility.value.availableChances} draw chance${eligibility.value.availableChances === 1 ? '' : 's'} available.`; return eligibility.value.message || 'No draw chance available.' })

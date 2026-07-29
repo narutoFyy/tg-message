@@ -83,11 +83,12 @@
               <text></text>
             </view>
           </view>
-          <input v-model="draft" class="message-input" placeholder="Type a message..." @focus="closeComposerTools" @confirm="handleSend" />
+          <input v-model="draft" class="message-input" maxlength="2000" placeholder="Type a message..." @focus="closeComposerTools" @confirm="handleSend" />
           <view class="send-btn" :class="{ active: canSend }" @click="handleSend">
             <text>Send</text>
           </view>
         </view>
+        <text :class="['message-limit', draft.length >= 1800 && 'warning']">{{ draft.length }}/2000</text>
         <view v-if="showComposerTools" class="composer-panel">
           <view class="composer-panel-grid">
             <view class="composer-panel-item" @click="chooseComposerTool('image')">
@@ -186,7 +187,7 @@ const headerSubtitle = computed(() => isAgent.value ? 'tap to switch customer' :
 const heroLabel = computed(() => isAgent.value ? 'Customer conversation' : 'Dedicated support')
 const heroCopy = computed(() => isAgent.value ? 'Reply to this customer here.' : 'Your support agent will reply in this chat.')
 const balanceSummary = computed(() => store.state.balanceSummary)
-const canSend = computed(() => Boolean(draft.value.trim() || hasAttachment.value))
+const canSend = computed(() => Boolean((draft.value.trim() && draft.value.length <= 2000) || hasAttachment.value))
 const replyTargetText = computed(() => previewMessageContent(replyTarget.value?.content || ''))
 const messageMenuStyle = computed(() => {
   const menu = messageContextMenu.value
@@ -799,6 +800,10 @@ function handleSend() {
   }
   const value = draft.value.trim()
   if (!value) return
+  if (value.length > 2000) {
+    showNotice('Text messages are limited to 2,000 characters.')
+    return
+  }
   sendText(value)
 }
 
@@ -1680,6 +1685,20 @@ function isVideoFileMessage(message: ChatMessage) {
 
 .message-context-item:hover {
   background: rgba(0, 136, 204, 0.1);
+}
+
+.message-limit {
+  display: block;
+  margin-top: 4px;
+  padding-right: 58px;
+  color: #7a8792;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: right;
+}
+
+.message-limit.warning {
+  color: #c96c18;
 }
 
 .message-context-item.danger {

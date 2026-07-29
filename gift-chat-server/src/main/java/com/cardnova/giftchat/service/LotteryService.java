@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.WeekFields;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -47,6 +48,8 @@ public class LotteryService {
         "lottery-prize-ngn-1000",
         "lottery-prize-ngn-5000"
     );
+    private static final int WINNER_FEED_SIZE = 24;
+    private static final List<String> PHYSICAL_ACTIVITY_PRIZES = List.of("iPad", "iPhone 17", "Computer");
     private final LotteryPrizeRepository lotteryPrizeRepository;
     private final LotteryChanceRepository lotteryChanceRepository;
     private final LotteryDrawRecordRepository lotteryDrawRecordRepository;
@@ -133,17 +136,47 @@ public class LotteryService {
     }
 
     public List<LotteryWinnerItem> winners() {
-        List<LotteryDrawRecordEntity> records = lotteryDrawRecordRepository.findTop50ByOrderByDrawnAtDesc();
-        if (records.isEmpty()) {
-            return demoWinners();
-        }
-        return records.stream()
-            .map(record -> new LotteryWinnerItem(
-                maskedUser(record.getUser()),
-                record.getPrize().getName(),
-                TIME_FORMATTER.format(record.getDrawnAt())
-            ))
+        UserEntity viewer = currentUserService.getCurrentUser();
+        String countryCode = countryCodeService.findCountry(viewer.getCountryCode())
+            .map(country -> country.code())
+            .orElse("US");
+        List<LotteryDrawRecordEntity> realRecords = lotteryDrawRecordRepository
+            .findTop50ByUser_CountryCodeOrderByDrawnAtDesc(countryCode)
+            .stream()
+            .filter(record -> DRAWABLE_PRIZE_IDS.contains(record.getPrize().getId()))
             .toList();
+        List<String> cashActivityPrizes = winnerCashPrizeNames(countryCode);
+        int physicalInterval = 8 + Math.floorMod(countryCode.hashCode(), 5);
+        List<LotteryWinnerItem> activity = new ArrayList<>(WINNER_FEED_SIZE);
+        int realIndex = 0;
+        int cashIndex = 0;
+        int physicalIndex = 0;
+        for (int position = 1; position <= WINNER_FEED_SIZE; position++) {
+            if (position % physicalInterval == 0) {
+                activity.add(new LotteryWinnerItem(
+                    syntheticMaskedPhone(countryCode, position),
+                    PHYSICAL_ACTIVITY_PRIZES.get(physicalIndex++ % PHYSICAL_ACTIVITY_PRIZES.size()),
+                    "",
+                    true
+                ));
+            } else if (realIndex < realRecords.size()) {
+                LotteryDrawRecordEntity record = realRecords.get(realIndex++);
+                activity.add(new LotteryWinnerItem(
+                    maskedUser(record.getUser(), record.getUser().getCountryCode(), position),
+                    winnerPrizeName(record, countryCode),
+                    TIME_FORMATTER.format(record.getDrawnAt()),
+                    false
+                ));
+            } else {
+                activity.add(new LotteryWinnerItem(
+                    syntheticMaskedPhone(countryCode, position),
+                    cashActivityPrizes.get(cashIndex++ % cashActivityPrizes.size()),
+                    "",
+                    true
+                ));
+            }
+        }
+        return activity;
     }
 
     public List<LotteryPrizeItem> prizes() {
@@ -427,42 +460,52 @@ public class LotteryService {
         return normalized;
     }
 
-    private String maskedUser(UserEntity user) {
+    private String maskedUser(UserEntity user, String countryCode, int seed) {
         if (StringUtils.hasText(user.getPhone())) {
-            return maskPhone(user.getPhone());
+            return maskPhone(user.getPhone(), countryCode, seed);
         }
-        String username = user.getUsername();
-        if (username.length() <= 2) {
-            return username.substring(0, 1) + "***";
-        }
-        return username.substring(0, 2) + "***" + username.substring(username.length() - 1);
+        return syntheticMaskedPhone(countryCode, user.getUsername().hashCode());
     }
 
-    private String maskPhone(String phone) {
+    private String maskPhone(String phone, String countryCode, int seed) {
         String digits = phone.replaceAll("[^0-9]", "");
         if (digits.length() < 4) {
-            return phone;
+            return syntheticMaskedPhone(countryCode, seed);
         }
         String last4 = digits.substring(digits.length() - 4);
-        if (phone.startsWith("+234")) {
-            return "+234 *** *** " + last4;
-        }
-        if (phone.startsWith("+233")) {
-            return "+233 *** *** " + last4;
-        }
-        if (phone.startsWith("+91")) {
-            return "+91 *** *** " + last4;
-        }
-        return "+*** *** " + last4;
+        return countryCodeService.requireCountry(countryCode).countryCode() + " *** *** " + last4;
     }
 
-    private List<LotteryWinnerItem> demoWinners() {
-        return List.of(
-            new LotteryWinnerItem("+234 *** *** 4551", "₦1000", ""),
-            new LotteryWinnerItem("+233 *** *** 7905", "₦800", ""),
-            new LotteryWinnerItem("+234 *** *** 2866", "₦500", ""),
-            new LotteryWinnerItem("+91 *** *** 1024", "₦200", "")
-        );
+    private String syntheticMaskedPhone(String countryCode, int seed) {
+        String last4 = "%04d".formatted(Math.floorMod((countryCode + ":" + seed).hashCode(), 10_000));
+        return countryCodeService.requireCountry(countryCode).countryCode() + " *** *** " + last4;
+    }
+
+    private List<String> winnerCashPrizeNames(String countryCode) {
+        CurrencyExchangeRateEntity rate = currencyExchangeRateService.requireEnabledRate(countryCode);
+        String currencyCode = countryCodeService.requireCountry(countryCode).currencyCode();
+        List<String> names = drawablePrizes().stream()
+            .map(prize -> displayAmount(
+                currencyCode,
+                prize.getBaseAmountUsd().multiply(rate.getLocalCurrencyPerUsd()).setScale(2, RoundingMode.HALF_UP)
+            ))
+            .toList();
+        if (names.isEmpty()) {
+            throw new IllegalArgumentException("No drawable lottery prize is enabled");
+        }
+        return names;
+    }
+
+    private String winnerPrizeName(LotteryDrawRecordEntity record, String countryCode) {
+        String snapshotAmount = displayAmount(record.getCurrencyCode(), record.getLocalAmount());
+        if (StringUtils.hasText(snapshotAmount)) {
+            return snapshotAmount;
+        }
+        CurrencyExchangeRateEntity rate = currencyExchangeRateService.requireEnabledRate(countryCode);
+        BigDecimal localAmount = record.getPrize().getBaseAmountUsd()
+            .multiply(rate.getLocalCurrencyPerUsd())
+            .setScale(2, RoundingMode.HALF_UP);
+        return displayAmount(countryCodeService.requireCountry(countryCode).currencyCode(), localAmount);
     }
 
     private String value(String value) {

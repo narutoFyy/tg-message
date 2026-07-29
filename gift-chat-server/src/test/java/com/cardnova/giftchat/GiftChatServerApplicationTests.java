@@ -6,6 +6,7 @@ import com.cardnova.giftchat.entity.LotteryDrawRecordEntity;
 import com.cardnova.giftchat.entity.LotteryPrizeEntity;
 import com.cardnova.giftchat.entity.GiftCardRateEntity;
 import com.cardnova.giftchat.entity.TradeOrderEntity;
+import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.entity.VipPointLedgerEntity;
 import com.cardnova.giftchat.repository.LotteryDrawRecordRepository;
@@ -15,6 +16,7 @@ import com.cardnova.giftchat.repository.RegistrationBonusRecordRepository;
 import com.cardnova.giftchat.repository.ReferralRewardRepository;
 import com.cardnova.giftchat.repository.UserRepository;
 import com.cardnova.giftchat.repository.TradeOrderRepository;
+import com.cardnova.giftchat.repository.SupportConversationRepository;
 import com.cardnova.giftchat.repository.TradeOrderSettlementAuditRepository;
 import com.cardnova.giftchat.repository.UploadAssetRepository;
 import com.cardnova.giftchat.repository.VipPointLedgerRepository;
@@ -111,6 +113,9 @@ class GiftChatServerApplicationTests {
 
     @Autowired
     private TradeOrderRepository tradeOrderRepository;
+
+    @Autowired
+    private SupportConversationRepository supportConversationRepository;
 
     @Autowired
     private TradeOrderSettlementAuditRepository tradeOrderSettlementAuditRepository;
@@ -2850,7 +2855,7 @@ class GiftChatServerApplicationTests {
         mockMvc.perform(get("/api/balances/summary")
                 .header("Authorization", bearer(userToken)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.availableTotal").value("24,000.00"))
+            .andExpect(jsonPath("$.data.availableTotal").value("26,000.00"))
             .andExpect(jsonPath("$.data.pendingTotal").value("0.00"));
 
         mockMvc.perform(get("/api/support/conversations")
@@ -2867,6 +2872,7 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.points").value("50"))
             .andExpect(jsonPath("$.data.nextLevel").value("VIP2"));
 
+        approveLotteryAccess(userToken);
         mockMvc.perform(get("/api/lottery/eligibility")
                 .header("Authorization", bearer(userToken)))
             .andExpect(status().isOk())
@@ -2943,6 +2949,7 @@ class GiftChatServerApplicationTests {
     void vipOneLotteryChanceCanOnlyBeUsedOnce() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String userToken = registerToken("lottery_once_" + suffix);
+        approveLotteryAccess(userToken);
 
         mockMvc.perform(get("/api/lottery/eligibility")
                 .header("Authorization", bearer(userToken)))
@@ -2974,6 +2981,7 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.message", containsString("Next chance available")));
 
         String otherUserToken = registerToken("lottery_invalid_" + suffix);
+        approveLotteryAccess(otherUserToken);
         MvcResult forcedPrizeResult = mockMvc.perform(post("/api/lottery/spin")
                 .header("Authorization", bearer(otherUserToken))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -2992,6 +3000,140 @@ class GiftChatServerApplicationTests {
         assertTrue(List.of(
             "₦200", "₦500", "₦800", "₦1000"
         ).contains(forcedPrizeName));
+    }
+
+    @Test
+    void newUserNeedsAssignedSupportApprovalBeforeLotteryAccess() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String username = "lottery_approval_" + suffix;
+        String userToken = registerToken(username);
+        String conversationId = supportConversations(userToken).get(0).path("conversationId").asText();
+        SupportConversationEntity conversation = supportConversationRepository.findById(conversationId).orElseThrow();
+        String assignedAgent = userRepository.findById(conversation.getAssignedAgent().getId()).orElseThrow().getUsername();
+        String otherAgent = "support_luna".equals(assignedAgent) ? "support_angela" : "support_luna";
+
+        mockMvc.perform(get("/api/lottery/eligibility").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.accessStatus").value("pending"))
+            .andExpect(jsonPath("$.data.eligible").value(false))
+            .andExpect(jsonPath("$.data.availableChances").value(0))
+            .andExpect(jsonPath("$.data.message").value(
+                "Lucky Wheel access is pending support approval. Please contact your assigned support agent."
+            ));
+
+        mockMvc.perform(post("/api/lottery/spin").header("Authorization", bearer(userToken)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value(
+                "Lucky Wheel access is pending support approval. Please contact your assigned support agent."
+            ));
+
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/lottery-access/approve", conversationId)
+                .header("Authorization", bearer(loginToken(otherAgent))))
+            .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/lottery-access/approve", conversationId)
+                .header("Authorization", bearer(loginToken(assignedAgent))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("approved"))
+            .andExpect(jsonPath("$.data.approvedBy").value(assignedAgent))
+            .andExpect(jsonPath("$.data.canApprove").value(false));
+
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/lottery-access/approve", conversationId)
+                .header("Authorization", bearer(loginToken("admin_mia"))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.approvedBy").value(assignedAgent));
+
+        mockMvc.perform(get("/api/lottery/eligibility").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.accessStatus").value("approved"))
+            .andExpect(jsonPath("$.data.eligible").value(true))
+            .andExpect(jsonPath("$.data.availableChances").value(1));
+    }
+
+    @Test
+    void newReferralChainInheritsTheDirectInvitersActiveSupport() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String rootUsername = "referral_root_" + suffix;
+        registerToken(rootUsername);
+        UserEntity root = userRepository.findByUsername(rootUsername).orElseThrow();
+        SupportConversationEntity rootConversation = supportConversationRepository
+            .findFirstByCustomerUser_IdOrderByUpdatedAtDesc(root.getId()).orElseThrow();
+
+        String childUsername = "referral_child_" + suffix;
+        registerTokenWithInvite(childUsername, root.getInviteCode());
+        UserEntity child = userRepository.findByUsername(childUsername).orElseThrow();
+        SupportConversationEntity childConversation = supportConversationRepository
+            .findFirstByCustomerUser_IdOrderByUpdatedAtDesc(child.getId()).orElseThrow();
+
+        String grandchildUsername = "referral_grand_" + suffix;
+        registerTokenWithInvite(grandchildUsername, child.getInviteCode());
+        UserEntity grandchild = userRepository.findByUsername(grandchildUsername).orElseThrow();
+        SupportConversationEntity grandchildConversation = supportConversationRepository
+            .findFirstByCustomerUser_IdOrderByUpdatedAtDesc(grandchild.getId()).orElseThrow();
+
+        assertEquals(rootConversation.getAssignedAgent().getId(), childConversation.getAssignedAgent().getId());
+        assertEquals(rootConversation.getAssignedAgent().getId(), grandchildConversation.getAssignedAgent().getId());
+        assertEquals("REFERRAL_ASSIGNED", childConversation.getAssignmentStatus());
+        assertEquals("REFERRAL_ASSIGNED", grandchildConversation.getAssignmentStatus());
+    }
+
+    @Test
+    void nigeriaWelcomeBonusStaysLockedUntilFirstCompletedSupportSellOrder() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String username = "locked_bonus_" + suffix;
+        String userToken = registerToken(username, "NG");
+
+        mockMvc.perform(get("/api/account/registration-bonus").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.bonusAmount").value("2,000.00"))
+            .andExpect(jsonPath("$.data.currencyCode").value("NGN"))
+            .andExpect(jsonPath("$.data.status").value("locked"));
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("0.00"))
+            .andExpect(jsonPath("$.data.lockedTotal").value("2,000.00"));
+
+        mockMvc.perform(post("/api/withdrawals")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "amount":"2000",
+                      "country":"Nigeria",
+                      "accountName":"Locked User",
+                      "bankName":"Locked Bank",
+                      "accountNumber":"1234567890"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Withdrawal amount exceeds available balance"));
+
+        MvcResult createResult = mockMvc.perform(post("/api/transactions/sell-orders")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(sellOrderRequest("unlock-" + suffix, 10)))
+            .andExpect(status().isOk())
+            .andReturn();
+        JsonNode order = objectMapper.readTree(createResult.getResponse().getContentAsString()).path("data");
+        String orderId = order.path("id").asText();
+        String orderNo = order.path("orderNo").asText();
+        String agentToken = loginToken(order.path("counterpartyUsername").asText());
+
+        mockMvc.perform(post("/api/transactions/{orderId}/complete", orderId)
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"finalLocalAmount\":10000,\"vipPoints\":0,\"reason\":\"First successful trade\"}"))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/account/registration-bonus").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("available"))
+            .andExpect(jsonPath("$.data.unlockedAt").isNotEmpty())
+            .andExpect(jsonPath("$.data.unlockedByOrderNo").value(orderNo));
+        mockMvc.perform(get("/api/balances/summary").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("12,000.00"))
+            .andExpect(jsonPath("$.data.lockedTotal").value("0.00"));
     }
 
     @Test
@@ -3911,11 +4053,20 @@ class GiftChatServerApplicationTests {
     }
 
     private JsonNode spinLottery(String token) throws Exception {
+        approveLotteryAccess(token);
         MvcResult result = mockMvc.perform(post("/api/lottery/spin")
                 .header("Authorization", bearer(token)))
             .andExpect(status().isOk())
             .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+    }
+
+    private void approveLotteryAccess(String userToken) throws Exception {
+        String conversationId = supportConversations(userToken).get(0).path("conversationId").asText();
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/lottery-access/approve", conversationId)
+                .header("Authorization", bearer(loginToken("admin_mia"))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("approved"));
     }
 
     private JsonNode spinCashLottery(String token) throws Exception {
@@ -3986,6 +4137,24 @@ class GiftChatServerApplicationTests {
 
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
         return root.path("data").path("accessToken").asText();
+    }
+
+    private String registerTokenWithInvite(String username, String inviteCode) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "countryCode": "NG",
+                      "username": "%s",
+                      "email": "%s@example.com",
+                      "password": "demo12345",
+                      "inviteCode": "%s"
+                    }
+                    """.formatted(username, username, inviteCode)))
+            .andExpect(status().isOk())
+            .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString())
+            .path("data").path("accessToken").asText();
     }
 
     private void grantCompletedUsdVolume(String username, String amountUsd) {

@@ -138,7 +138,8 @@ const wheelBackground = computed(() => {
   return `conic-gradient(${slices.join(', ')})`
 })
 const wheelStyle = computed(() => ({ transform: `rotate(${rotation.value}deg)`, background: wheelBackground.value }))
-const spinButtonLabel = computed(() => !wheelReady.value ? 'Loading prizes...' : spinning.value ? 'Drawing...' : 'Start draw')
+const lotteryApprovalPending = computed(() => eligibility.value?.accessStatus?.toUpperCase() === 'PENDING')
+const spinButtonLabel = computed(() => !wheelReady.value ? 'Loading prizes...' : spinning.value ? 'Drawing...' : lotteryApprovalPending.value ? 'Waiting for support approval' : 'Start draw')
 const spinDurationMs = 4000
 onShow(() => {
   store.refreshLotteryEligibility().catch(() => undefined)
@@ -152,9 +153,9 @@ onShow(() => {
 const eligibility = computed(() => store.state.lotteryEligibility)
 const recentWinners = computed(() => store.state.lotteryWinners)
 const lotteryRecords = computed(() => store.state.lotteryRecords)
-const chanceLabel = computed(() => eligibility.value ? `${eligibility.value.availableChances} available` : 'Checking')
+const chanceLabel = computed(() => !eligibility.value ? 'Checking' : lotteryApprovalPending.value ? 'Approval required' : `${eligibility.value.availableChances} available`)
 const eligibilityText = computed(() => { if (!eligibility.value) return 'Checking your draw chance.'; if (eligibility.value.eligible) return `${eligibility.value.availableChances} draw chance${eligibility.value.availableChances === 1 ? '' : 's'} available.`; return eligibility.value.message || 'No draw chance available.' })
-const spinHint = computed(() => { if (!eligibility.value) return ''; if (eligibility.value.eligible) return 'The server determines the final prize.'; return eligibility.value.nextAvailableAt ? `Next: ${eligibility.value.nextAvailableAt}` : 'Upgrade VIP or wait for reset.' })
+const spinHint = computed(() => { if (!eligibility.value) return ''; if (lotteryApprovalPending.value) return 'Your assigned support agent must enable your first draw.'; if (eligibility.value.eligible) return 'The server determines the final prize.'; return eligibility.value.nextAvailableAt ? `Next: ${eligibility.value.nextAvailableAt}` : 'Upgrade VIP or wait for reset.' })
 function wheelPrizeImage(prize: string) { return featuredPrizes.value.find((item) => item.name === prize)?.image || '' }
 function labelStyle(index: number, prize: string) { const sliceAngle = 360 / wheelPrizes.value.length; const angle = index * sliceAngle + sliceAngle / 2; const distance = wheelPrizeImage(prize) ? 176 : 185; return `transform: rotate(${angle}deg) translateY(-${distance}rpx) rotate(-${angle}deg);` }
 function prizeKey(prize: string) {

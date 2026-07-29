@@ -50,6 +50,13 @@ public class RegistrationBonusRecordEntity {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "unlocked_by_order_id")
+    private TradeOrderEntity unlockedByOrder;
+
+    @Column(name = "unlocked_at")
+    private LocalDateTime unlockedAt;
+
     public String getId() {
         return id;
     }
@@ -137,4 +144,9 @@ public class RegistrationBonusRecordEntity {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
+
+    public TradeOrderEntity getUnlockedByOrder() { return unlockedByOrder; }
+    public void setUnlockedByOrder(TradeOrderEntity unlockedByOrder) { this.unlockedByOrder = unlockedByOrder; }
+    public LocalDateTime getUnlockedAt() { return unlockedAt; }
+    public void setUnlockedAt(LocalDateTime unlockedAt) { this.unlockedAt = unlockedAt; }
 }

@@ -524,8 +524,9 @@ public class PersistentSupportService {
             lockSupportAssignment();
             entityManager.refresh(existing);
             if (existing.getAssignedAgent() == null) {
-                existing.setAssignedAgent(selectBalancedAgent());
-                existing.setAssignmentStatus("AUTO_ASSIGNED");
+                AgentSelection selection = selectAgentFor(user);
+                existing.setAssignedAgent(selection.agent());
+                existing.setAssignmentStatus(selection.status());
                 existing.setUpdatedAt(LocalDateTime.now());
                 existing = supportConversationRepository.save(existing);
             }
@@ -537,6 +538,13 @@ public class PersistentSupportService {
         existing = supportConversationRepository.findFirstByCustomerUser_IdOrderByUpdatedAtDesc(user.getId())
             .orElse(null);
         if (existing != null) {
+            if (existing.getAssignedAgent() == null) {
+                AgentSelection selection = selectAgentFor(user);
+                existing.setAssignedAgent(selection.agent());
+                existing.setAssignmentStatus(selection.status());
+                existing.setUpdatedAt(LocalDateTime.now());
+                existing = supportConversationRepository.save(existing);
+            }
             sendAgentWelcomeMessageIfNeeded(existing);
             return existing;
         }
@@ -544,8 +552,9 @@ public class PersistentSupportService {
         SupportConversationEntity conversation = new SupportConversationEntity();
         conversation.setId(UUID.randomUUID().toString());
         conversation.setCustomerUser(user);
-        conversation.setAssignedAgent(selectBalancedAgent());
-        conversation.setAssignmentStatus("AUTO_ASSIGNED");
+        AgentSelection selection = selectAgentFor(user);
+        conversation.setAssignedAgent(selection.agent());
+        conversation.setAssignmentStatus(selection.status());
         conversation.setCreatedAt(LocalDateTime.now());
         conversation.setUpdatedAt(LocalDateTime.now());
         SupportConversationEntity saved = supportConversationRepository.save(conversation);
@@ -887,5 +896,24 @@ public class PersistentSupportService {
                 .thenComparing(UserEntity::getCreatedAt)
                 .thenComparing(UserEntity::getId))
             .orElse(null);
+    }
+
+    private AgentSelection selectAgentFor(UserEntity user) {
+        if (user.getOnboardingPolicyVersion() >= 1
+            && StringUtils.hasText(user.getReferredByUserId())) {
+            UserEntity inherited = supportConversationRepository
+                .findFirstByCustomerUser_IdOrderByUpdatedAtDesc(user.getReferredByUserId())
+                .map(SupportConversationEntity::getAssignedAgent)
+                .filter(agent -> "AGENT".equalsIgnoreCase(agent.getRoleCode()))
+                .filter(agent -> "ACTIVE".equalsIgnoreCase(agent.getStatusCode()))
+                .orElse(null);
+            if (inherited != null) {
+                return new AgentSelection(inherited, "REFERRAL_ASSIGNED");
+            }
+        }
+        return new AgentSelection(selectBalancedAgent(), "AUTO_ASSIGNED");
+    }
+
+    private record AgentSelection(UserEntity agent, String status) {
     }
 }

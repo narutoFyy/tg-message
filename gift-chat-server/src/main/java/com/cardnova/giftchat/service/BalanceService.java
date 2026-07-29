@@ -86,6 +86,7 @@ public class BalanceService {
                 money(BigDecimal.ZERO),
                 money(BigDecimal.ZERO),
                 money(BigDecimal.ZERO),
+                money(BigDecimal.ZERO),
                 0
             );
         }
@@ -95,6 +96,7 @@ public class BalanceService {
             scope,
             currencyCode,
             money(amounts.available()),
+            money(amounts.locked()),
             money(amounts.pendingSettlement()),
             money(amounts.pendingWithdrawal()),
             money(amounts.withdrawn()),
@@ -110,6 +112,7 @@ public class BalanceService {
         WalletAmounts amounts = walletAmounts(List.of(user.getId()));
         return new CustomerBalanceSummary(
             money(amounts.available()),
+            money(amounts.locked()),
             money(amounts.pendingSettlement()),
             money(amounts.pendingWithdrawal()),
             money(amounts.withdrawn())
@@ -139,6 +142,7 @@ public class BalanceService {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal rewards = referralRewardService.availableRewardsForUsers(userIds);
         BigDecimal registrationBonuses = registrationBonusService.availableBonusesForUsers(userIds);
+        BigDecimal lockedBonuses = registrationBonusService.lockedBonusesForUsers(userIds);
         BigDecimal vipBenefits = vipBenefitService.availableCreditsForUsers(userIds);
 
         BigDecimal available = completed
@@ -148,7 +152,7 @@ public class BalanceService {
             .subtract(withdrawn)
             .subtract(pendingWithdrawal)
             .max(BigDecimal.ZERO);
-        return new WalletAmounts(available, pending, pendingWithdrawal, withdrawn);
+        return new WalletAmounts(available, lockedBonuses, pending, pendingWithdrawal, withdrawn);
     }
 
     private java.util.stream.Stream<WithdrawalRequestEntity> walletWithdrawals(List<WithdrawalRequestEntity> withdrawals) {
@@ -189,6 +193,7 @@ public class BalanceService {
 
     private record WalletAmounts(
         BigDecimal available,
+        BigDecimal locked,
         BigDecimal pendingSettlement,
         BigDecimal pendingWithdrawal,
         BigDecimal withdrawn

@@ -38,6 +38,7 @@ import type {
 } from '@/types'
 import {
   acceptFriendRequest,
+  approveSupportLotteryAccess as approveSupportLotteryAccessRequest,
   addBlacklist,
   markFriendConversationRead,
   markSupportConversationRead,
@@ -899,6 +900,12 @@ export function useAppStore() {
     }
   }
 
+  async function approveSupportLotteryAccess(conversationId = state.supportConversationId) {
+    if (!conversationId) throw new Error('Select a customer first')
+    await approveSupportLotteryAccessRequest(conversationId)
+    return refreshSupportCustomerProfile(conversationId, true, false)
+  }
+
   async function refreshSupportLedger() {
     const role = state.currentUser?.roleCode
     if (role !== 'AGENT' && role !== 'ADMIN') {
@@ -1363,6 +1370,7 @@ export function useAppStore() {
     markSupportRead,
     updateSupportNote,
     refreshSupportCustomerProfile,
+    approveSupportLotteryAccess,
     refreshSupportLedger,
     clearSupportUnread,
     setActiveSupportConversation,

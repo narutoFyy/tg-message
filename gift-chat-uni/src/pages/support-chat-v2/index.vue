@@ -354,6 +354,10 @@
               <text class="metric-label">{{ workbenchText.available }}</text>
               <text class="metric-value">{{ supportLedger?.summary.availableTotal || '0.00' }}</text>
             </view>
+            <view class="ledger-summary-item locked-metric">
+              <text class="metric-label">{{ lockedBalanceText }}</text>
+              <text class="metric-value">{{ supportLedger?.summary.lockedTotal || '0.00' }}</text>
+            </view>
             <view class="ledger-summary-item">
               <text class="metric-label">{{ workbenchText.pendingBalance }}</text>
               <text class="metric-value">{{ supportLedger?.summary.pendingTotal || '0.00' }}</text>
@@ -381,7 +385,7 @@
             </view>
             <view class="ledger-row-money">
               <text class="ledger-money">{{ customer.availableTotal }}</text>
-              <text class="ledger-pending">{{ customer.pendingTotal }} / {{ customer.pendingWithdrawalTotal }}</text>
+              <text class="ledger-pending">Locked {{ customer.lockedTotal }} / pending {{ customer.pendingTotal }}</text>
             </view>
           </view>
         </view>
@@ -417,13 +421,29 @@
           </view>
         </view>
 
+        <view class="profile-section">
+          <view class="section-head">
+            <text class="section-title">Lucky Wheel access</text>
+            <text :class="['work-status', profile.customer.lotteryAccess.status.toLowerCase()]">{{ profile.customer.lotteryAccess.status }}</text>
+          </view>
+          <text class="work-line">{{ profile.customer.lotteryAccess.message }}</text>
+          <text v-if="profile.customer.lotteryAccess.approvedBy" class="work-line">Approved by {{ profile.customer.lotteryAccess.approvedBy }} / {{ profile.customer.lotteryAccess.approvedAt }}</text>
+          <view v-if="profile.customer.lotteryAccess.canApprove" class="work-actions">
+            <button class="mini-btn primary" :disabled="lotteryApprovalSubmitting" @click="approveActiveCustomerLottery">
+              {{ lotteryApprovalSubmitting ? 'Approving...' : 'Allow Lucky Wheel' }}
+            </button>
+          </view>
+        </view>
+
         <view class="profile-section" v-if="profile.registrationBonus">
           <view class="section-head">
             <text class="section-title">Registration bonus</text>
-            <text :class="['work-status', profile.registrationBonus.status]">{{ profile.registrationBonus.status }}</text>
+            <text :class="['work-status', profile.registrationBonus.status.toLowerCase()]">{{ profile.registrationBonus.status }}</text>
           </view>
           <text class="work-line strong">{{ profile.registrationBonus.bonusAmount }} {{ profile.registrationBonus.currencyCode }}</text>
           <text class="work-line">{{ profile.registrationBonus.countryCode || '-' }} / {{ profile.registrationBonus.reason }}</text>
+          <text v-if="profile.registrationBonus.status.toUpperCase() === 'LOCKED'" class="work-line">Unlocks automatically after this customer completes the first support sell order.</text>
+          <text v-if="profile.registrationBonus.unlockedByOrderNo" class="work-line">Unlocked by {{ profile.registrationBonus.unlockedByOrderNo }} / {{ profile.registrationBonus.unlockedAt }}</text>
         </view>
 
         <view class="profile-section">
@@ -467,6 +487,10 @@
           <view class="metric-item">
             <text class="metric-label">{{ workbenchText.available }}</text>
             <text class="metric-value">{{ profile.balance.availableTotal }}</text>
+          </view>
+          <view class="metric-item locked-metric">
+            <text class="metric-label">{{ lockedBalanceText }}</text>
+            <text class="metric-value">{{ profile.balance.lockedTotal }}</text>
           </view>
           <view class="metric-item">
             <text class="metric-label">{{ workbenchText.pendingBalance }}</text>
@@ -761,6 +785,7 @@ const broadcastMediaUrl = ref('')
 const broadcastMediaName = ref('')
 const broadcastMediaType = ref<'image' | 'video'>('image')
 const broadcastUploading = ref(false)
+const lotteryApprovalSubmitting = ref(false)
 const broadcastCountryOptions = ['+234', '+91', '+237', '+233', '+254']
 const broadcastCountryCodes = ref<string[]>([])
 const broadcastSelectedConversationIds = ref<string[]>([])
@@ -916,6 +941,7 @@ const ledgerTitleText = computed(() => workbenchLanguage.value === 'zh' ? '客�
 const ledgerLoadingText = computed(() => workbenchLanguage.value === 'zh' ? '正在加载账务...' : 'Loading ledger...')
 const ledgerEmptyText = computed(() => workbenchLanguage.value === 'zh' ? '暂无账务数据' : 'No ledger data')
 const orderRefreshLabel = computed(() => workbenchLanguage.value === 'zh' ? '刷新订单' : 'Refresh orders')
+const lockedBalanceText = computed(() => workbenchLanguage.value === 'zh' ? '锁定余额' : 'Locked')
 const workbenchCopy = {
   zh: {
     customer: '客户',
@@ -1861,6 +1887,20 @@ async function reviewActiveBenefit(claimId: string, status: 'approved' | 'reject
     uni.showToast({ title: `Request ${status}`, icon: status === 'approved' ? 'success' : 'none' })
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : 'Benefit review failed', icon: 'none' })
+  }
+}
+
+async function approveActiveCustomerLottery() {
+  const conversationId = activeConversationId.value
+  if (!conversationId || !profile.value?.customer.lotteryAccess.canApprove || lotteryApprovalSubmitting.value) return
+  lotteryApprovalSubmitting.value = true
+  try {
+    await store.approveSupportLotteryAccess(conversationId)
+    uni.showToast({ title: 'Lucky Wheel enabled', icon: 'success' })
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : 'Approval failed', icon: 'none' })
+  } finally {
+    lotteryApprovalSubmitting.value = false
   }
 }
 
@@ -2904,6 +2944,10 @@ function previewImage(url: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.locked-metric {
+  background: #fff6df;
 }
 
 .section-head-actions {

@@ -10,6 +10,8 @@ public record RegistrationBonusRecordItem(
     String bonusAmount,
     String status,
     String reason,
-    String createdAt
+    String createdAt,
+    String unlockedAt,
+    String unlockedByOrderNo
 ) {
 }

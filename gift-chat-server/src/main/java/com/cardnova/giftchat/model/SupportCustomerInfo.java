@@ -12,6 +12,7 @@ public record SupportCustomerInfo(
     boolean online,
     String assignedAgent,
     String referrerUsername,
+    LotteryAccessInfo lotteryAccess,
     String createdAt,
     String updatedAt
 ) {

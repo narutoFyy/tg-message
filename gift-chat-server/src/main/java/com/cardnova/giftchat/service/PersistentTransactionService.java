@@ -57,6 +57,7 @@ public class PersistentTransactionService {
     private final CountryCodeService countryCodeService;
     private final TradeOrderNumberService tradeOrderNumberService;
     private final TradeOrderSettlementAuditRepository tradeOrderSettlementAuditRepository;
+    private final RegistrationBonusService registrationBonusService;
 
     public PersistentTransactionService(
         TradeOrderRepository tradeOrderRepository,
@@ -73,7 +74,8 @@ public class PersistentTransactionService {
         PersistentRateService persistentRateService,
         CountryCodeService countryCodeService,
         TradeOrderNumberService tradeOrderNumberService,
-        TradeOrderSettlementAuditRepository tradeOrderSettlementAuditRepository
+        TradeOrderSettlementAuditRepository tradeOrderSettlementAuditRepository,
+        RegistrationBonusService registrationBonusService
     ) {
         this.tradeOrderRepository = tradeOrderRepository;
         this.currentUserService = currentUserService;
@@ -90,6 +92,7 @@ public class PersistentTransactionService {
         this.countryCodeService = countryCodeService;
         this.tradeOrderNumberService = tradeOrderNumberService;
         this.tradeOrderSettlementAuditRepository = tradeOrderSettlementAuditRepository;
+        this.registrationBonusService = registrationBonusService;
     }
 
     public List<TransactionItem> getTransactions() {
@@ -319,8 +322,21 @@ public class PersistentTransactionService {
 
         vipService.grantManualOrderPoints(saved, vipPoints);
         referralRewardService.rewardCompletedTrade(saved);
+        boolean welcomeBonusUnlocked = registrationBonusService.unlockForCompletedSupportSellOrder(saved);
         saveSettlementAudit(saved, currentUser, "COMPLETED", estimatedAmount, finalAmount, vipPoints, reason, now);
         persistentSupportService.publishOrderUpdate(saved);
+        if (welcomeBonusUnlocked) {
+            SupportConversationEntity conversation = persistentSupportService.ensureUserConversation(saved.getOwnerUser());
+            if (conversation != null) {
+                persistentSupportService.appendSystemMessage(
+                    conversation,
+                    "Your %s %s welcome bonus is now unlocked and available for withdrawal.".formatted(
+                        saved.getOwnerUser().getCurrencyCode(),
+                        registrationBonusService.recordForUser(saved.getOwnerUser().getId()).bonusAmount()
+                    )
+                );
+            }
+        }
         return toTransactionItem(saved, currentUser.getId());
     }
 

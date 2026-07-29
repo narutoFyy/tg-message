@@ -17,6 +17,7 @@ import type {
   LoanApplicationItem,
   LotteryDrawResult,
   LotteryEligibility,
+  LotteryAccessInfo,
   LotteryFulfillmentItem,
   LotteryPrizeItem,
   LotteryRecordItem,
@@ -269,6 +270,10 @@ export function syncSupportMessages(conversationId: string, sinceSeq = 0) {
 
 export function fetchSupportCustomerProfile(conversationId: string) {
   return request<SupportCustomerProfile>(`/support/conversations/${conversationId}/customer-profile`)
+}
+
+export function approveSupportLotteryAccess(conversationId: string) {
+  return request<LotteryAccessInfo>(`/support/conversations/${conversationId}/lottery-access/approve`, 'POST')
 }
 
 export function fetchSupportLedger() {

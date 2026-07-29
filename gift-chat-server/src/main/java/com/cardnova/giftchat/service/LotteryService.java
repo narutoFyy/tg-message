@@ -4,10 +4,12 @@ import com.cardnova.giftchat.entity.LotteryDrawRecordEntity;
 import com.cardnova.giftchat.entity.LotteryChanceEntity;
 import com.cardnova.giftchat.entity.LotteryEligibilityResetEntity;
 import com.cardnova.giftchat.entity.LotteryPrizeEntity;
+import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.CurrencyExchangeRateEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.model.LotteryDrawResult;
 import com.cardnova.giftchat.model.LotteryEligibility;
+import com.cardnova.giftchat.model.LotteryAccessInfo;
 import com.cardnova.giftchat.model.LotteryPrizeItem;
 import com.cardnova.giftchat.model.LotteryRecordItem;
 import com.cardnova.giftchat.model.LotteryWinnerItem;
@@ -59,6 +61,7 @@ public class LotteryService {
     private final UserRepository userRepository;
     private final CurrencyExchangeRateService currencyExchangeRateService;
     private final CountryCodeService countryCodeService;
+    private final PersistentSupportService persistentSupportService;
     private final SecureRandom random = new SecureRandom();
 
     public LotteryService(
@@ -70,7 +73,8 @@ public class LotteryService {
         VipService vipService,
         UserRepository userRepository,
         CurrencyExchangeRateService currencyExchangeRateService,
-        CountryCodeService countryCodeService
+        CountryCodeService countryCodeService,
+        PersistentSupportService persistentSupportService
     ) {
         this.lotteryPrizeRepository = lotteryPrizeRepository;
         this.lotteryChanceRepository = lotteryChanceRepository;
@@ -81,12 +85,38 @@ public class LotteryService {
         this.userRepository = userRepository;
         this.currencyExchangeRateService = currencyExchangeRateService;
         this.countryCodeService = countryCodeService;
+        this.persistentSupportService = persistentSupportService;
     }
 
     @Transactional
     public LotteryEligibility currentEligibility() {
         UserEntity currentUser = lockUser(currentUserService.getCurrentUser().getId());
         return eligibilityFor(currentUser, LocalDateTime.now());
+    }
+
+    @Transactional
+    public LotteryAccessInfo approveAccess(String conversationId) {
+        UserEntity approver = currentUserService.getCurrentUser();
+        SupportConversationEntity conversation = persistentSupportService.getAccessibleConversationForStaff(conversationId);
+        UserEntity customer = lockUser(conversation.getCustomerUser().getId());
+        if (!"PENDING".equalsIgnoreCase(accessStatus(customer))) {
+            return accessInfo(customer, false);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        customer.setLotteryAccessStatus("APPROVED");
+        customer.setLotteryApprovedByUser(approver);
+        customer.setLotteryApprovedAt(now);
+        userRepository.save(customer);
+        ensureChances(customer, vipService.levelForUser(customer.getId()), now);
+        persistentSupportService.appendSystemMessage(
+            conversation,
+            "Lucky Wheel access has been approved. You can now use your available draw chance."
+        );
+        return accessInfo(customer, false);
+    }
+
+    public LotteryAccessInfo accessInfoForSupport(UserEntity user) {
+        return accessInfo(user, "PENDING".equalsIgnoreCase(accessStatus(user)));
     }
 
     @Transactional
@@ -243,6 +273,20 @@ public class LotteryService {
 
     private LotteryEligibility eligibilityFor(UserEntity user, LocalDateTime now) {
         String vipLevel = vipService.levelForUser(user.getId());
+        String accessStatus = accessStatus(user);
+        if ("PENDING".equals(accessStatus)) {
+            return new LotteryEligibility(
+                vipLevel,
+                accessStatus.toLowerCase(Locale.ROOT),
+                false,
+                "ONCE",
+                "WELCOME",
+                0,
+                0,
+                "",
+                "Lucky Wheel access is pending support approval. Please contact your assigned support agent."
+            );
+        }
         ensureChances(user, vipLevel, now);
         LotteryChanceEntity available = lotteryChanceRepository
             .findFirstByUser_IdAndConsumedAtIsNullOrderByGrantedAtAsc(user.getId())
@@ -263,6 +307,7 @@ public class LotteryService {
             : "Next chance available at " + nextAvailableAt;
         return new LotteryEligibility(
             vipLevel,
+            accessStatus.toLowerCase(Locale.ROOT),
             eligible,
             periodType,
             periodKey,
@@ -374,6 +419,27 @@ public class LotteryService {
     private UserEntity lockUser(String userId) {
         return userRepository.findByIdForUpdate(userId)
             .orElseThrow(() -> new IllegalArgumentException("User not found"));
+    }
+
+    private String accessStatus(UserEntity user) {
+        return StringUtils.hasText(user.getLotteryAccessStatus())
+            ? user.getLotteryAccessStatus().trim().toUpperCase(Locale.ROOT)
+            : "GRANDFATHERED";
+    }
+
+    private LotteryAccessInfo accessInfo(UserEntity user, boolean canApprove) {
+        String status = accessStatus(user).toLowerCase(Locale.ROOT);
+        return new LotteryAccessInfo(
+            status,
+            user.getLotteryApprovedByUser() == null ? "" : user.getLotteryApprovedByUser().getUsername(),
+            user.getLotteryApprovedAt() == null ? "" : TIME_FORMATTER.format(user.getLotteryApprovedAt()),
+            canApprove,
+            "pending".equals(status)
+                ? "This customer is waiting for Lucky Wheel approval."
+                : "approved".equals(status)
+                    ? "Lucky Wheel access has been approved."
+                    : "Existing user access remains available."
+        );
     }
 
     private LotteryPrizeEntity choosePrize() {

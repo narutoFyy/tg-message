@@ -10,10 +10,12 @@ import com.cardnova.giftchat.model.SupportCustomerProfile;
 import com.cardnova.giftchat.model.SupportCustomerSearchResult;
 import com.cardnova.giftchat.model.SupportLedgerReport;
 import com.cardnova.giftchat.model.SupportMessageSearchResult;
+import com.cardnova.giftchat.model.LotteryAccessInfo;
 import com.cardnova.giftchat.service.PersistentSupportService;
 import com.cardnova.giftchat.service.SupportCustomerProfileService;
 import com.cardnova.giftchat.service.SupportLedgerService;
 import com.cardnova.giftchat.service.SupportSearchService;
+import com.cardnova.giftchat.service.LotteryService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,17 +35,20 @@ public class SupportController {
     private final SupportCustomerProfileService supportCustomerProfileService;
     private final SupportLedgerService supportLedgerService;
     private final SupportSearchService supportSearchService;
+    private final LotteryService lotteryService;
 
     public SupportController(
         PersistentSupportService persistentSupportService,
         SupportCustomerProfileService supportCustomerProfileService,
         SupportLedgerService supportLedgerService,
-        SupportSearchService supportSearchService
+        SupportSearchService supportSearchService,
+        LotteryService lotteryService
     ) {
         this.persistentSupportService = persistentSupportService;
         this.supportCustomerProfileService = supportCustomerProfileService;
         this.supportLedgerService = supportLedgerService;
         this.supportSearchService = supportSearchService;
+        this.lotteryService = lotteryService;
     }
 
     @GetMapping("/conversations")
@@ -83,6 +88,11 @@ public class SupportController {
     @GetMapping("/conversations/{conversationId}/customer-profile")
     public ApiResponse<SupportCustomerProfile> customerProfile(@PathVariable String conversationId) {
         return ApiResponse.success(supportCustomerProfileService.getProfile(conversationId));
+    }
+
+    @PostMapping("/conversations/{conversationId}/lottery-access/approve")
+    public ApiResponse<LotteryAccessInfo> approveLotteryAccess(@PathVariable String conversationId) {
+        return ApiResponse.success("lottery_access_approved", lotteryService.approveAccess(conversationId));
     }
 
     @GetMapping("/ledger")

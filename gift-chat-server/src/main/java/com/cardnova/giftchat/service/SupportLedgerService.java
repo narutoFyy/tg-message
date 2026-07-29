@@ -68,6 +68,9 @@ public class SupportLedgerService {
         BigDecimal pending = customers.stream()
             .map(customer -> amountFromText(customer.pendingTotal()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal locked = customers.stream()
+            .map(customer -> amountFromText(customer.lockedTotal()))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal pendingWithdrawal = customers.stream()
             .map(customer -> amountFromText(customer.pendingWithdrawalTotal()))
             .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -81,6 +84,7 @@ public class SupportLedgerService {
                 scope,
                 "",
                 money(available),
+                money(locked),
                 money(pending),
                 money(pendingWithdrawal),
                 money(withdrawn),
@@ -116,6 +120,7 @@ public class SupportLedgerService {
                 : conversation.getAgentNote(),
             conversation.getAssignedAgent() == null ? "" : conversation.getAssignedAgent().getUsername(),
             balance.availableTotal(),
+            balance.lockedTotal(),
             balance.pendingTotal(),
             balance.pendingWithdrawalTotal(),
             balance.withdrawnTotal(),

@@ -3,6 +3,9 @@ package com.cardnova.giftchat.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
@@ -44,6 +47,19 @@ public class UserEntity {
 
     @Column(name = "referred_by_user_id", length = 36)
     private String referredByUserId;
+
+    @Column(name = "onboarding_policy_version", nullable = false)
+    private int onboardingPolicyVersion = 0;
+
+    @Column(name = "lottery_access_status", nullable = false, length = 16)
+    private String lotteryAccessStatus = "GRANDFATHERED";
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lottery_approved_by_user_id")
+    private UserEntity lotteryApprovedByUser;
+
+    @Column(name = "lottery_approved_at")
+    private LocalDateTime lotteryApprovedAt;
 
     @Column(name = "country_code", length = 2)
     private String countryCode;
@@ -156,6 +172,15 @@ public class UserEntity {
     public void setReferredByUserId(String referredByUserId) {
         this.referredByUserId = referredByUserId;
     }
+
+    public int getOnboardingPolicyVersion() { return onboardingPolicyVersion; }
+    public void setOnboardingPolicyVersion(int onboardingPolicyVersion) { this.onboardingPolicyVersion = onboardingPolicyVersion; }
+    public String getLotteryAccessStatus() { return lotteryAccessStatus; }
+    public void setLotteryAccessStatus(String lotteryAccessStatus) { this.lotteryAccessStatus = lotteryAccessStatus; }
+    public UserEntity getLotteryApprovedByUser() { return lotteryApprovedByUser; }
+    public void setLotteryApprovedByUser(UserEntity lotteryApprovedByUser) { this.lotteryApprovedByUser = lotteryApprovedByUser; }
+    public LocalDateTime getLotteryApprovedAt() { return lotteryApprovedAt; }
+    public void setLotteryApprovedAt(LocalDateTime lotteryApprovedAt) { this.lotteryApprovedAt = lotteryApprovedAt; }
 
     public String getCountryCode() {
         return countryCode;

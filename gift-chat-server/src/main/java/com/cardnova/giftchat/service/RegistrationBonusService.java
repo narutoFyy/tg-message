@@ -3,6 +3,7 @@ package com.cardnova.giftchat.service;
 import com.cardnova.giftchat.dto.UpdateRegistrationBonusConfigRequest;
 import com.cardnova.giftchat.entity.RegistrationBonusConfigEntity;
 import com.cardnova.giftchat.entity.RegistrationBonusRecordEntity;
+import com.cardnova.giftchat.entity.TradeOrderEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.model.RegistrationBonusConfigItem;
 import com.cardnova.giftchat.model.RegistrationBonusRecordItem;
@@ -31,17 +32,20 @@ public class RegistrationBonusService {
     private final RegistrationBonusRecordRepository recordRepository;
     private final CurrentUserService currentUserService;
     private final PhoneCountryCodeResolver phoneCountryCodeResolver;
+    private final CountryCodeService countryCodeService;
 
     public RegistrationBonusService(
         RegistrationBonusConfigRepository configRepository,
         RegistrationBonusRecordRepository recordRepository,
         CurrentUserService currentUserService,
-        PhoneCountryCodeResolver phoneCountryCodeResolver
+        PhoneCountryCodeResolver phoneCountryCodeResolver,
+        CountryCodeService countryCodeService
     ) {
         this.configRepository = configRepository;
         this.recordRepository = recordRepository;
         this.currentUserService = currentUserService;
         this.phoneCountryCodeResolver = phoneCountryCodeResolver;
+        this.countryCodeService = countryCodeService;
     }
 
     public List<RegistrationBonusConfigItem> configs() {
@@ -88,10 +92,12 @@ public class RegistrationBonusService {
         }
 
         List<RegistrationBonusConfigEntity> configs = configRepository.findAllByOrderByCountryCodeAsc();
-        String countryCode = phoneCountryCodeResolver.resolve(
-            user.getPhone(),
-            configs.stream().map(RegistrationBonusConfigEntity::getCountryCode).toList()
-        );
+        String countryCode = countryCodeService.findCountry(user.getCountryCode())
+            .map(country -> country.countryCode())
+            .orElseGet(() -> phoneCountryCodeResolver.resolve(
+                user.getPhone(),
+                configs.stream().map(RegistrationBonusConfigEntity::getCountryCode).toList()
+            ));
         RegistrationBonusConfigEntity config = StringUtils.hasText(countryCode)
             ? configs.stream()
                 .filter(item -> item.getCountryCode().equals(countryCode))
@@ -117,8 +123,15 @@ public class RegistrationBonusService {
             record.setCountryName(config.getCountryName());
             record.setCurrencyCode(config.getCurrencyCode());
             record.setBonusAmount(config.getBonusAmount());
-            record.setStatusCode(config.getBonusAmount().compareTo(BigDecimal.ZERO) > 0 ? "AVAILABLE" : "SKIPPED");
-            record.setReasonNote("Country code registration bonus");
+            boolean lockedNigeriaBonus = user.getOnboardingPolicyVersion() >= 1
+                && "NG".equalsIgnoreCase(user.getCountryCode())
+                && config.getBonusAmount().compareTo(BigDecimal.ZERO) > 0;
+            record.setStatusCode(config.getBonusAmount().compareTo(BigDecimal.ZERO) <= 0
+                ? "SKIPPED"
+                : lockedNigeriaBonus ? "LOCKED" : "AVAILABLE");
+            record.setReasonNote(lockedNigeriaBonus
+                ? "Locked until the first successful gift card trade with customer support"
+                : "Country code registration bonus");
         }
         recordRepository.save(record);
     }
@@ -130,6 +143,38 @@ public class RegistrationBonusService {
         return recordRepository.findByUser_IdInAndStatusCode(userIds, "AVAILABLE").stream()
             .map(RegistrationBonusRecordEntity::getBonusAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public BigDecimal lockedBonusesForUsers(Collection<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return recordRepository.findByUser_IdInAndStatusCode(userIds, "LOCKED").stream()
+            .map(RegistrationBonusRecordEntity::getBonusAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    @Transactional
+    public boolean unlockForCompletedSupportSellOrder(TradeOrderEntity order) {
+        if (order == null
+            || order.getOwnerUser() == null
+            || order.getFriendship() != null
+            || !"COMPLETED".equalsIgnoreCase(order.getStatusCode())
+            || order.getCounterpartyUser() == null
+            || !"AGENT".equalsIgnoreCase(order.getCounterpartyUser().getRoleCode())) {
+            return false;
+        }
+        RegistrationBonusRecordEntity record = recordRepository.findByUser_IdForUpdate(order.getOwnerUser().getId())
+            .orElse(null);
+        if (record == null || !"LOCKED".equalsIgnoreCase(record.getStatusCode())) {
+            return false;
+        }
+        record.setStatusCode("AVAILABLE");
+        record.setUnlockedByOrder(order);
+        record.setUnlockedAt(LocalDateTime.now());
+        record.setReasonNote("Unlocked by first completed support sell order " + order.getOrderNo());
+        recordRepository.save(record);
+        return true;
     }
 
     public RegistrationBonusRecordItem recordForUser(String userId) {
@@ -172,7 +217,9 @@ public class RegistrationBonusService {
             money(entity.getBonusAmount()),
             entity.getStatusCode().toLowerCase(),
             value(entity.getReasonNote()),
-            TIME_FORMATTER.format(entity.getCreatedAt())
+            TIME_FORMATTER.format(entity.getCreatedAt()),
+            entity.getUnlockedAt() == null ? "" : TIME_FORMATTER.format(entity.getUnlockedAt()),
+            entity.getUnlockedByOrder() == null ? "" : entity.getUnlockedByOrder().getOrderNo()
         );
     }
 

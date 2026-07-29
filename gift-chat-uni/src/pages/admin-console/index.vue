@@ -609,7 +609,7 @@
           <view class="reward-setting-row">
             <view>
               <text class="row-title">{{ config.countryCode }} / {{ registrationBonusDrafts[config.countryCode]?.countryName || config.countryName }}</text>
-              <text class="row-meta">Paid once when a new account registers with this phone prefix.</text>
+              <text class="row-meta">Applies only to accounts registered after this setting is saved. Nigeria bonuses stay locked until the customer's first completed support sell order.</text>
             </view>
             <switch
               :checked="registrationBonusDrafts[config.countryCode]?.enabled"
@@ -636,6 +636,7 @@
             <text class="row-title">{{ record.username }} received {{ record.bonusAmount }} {{ record.currencyCode }}</text>
             <text class="row-meta">{{ record.countryCode }} / {{ record.phone || 'No phone' }} / {{ record.status }}</text>
             <text class="row-meta">{{ record.reason }} / {{ record.createdAt }}</text>
+            <text v-if="record.unlockedByOrderNo" class="row-meta">Unlocked by {{ record.unlockedByOrderNo }} / {{ record.unlockedAt }}</text>
           </view>
         </view>
       </view>

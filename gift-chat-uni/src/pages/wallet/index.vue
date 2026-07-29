@@ -15,6 +15,10 @@
           <text class="balance-label">Available balance</text>
           <text class="balance-value">{{ availableBalance }}</text>
         </view>
+        <view class="balance-secondary locked-balance">
+          <text class="balance-label">Locked welcome bonus</text>
+          <text class="pending-value hold-value">{{ lockedBalance }}</text>
+        </view>
         <view class="balance-secondary">
           <text class="balance-label">Withdrawal in progress</text>
           <text class="pending-value hold-value">{{ pendingWithdrawalBalance }}</text>
@@ -28,13 +32,15 @@
       <view v-if="registrationBonus" class="content-section bonus-section">
         <view class="section-head">
           <text class="section-title">Registration bonus</text>
-          <text :class="['status-chip', registrationBonus.status]">{{ registrationBonus.status }}</text>
+          <text :class="['status-chip', registrationBonus.status.toLowerCase()]">{{ registrationBonus.status }}</text>
         </view>
         <view class="bonus-row">
           <view>
             <text class="trade-name">{{ registrationBonus.bonusAmount }} {{ registrationBonus.currencyCode || '' }}</text>
             <text class="trade-meta">{{ registrationBonus.countryCode || 'Unknown country' }} / {{ registrationBonus.createdAt }}</text>
             <text class="trade-meta">{{ registrationBonus.reason }}</text>
+            <text v-if="registrationBonus.status.toUpperCase() === 'LOCKED'" class="trade-meta bonus-guidance">Complete your first gift-card sale with support to unlock this bonus for withdrawal.</text>
+            <text v-else-if="registrationBonus.unlockedByOrderNo" class="trade-meta bonus-guidance">Unlocked after order {{ registrationBonus.unlockedByOrderNo }}.</text>
           </view>
         </view>
       </view>
@@ -83,6 +89,7 @@ const registrationBonus = computed(() => store.state.registrationBonusRecord)
 
 const walletCurrency = computed(() => store.state.balanceSummary?.currencyCode || store.state.currentUser?.currencyCode || 'USD')
 const availableBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.availableTotal || '0.00'}`)
+const lockedBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.lockedTotal || '0.00'}`)
 const pendingWithdrawalBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.pendingWithdrawalTotal || '0.00'}`)
 const pendingBalance = computed(() => `${walletCurrency.value} ${store.state.balanceSummary?.pendingTotal || '0.00'}`)
 
@@ -129,7 +136,7 @@ function goWithdraw() {
 
 .balance-section {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
   border-left: 5rpx solid var(--cb-mint-strong);
 }
 
@@ -150,6 +157,10 @@ function goWithdraw() {
 
 .hold-value {
   color: #9a5b00;
+}
+
+.locked-balance {
+  background: #fff8e8;
 }
 
 .balance-label {
@@ -275,6 +286,16 @@ function goWithdraw() {
 .status-chip.available {
   color: #137a4e;
   background: #eaf6f0;
+}
+
+.status-chip.locked {
+  color: #9a5b00;
+  background: #fff4df;
+}
+
+.bonus-guidance {
+  color: #6e4b00;
+  font-weight: 600;
 }
 
 .status-chip.skipped {

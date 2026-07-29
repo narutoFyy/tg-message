@@ -6,6 +6,7 @@ public record SupportLedgerCustomer(
     String displayName,
     String assignedAgent,
     String availableTotal,
+    String lockedTotal,
     String pendingTotal,
     String pendingWithdrawalTotal,
     String withdrawnTotal,

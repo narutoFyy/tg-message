@@ -224,12 +224,21 @@ export interface LotteryPrizeItem {
 
 export interface LotteryEligibility {
   vipLevel: string
+  accessStatus: 'pending' | 'approved' | 'grandfathered' | string
   eligible: boolean
   periodType: 'once' | 'week' | 'day' | string
   periodKey: string
   periodDrawCount: number
   availableChances: number
   nextAvailableAt: string
+  message: string
+}
+
+export interface LotteryAccessInfo {
+  status: 'pending' | 'approved' | 'grandfathered' | string
+  approvedBy: string
+  approvedAt: string
+  canApprove: boolean
   message: string
 }
 
@@ -443,6 +452,7 @@ export interface BalanceSummary {
   scope: 'self' | 'own' | 'all'
   currencyCode: string
   availableTotal: string
+  lockedTotal: string
   pendingTotal: string
   pendingWithdrawalTotal: string
   withdrawnTotal: string
@@ -455,6 +465,7 @@ export interface SupportLedgerCustomer {
   displayName: string
   assignedAgent: string
   availableTotal: string
+  lockedTotal: string
   pendingTotal: string
   pendingWithdrawalTotal: string
   withdrawnTotal: string
@@ -471,6 +482,7 @@ export interface SupportLedgerReport {
 
 export interface CustomerBalanceSummary {
   availableTotal: string
+  lockedTotal: string
   pendingTotal: string
   pendingWithdrawalTotal: string
   withdrawnTotal: string
@@ -603,6 +615,7 @@ export interface SupportCustomerInfo {
   online: boolean
   assignedAgent: string
   referrerUsername: string
+  lotteryAccess: LotteryAccessInfo
   createdAt: string
   updatedAt: string
 }
@@ -643,6 +656,8 @@ export interface RegistrationBonusRecordItem {
   status: string
   reason: string
   createdAt: string
+  unlockedAt: string
+  unlockedByOrderNo: string
 }
 
 export interface BankAccountRiskMatch {

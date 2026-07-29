@@ -47,6 +47,7 @@ public class SupportCustomerProfileService {
     private final PhoneCountryCodeResolver phoneCountryCodeResolver;
     private final BalanceService balanceService;
     private final UserRepository userRepository;
+    private final LotteryService lotteryService;
 
     public SupportCustomerProfileService(
         PersistentSupportService persistentSupportService,
@@ -61,7 +62,8 @@ public class SupportCustomerProfileService {
         CurrentUserService currentUserService,
         PhoneCountryCodeResolver phoneCountryCodeResolver,
         BalanceService balanceService,
-        UserRepository userRepository
+        UserRepository userRepository,
+        LotteryService lotteryService
     ) {
         this.persistentSupportService = persistentSupportService;
         this.tradeOrderRepository = tradeOrderRepository;
@@ -76,6 +78,7 @@ public class SupportCustomerProfileService {
         this.phoneCountryCodeResolver = phoneCountryCodeResolver;
         this.balanceService = balanceService;
         this.userRepository = userRepository;
+        this.lotteryService = lotteryService;
     }
 
     public SupportCustomerProfile getProfile(String conversationId) {
@@ -115,6 +118,7 @@ public class SupportCustomerProfileService {
             userPresenceService.isOnline(customer.getId()),
             conversation.getAssignedAgent() == null ? "" : conversation.getAssignedAgent().getUsername(),
             referrerUsername(customer),
+            lotteryService.accessInfoForSupport(customer),
             TIME_FORMATTER.format(customer.getCreatedAt()),
             TIME_FORMATTER.format(customer.getUpdatedAt())
         );

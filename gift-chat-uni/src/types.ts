@@ -602,6 +602,7 @@ export interface SupportCustomerInfo {
   agentNote: string
   online: boolean
   assignedAgent: string
+  referrerUsername: string
   createdAt: string
   updatedAt: string
 }

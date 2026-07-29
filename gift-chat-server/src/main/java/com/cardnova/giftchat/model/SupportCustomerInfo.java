@@ -11,6 +11,7 @@ public record SupportCustomerInfo(
     String agentNote,
     boolean online,
     String assignedAgent,
+    String referrerUsername,
     String createdAt,
     String updatedAt
 ) {

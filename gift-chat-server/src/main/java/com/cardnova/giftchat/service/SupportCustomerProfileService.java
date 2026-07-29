@@ -17,6 +17,7 @@ import com.cardnova.giftchat.model.WithdrawalItem;
 import com.cardnova.giftchat.repository.LoanApplicationRepository;
 import com.cardnova.giftchat.repository.LotteryFulfillmentOrderRepository;
 import com.cardnova.giftchat.repository.TradeOrderRepository;
+import com.cardnova.giftchat.repository.UserRepository;
 import com.cardnova.giftchat.repository.VideoSessionRepository;
 import com.cardnova.giftchat.repository.WithdrawalRequestRepository;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ public class SupportCustomerProfileService {
     private final CurrentUserService currentUserService;
     private final PhoneCountryCodeResolver phoneCountryCodeResolver;
     private final BalanceService balanceService;
+    private final UserRepository userRepository;
 
     public SupportCustomerProfileService(
         PersistentSupportService persistentSupportService,
@@ -58,7 +60,8 @@ public class SupportCustomerProfileService {
         BankAccountRiskService bankAccountRiskService,
         CurrentUserService currentUserService,
         PhoneCountryCodeResolver phoneCountryCodeResolver,
-        BalanceService balanceService
+        BalanceService balanceService,
+        UserRepository userRepository
     ) {
         this.persistentSupportService = persistentSupportService;
         this.tradeOrderRepository = tradeOrderRepository;
@@ -72,6 +75,7 @@ public class SupportCustomerProfileService {
         this.currentUserService = currentUserService;
         this.phoneCountryCodeResolver = phoneCountryCodeResolver;
         this.balanceService = balanceService;
+        this.userRepository = userRepository;
     }
 
     public SupportCustomerProfile getProfile(String conversationId) {
@@ -110,6 +114,7 @@ public class SupportCustomerProfileService {
             value(conversation.getAgentNote()),
             userPresenceService.isOnline(customer.getId()),
             conversation.getAssignedAgent() == null ? "" : conversation.getAssignedAgent().getUsername(),
+            referrerUsername(customer),
             TIME_FORMATTER.format(customer.getCreatedAt()),
             TIME_FORMATTER.format(customer.getUpdatedAt())
         );
@@ -194,6 +199,15 @@ public class SupportCustomerProfileService {
             TIME_FORMATTER.format(entity.getCreatedAt()),
             TIME_FORMATTER.format(entity.getUpdatedAt())
         );
+    }
+
+    private String referrerUsername(UserEntity customer) {
+        if (customer.getReferredByUserId() == null || customer.getReferredByUserId().isBlank()) {
+            return "";
+        }
+        return userRepository.findById(customer.getReferredByUserId())
+            .map(UserEntity::getUsername)
+            .orElse("");
     }
 
     private LoanApplicationItem toLoanItem(LoanApplicationEntity entity) {

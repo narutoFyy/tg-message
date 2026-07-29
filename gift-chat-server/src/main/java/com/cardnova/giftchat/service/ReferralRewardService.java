@@ -16,6 +16,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -28,8 +29,13 @@ import java.util.UUID;
 public class ReferralRewardService {
 
     private static final String CONFIG_ID = "default";
+    private static final int INVITE_USERNAME_LENGTH = 12;
+    private static final int INVITE_SUFFIX_LENGTH = 3;
+    private static final int INVITE_GENERATION_ATTEMPTS = 100;
+    private static final String INVITE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DecimalFormat MONEY_FORMAT = new DecimalFormat("#,##0.00");
+    private static final SecureRandom INVITE_RANDOM = new SecureRandom();
 
     private final ReferralRewardConfigRepository configRepository;
     private final ReferralRewardRepository rewardRepository;
@@ -75,7 +81,14 @@ public class ReferralRewardService {
     }
 
     public String generateInviteCode(String username) {
-        return UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
+        String prefix = inviteUsernamePrefix(username);
+        for (int attempt = 0; attempt < INVITE_GENERATION_ATTEMPTS; attempt++) {
+            String candidate = prefix + randomInviteSuffix();
+            if (userRepository.findByInviteCode(candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("Unable to generate a unique invite code");
     }
 
     public UserEntity resolveReferrer(String inviteCode) {
@@ -239,6 +252,24 @@ public class ReferralRewardService {
         return StringUtils.hasText(value)
             ? value.trim().replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT)
             : null;
+    }
+
+    private String inviteUsernamePrefix(String username) {
+        String normalized = StringUtils.hasText(username)
+            ? username.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT)
+            : "";
+        if (!StringUtils.hasText(normalized)) {
+            normalized = "USER";
+        }
+        return normalized.substring(0, Math.min(normalized.length(), INVITE_USERNAME_LENGTH));
+    }
+
+    private String randomInviteSuffix() {
+        StringBuilder suffix = new StringBuilder(INVITE_SUFFIX_LENGTH);
+        for (int index = 0; index < INVITE_SUFFIX_LENGTH; index++) {
+            suffix.append(INVITE_CHARACTERS.charAt(INVITE_RANDOM.nextInt(INVITE_CHARACTERS.length())));
+        }
+        return suffix.toString();
     }
 
     private BigDecimal amountFromText(String value) {

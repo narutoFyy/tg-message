@@ -392,6 +392,10 @@
             <text class="profile-value">@{{ profile.customer.username }}</text>
           </view>
           <view class="profile-row">
+            <text class="profile-label">Invited by</text>
+            <text class="profile-value">{{ profile.customer.referrerUsername ? '@' + profile.customer.referrerUsername : 'Direct registration' }}</text>
+          </view>
+          <view class="profile-row">
             <text class="profile-label">{{ workbenchText.agent }}</text>
             <text class="profile-value">{{ profile.customer.assignedAgent || '-' }}</text>
           </view>

@@ -1838,13 +1838,37 @@ class GiftChatServerApplicationTests {
 
     @Test
     void generatedInviteCodesStayUniqueForLongSimilarUsernames() {
+        List<String> userIds = new ArrayList<>();
         List<String> codes = new ArrayList<>();
-        for (int index = 0; index < 100; index++) {
-            codes.add(referralRewardService.generateInviteCode("same_long_username_prefix_" + index));
+        try {
+            for (int index = 0; index < 100; index++) {
+                String inviteCode = referralRewardService.generateInviteCode("same_long_username_prefix_" + index);
+                UserEntity user = new UserEntity();
+                user.setId(UUID.randomUUID().toString());
+                user.setUsername("invite_format_" + UUID.randomUUID());
+                user.setPasswordHash("{noop}test-password");
+                user.setRoleCode("USER");
+                user.setStatusCode("ACTIVE");
+                user.setInviteCode(inviteCode);
+                user.setCreatedAt(LocalDateTime.now());
+                user.setUpdatedAt(LocalDateTime.now());
+                userRepository.saveAndFlush(user);
+                userIds.add(user.getId());
+                codes.add(inviteCode);
+            }
+        } finally {
+            userRepository.deleteAllById(userIds);
         }
 
         assertEquals(100, codes.stream().distinct().count());
-        assertTrue(codes.stream().allMatch(code -> code.length() <= 32));
+        assertTrue(codes.stream().allMatch(code -> code.matches("SAMELONGUSER[A-Z0-9]{3}")));
+    }
+
+    @Test
+    void generatedInviteCodesUseReadableUsernamePrefixes() {
+        assertTrue(referralRewardService.generateInviteCode("john_smith").matches("JOHNSMITH[A-Z0-9]{3}"));
+        assertTrue(referralRewardService.generateInviteCode("very-long_username.2026").matches("VERYLONGUSER[A-Z0-9]{3}"));
+        assertTrue(referralRewardService.generateInviteCode("用户名").matches("USER[A-Z0-9]{3}"));
     }
 
     @Test
@@ -2693,12 +2717,19 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.conversationId").value("support-2"))
             .andExpect(jsonPath("$.data.customer.username").value("john_smith"))
             .andExpect(jsonPath("$.data.customer.assignedAgent").value("support_luna"))
+            .andExpect(jsonPath("$.data.customer.referrerUsername").value("cardnova_user"))
             .andExpect(jsonPath("$.data.balance.availableTotal").isString())
             .andExpect(jsonPath("$.data.orders").isArray())
             .andExpect(jsonPath("$.data.withdrawals").isArray())
             .andExpect(jsonPath("$.data.lotteryFulfillments").isArray())
             .andExpect(jsonPath("$.data.loans").isArray())
             .andExpect(jsonPath("$.data.videoSessions").isArray());
+
+        mockMvc.perform(get("/api/support/conversations/support-3/customer-profile")
+                .header("Authorization", bearer(agentToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.customer.username").value("mary_jane"))
+            .andExpect(jsonPath("$.data.customer.referrerUsername").value(""));
 
         mockMvc.perform(get("/api/support/conversations/support-2/customer-profile")
                 .header("Authorization", bearer(otherAgentToken)))

@@ -1050,6 +1050,16 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void staffSupportMessageIsNotTruncatedByTranslationNormalization() throws Exception {
+        String adminToken = loginToken("admin_mia");
+        String content = "A".repeat(2_000);
+
+        sendSupportText(adminToken, "support-2", content, "staff-length-" + UUID.randomUUID())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content").value(content));
+    }
+
+    @Test
     void supportUserMessageRateLimitIsPerAccount() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String firstToken = registerToken("message_rate_a_" + suffix);

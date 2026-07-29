@@ -21,7 +21,8 @@ import java.util.Map;
 @Service
 public class TranslationService {
 
-    private static final int MAX_TEXT_LENGTH = 600;
+    private static final int MAX_TEXT_LENGTH = 2_000;
+    private static final int ONLINE_TRANSLATION_CHUNK_LENGTH = 500;
 
     private final CurrentUserService currentUserService;
     private final ObjectMapper objectMapper;
@@ -44,7 +45,7 @@ public class TranslationService {
             return new TranslationResult(normalized, normalized, "original");
         }
 
-        String online = translateOnline(normalized);
+        String online = translateOnlineInChunks(normalized, "en%7Czh-CN", true);
         if (StringUtils.hasText(online)) {
             return new TranslationResult(normalized, online, "mymemory");
         }
@@ -61,7 +62,7 @@ public class TranslationService {
             return new TranslationResult(normalized, normalized, "original");
         }
 
-        String online = translateOnline(normalized, "zh-CN%7Cen", false);
+        String online = translateOnlineInChunks(normalized, "zh-CN%7Cen", false);
         if (StringUtils.hasText(online)) {
             return new TranslationResult(normalized, online, "mymemory");
         }
@@ -79,15 +80,55 @@ public class TranslationService {
         if (!StringUtils.hasText(normalized)) {
             throw new IllegalArgumentException("Text is required");
         }
-        return normalized.length() > MAX_TEXT_LENGTH ? normalized.substring(0, MAX_TEXT_LENGTH) : normalized;
+        if (normalized.length() > MAX_TEXT_LENGTH) {
+            throw new IllegalArgumentException("Text messages are limited to 2,000 characters.");
+        }
+        return normalized;
     }
 
     private boolean looksChinese(String value) {
         return value.codePoints().anyMatch(codePoint -> codePoint >= 0x4E00 && codePoint <= 0x9FFF);
     }
 
-    private String translateOnline(String text) {
-        return translateOnline(text, "en%7Czh-CN", true);
+    private String translateOnlineInChunks(String text, String langPair, boolean requireChineseResult) {
+        if (text.length() <= ONLINE_TRANSLATION_CHUNK_LENGTH) {
+            return translateOnline(text, langPair, requireChineseResult);
+        }
+
+        StringBuilder translated = new StringBuilder();
+        int start = 0;
+        while (start < text.length()) {
+            int end = chunkEnd(text, start);
+            String chunk = text.substring(start, end).trim();
+            if (StringUtils.hasText(chunk)) {
+                String translatedChunk = translateOnline(chunk, langPair, requireChineseResult);
+                if (!StringUtils.hasText(translatedChunk)) {
+                    return "";
+                }
+                if (!translated.isEmpty()) {
+                    translated.append(' ');
+                }
+                translated.append(translatedChunk);
+            }
+            start = end;
+        }
+        return translated.toString();
+    }
+
+    private int chunkEnd(String text, int start) {
+        int end = Math.min(text.length(), start + ONLINE_TRANSLATION_CHUNK_LENGTH);
+        if (end < text.length()) {
+            for (int index = end; index > start + ONLINE_TRANSLATION_CHUNK_LENGTH / 2; index--) {
+                if (Character.isWhitespace(text.charAt(index - 1))) {
+                    end = index;
+                    break;
+                }
+            }
+        }
+        if (end > start && Character.isHighSurrogate(text.charAt(end - 1))) {
+            end--;
+        }
+        return end;
     }
 
     private String translateOnline(String text, String langPair, boolean requireChineseResult) {

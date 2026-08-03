@@ -41,7 +41,7 @@
       </view>
 
       <view class="rate-workspace">
-        <view class="editor-panel">
+        <view id="rate-editor" class="editor-panel">
           <view class="panel-heading">
             <view>
               <text class="section-title">{{ editingId ? '编辑汇率' : '新增汇率' }}</text>
@@ -146,17 +146,49 @@
               </view>
             </view>
             <view class="rate-side">
-              <view class="quote-summary">
+              <view v-if="inlineEditingId !== rate.id" class="quote-summary">
                 <text v-for="currency in faceCurrencies" :key="currency.code" :class="['quote-summary-item', !rate.quotes[currency.code] && 'missing']">
                   {{ currency.code }} {{ rate.quotes[currency.code] || '未配置' }}
                 </text>
               </view>
               <view class="rate-actions">
-                <button class="ghost-button action-button" @click="startEdit(rate)">编辑</button>
+                <button class="ghost-button action-button" @click="startInlineEdit(rate)">
+                  {{ inlineEditingId === rate.id ? '编辑中' : '编辑汇率' }}
+                </button>
                 <button class="ghost-button action-button" @click="toggleRate(rate.id, rate.status === 'active' ? 'paused' : 'active')">
                   {{ rate.status === 'active' ? '暂停' : '启用' }}
                 </button>
                 <button class="ghost-button action-button danger-action" @click="deleteRate(rate)">删除</button>
+              </view>
+            </view>
+            <view v-if="inlineEditingId === rate.id" class="inline-rate-editor">
+              <view class="inline-editor-heading">
+                <view>
+                  <text class="inline-editor-title">直接编辑卖卡汇率</text>
+                  <text class="inline-editor-note">每 1 单位卡面币种可兑换的 {{ payoutCurrencyFor(rate.region) }} 数量</text>
+                </view>
+                <button class="text-button" @click="startEdit(rate)">卡片设置</button>
+              </view>
+              <view class="inline-quote-grid">
+                <label v-for="currency in faceCurrencies" :key="currency.code" class="inline-quote-field">
+                  <text class="quote-label">1 {{ currency.code }} 卡面 =</text>
+                  <view class="quote-input-wrap">
+                    <input
+                      v-model.trim="inlineQuotes[currency.code]"
+                      class="quote-input"
+                      type="number"
+                      :placeholder="currency.required ? '必填' : '留空则不显示'"
+                    />
+                    <text class="quote-unit">{{ payoutCurrencyFor(rate.region) }}</text>
+                  </view>
+                </label>
+              </view>
+              <text v-if="inlineNotice" class="inline-notice">{{ inlineNotice }}</text>
+              <view class="inline-editor-actions">
+                <button class="ghost-button action-button" :disabled="inlineSavingId === rate.id" @click="cancelInlineEdit">取消</button>
+                <button class="primary-button action-button inline-save-button" :disabled="inlineSavingId === rate.id" @click="saveInlineRate(rate)">
+                  {{ inlineSavingId === rate.id ? '保存中' : '保存汇率' }}
+                </button>
               </view>
             </view>
           </view>
@@ -214,7 +246,7 @@
 
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref } from 'vue'
 import { useAppStore } from '@/store/app'
 import type { CurrencyExchangeRateItem, GiftCardFaceCurrency, RateItem } from '@/types'
 import { fetchAdminCurrencyExchangeRates, updateAdminCurrencyExchangeRate, uploadImage } from '@/utils/api'
@@ -235,6 +267,9 @@ const generalRates = ref<CurrencyExchangeRateItem[]>([])
 const generalRateInputs = reactive<Record<string, string>>({})
 const uploadingArtwork = ref(false)
 const artworkDirty = ref(false)
+const inlineEditingId = ref('')
+const inlineSavingId = ref('')
+const inlineNotice = ref('')
 const faceCurrencies: Array<{ code: GiftCardFaceCurrency; required: boolean }> = [
   { code: 'USD', required: true },
   { code: 'EUR', required: false },
@@ -253,6 +288,12 @@ const form = reactive({
     AUD: ''
   } as Record<GiftCardFaceCurrency, string>,
   imageUrl: ''
+})
+const inlineQuotes = reactive<Record<GiftCardFaceCurrency, string>>({
+  USD: '',
+  EUR: '',
+  GBP: '',
+  AUD: ''
 })
 
 const selectedCard = computed(() => findGiftCardByCode(form.cardCode))
@@ -358,7 +399,67 @@ function startEdit(rate: RateItem) {
   form.imageUrl = rate.imageUrl || ''
   artworkDirty.value = false
   notice.value = `正在编辑 ${rate.cardName}。`
-  uni.pageScrollTo({ scrollTop: 0, duration: 200 })
+  cancelInlineEdit()
+  nextTick(() => uni.pageScrollTo({ selector: '#rate-editor', duration: 200 }))
+}
+
+function startInlineEdit(rate: RateItem) {
+  inlineEditingId.value = rate.id
+  inlineNotice.value = ''
+  faceCurrencies.forEach((currency) => {
+    inlineQuotes[currency.code] = rate.quotes[currency.code] || ''
+  })
+}
+
+function cancelInlineEdit() {
+  inlineEditingId.value = ''
+  inlineSavingId.value = ''
+  inlineNotice.value = ''
+  faceCurrencies.forEach((currency) => { inlineQuotes[currency.code] = '' })
+}
+
+async function saveInlineRate(rate: RateItem) {
+  const quotes: Partial<Record<GiftCardFaceCurrency, number>> = {}
+  for (const currency of faceCurrencies) {
+    const raw = inlineQuotes[currency.code].trim()
+    if (!raw) {
+      if (currency.required) {
+        inlineNotice.value = '请输入 USD 卡面回收价。'
+        return
+      }
+      continue
+    }
+    const amount = Number(raw)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      inlineNotice.value = `${currency.code} 卡面回收价必须大于 0。`
+      return
+    }
+    quotes[currency.code] = amount
+  }
+
+  inlineSavingId.value = rate.id
+  inlineNotice.value = ''
+  try {
+    await store.updateRate(rate.id, {
+      cardName: rate.cardName,
+      cardCode: rate.cardCode,
+      region: rate.region,
+      rate: inlineQuotes.USD,
+      localPayoutPerUsd: quotes.USD,
+      quotes
+    })
+    cancelInlineEdit()
+    uni.showToast({ title: '卖卡汇率已更新', icon: 'success' })
+  } catch (error) {
+    inlineNotice.value = error instanceof Error ? error.message : '汇率更新失败'
+  } finally {
+    inlineSavingId.value = ''
+  }
+}
+
+function payoutCurrencyFor(region: string) {
+  const countryCode = resolveRegionCode(region)
+  return generalRates.value.find((rate) => rate.countryCode === countryCode)?.currencyCode || '当地币'
 }
 
 function resetForm(clearNotice = true) {
@@ -582,7 +683,7 @@ onShow(() => {
 .form-notice { display: block; margin-top: 14rpx; color: #475467; font-size: 22rpx; line-height: 1.45; }
 .list-heading { padding-bottom: 20rpx; border-bottom: 1rpx solid #d9dde3; }
 .empty-state { padding: 50rpx 20rpx; text-align: center; }
-.rate-row { padding: 20rpx 0; display: flex; align-items: center; justify-content: space-between; gap: 20rpx; border-bottom: 1rpx solid #e7e9ed; }
+.rate-row { padding: 20rpx 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20rpx; border-bottom: 1rpx solid #e7e9ed; }
 .rate-row:last-child { border-bottom: 0; }
 .rate-identity { min-width: 0; display: flex; align-items: center; gap: 16rpx; }
 .rate-logo { width: 58rpx; height: 58rpx; }
@@ -600,6 +701,15 @@ onShow(() => {
 .rate-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8rpx; }
 .action-button { min-width: 92rpx; margin: 0; padding: 10rpx 14rpx; border-radius: 0; font-size: 20rpx; }
 .danger-action { border-color: #e4002b; color: #e4002b; }
+.inline-rate-editor { width: 100%; padding: 20rpx; box-sizing: border-box; border: 1rpx solid #cfd4dc; border-left: 4rpx solid #002fa7; background: #f7f7f8; }
+.inline-editor-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16rpx; }
+.inline-editor-title { display: block; color: #111111; font-size: 23rpx; font-weight: 800; }
+.inline-editor-note { display: block; margin-top: 5rpx; color: #667085; font-size: 19rpx; line-height: 1.4; }
+.inline-quote-grid { margin-top: 16rpx; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12rpx; }
+.inline-quote-field { min-width: 0; }
+.inline-notice { display: block; margin-top: 12rpx; color: #b42318; font-size: 20rpx; }
+.inline-editor-actions { margin-top: 16rpx; display: flex; justify-content: flex-end; gap: 8rpx; }
+.inline-save-button { background: #002fa7; }
 .selector-mask { position: fixed; inset: 0; z-index: 100; padding: 30rpx; display: flex; align-items: center; justify-content: center; box-sizing: border-box; background: rgba(17, 17, 17, 0.48); }
 .selector-dialog { width: min(680rpx, 560px); height: min(840rpx, 82vh); max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; border: 1rpx solid #111111; background: #ffffff; }
 .selector-head { flex: 0 0 auto; padding: 24rpx; display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; border-bottom: 1rpx solid #d9dde3; }
@@ -641,6 +751,10 @@ onShow(() => {
   .quote-summary { justify-content: start; }
   .quote-summary-item { text-align: left; }
   .rate-actions { width: 100%; justify-content: flex-start; }
+  .inline-editor-heading { align-items: flex-start; }
+  .inline-quote-grid { grid-template-columns: 1fr; }
+  .inline-editor-actions { justify-content: stretch; }
+  .inline-editor-actions .action-button { flex: 1; }
   .selector-mask { padding: 0; align-items: flex-end; }
   .selector-dialog { width: 100%; height: 88vh; max-height: 88vh; border-right: 0; border-bottom: 0; border-left: 0; }
   .quote-grid { grid-template-columns: 1fr; }

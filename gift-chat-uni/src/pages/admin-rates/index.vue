@@ -23,8 +23,8 @@
       <view class="general-rate-panel">
         <view class="panel-heading list-heading">
           <view>
-            <text class="section-title">通用货币汇率（钱包 / 转盘）</text>
-            <text class="panel-note">美元是统一参考单位；这里维护 1 USD 可兑换的当地币数量。</text>
+            <text class="section-title">钱包 / 转盘通用汇率（不是卖卡倍率）</text>
+            <text class="panel-note">用于钱包金额和转盘奖金换算；这里维护 1 USD 可兑换的当地币数量。卖卡倍率请在下方“汇率记录”中修改。</text>
           </view>
           <button class="text-button" @click="loadGeneralRates">刷新</button>
         </view>
@@ -153,7 +153,7 @@
               </view>
               <view class="rate-actions">
                 <button class="ghost-button action-button" @click="startInlineEdit(rate)">
-                  {{ inlineEditingId === rate.id ? '编辑中' : '编辑汇率' }}
+                  {{ inlineEditingId === rate.id ? '编辑中' : '直接改倍率' }}
                 </button>
                 <button class="ghost-button action-button" @click="toggleRate(rate.id, rate.status === 'active' ? 'paused' : 'active')">
                   {{ rate.status === 'active' ? '暂停' : '启用' }}
@@ -164,7 +164,7 @@
             <view v-if="inlineEditingId === rate.id" class="inline-rate-editor">
               <view class="inline-editor-heading">
                 <view>
-                  <text class="inline-editor-title">直接编辑卖卡汇率</text>
+                  <text class="inline-editor-title">直接编辑该卡卖卡倍率</text>
                   <text class="inline-editor-note">每 1 单位卡面币种可兑换的 {{ payoutCurrencyFor(rate.region) }} 数量</text>
                 </view>
                 <button class="text-button" @click="startEdit(rate)">卡片设置</button>

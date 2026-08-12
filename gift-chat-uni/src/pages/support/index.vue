@@ -147,9 +147,11 @@ import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPrevi
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
 import { fetchVideoSessionBootstrap, uploadImage, uploadVideo } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
+import { getClientDeviceIdentity } from '@/utils/deviceIdentity'
+import { setGlobalSupportNotificationsSuspended } from '@/utils/globalSupportNotifications'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { uiIcons } from '@/utils/art'
-import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
+import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent, VideoCallMessagePayload, VideoInviteEvent, VideoRingClaimEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 
 const store = useAppStore()
 const supportAvatar = '/static/pwa/icons/xcard-192.png'
@@ -171,6 +173,8 @@ const {
 const messageScrollTarget = ref('msg-bottom')
 const audioEnabled = ref(false)
 const handledVideoInvites = new Set<string>()
+const videoRingClaimTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const clientDevice = getClientDeviceIdentity()
 const localVideoStatuses = ref<Record<string, VideoSessionItem['status']>>({})
 const incomingVideoInvite = ref<VideoInviteEvent | null>(null)
 const replyTarget = ref<ChatMessage['replyTo'] | null>(null)
@@ -204,6 +208,7 @@ const currentUserAvatar = computed(() =>
 )
 
 onShow(() => {
+  setGlobalSupportNotificationsSuspended(true)
   store.bootstrap().then(async () => {
     if (store.state.currentUser?.roleCode === 'AGENT' || store.state.currentUser?.roleCode === 'ADMIN') {
       uni.redirectTo({ url: '/pages/support-chat-v2/index' })
@@ -219,10 +224,12 @@ onShow(() => {
 })
 
 onUnmounted(() => {
+  clearVideoRingClaimTimers()
   closeSocket()
   stopReadRefresh()
   detachPasteListener()
   detachContextMenuPointListener()
+  setGlobalSupportNotificationsSuspended(false)
 })
 
 onMounted(() => {
@@ -415,6 +422,10 @@ function isVideoSessionStatus(payload: ChatRealtimePayload): payload is VideoSes
   return 'eventType' in payload && payload.eventType === 'video_session_status'
 }
 
+function isVideoRingClaim(payload: ChatRealtimePayload): payload is VideoRingClaimEvent {
+  return 'eventType' in payload && payload.eventType === 'video_ring_claimed'
+}
+
 function isPresenceEvent(payload: ChatRealtimePayload): payload is PresenceEvent {
   return 'eventType' in payload && payload.eventType === 'presence'
 }
@@ -423,7 +434,10 @@ function handleVideoSessionStatus(event: VideoSessionStatusEvent) {
   if (event.channelId !== store.state.supportConversationId) return
   const updated = store.applyVideoSessionStatus(event)
   setLocalVideoStatus(event.sessionId, updated?.status || event.status)
-  if (incomingVideoInvite.value?.sessionId === event.sessionId && isTerminalVideoStatus(event.status)) {
+  if (event.status !== 'created') {
+    clearVideoRingClaimTimer(event.sessionId)
+  }
+  if (incomingVideoInvite.value?.sessionId === event.sessionId && event.status !== 'created') {
     incomingVideoInvite.value = null
   }
 }
@@ -457,6 +471,11 @@ function connectSocket() {
 
       if (isVideoSessionStatus(payload)) {
         handleVideoSessionStatus(payload)
+        return
+      }
+
+      if (isVideoRingClaim(payload)) {
+        handleVideoRingClaim(payload)
         return
       }
 
@@ -495,6 +514,7 @@ function shouldPlayIncomingSound(message: ChatMessage, conversationId: string) {
 }
 
 function closeSocket() {
+  clearVideoRingClaimTimers()
   socketTask.value?.close({})
   socketTask.value = null
   socketStatus.value = 'offline'
@@ -508,7 +528,51 @@ function handleVideoInvite(invite: VideoInviteEvent) {
   const currentUsername = store.state.currentUser?.username
   if (!currentUsername || invite.initiatorUsername === currentUsername) return
 
-  incomingVideoInvite.value = invite
+  const delay = clientDevice.deviceType === 'mobile' ? 0 : 1200
+  const timer = setTimeout(() => {
+    videoRingClaimTimers.delete(invite.sessionId)
+    claimIncomingVideo(invite)
+  }, delay)
+  videoRingClaimTimers.set(invite.sessionId, timer)
+}
+
+async function claimIncomingVideo(invite: VideoInviteEvent) {
+  try {
+    const claim = await store.claimVideoSessionRing(invite.sessionId, clientDevice)
+    if (claim.claimed && claim.deviceId === clientDevice.deviceId) {
+      incomingVideoInvite.value = invite
+    }
+  } catch {
+    // The call may already be answered or claimed by another device.
+  }
+}
+
+function handleVideoRingClaim(event: VideoRingClaimEvent) {
+  if (event.channelId !== store.state.supportConversationId || event.deviceId === clientDevice.deviceId) return
+  const otherDeviceHasPriority = clientDevice.deviceType === 'desktop' || event.deviceType === 'mobile'
+  if (!otherDeviceHasPriority) return
+  clearVideoRingClaimTimer(event.sessionId)
+  if (incomingVideoInvite.value?.sessionId === event.sessionId) {
+    incomingVideoInvite.value = null
+  }
+}
+
+function clearVideoRingClaimTimer(sessionId: string) {
+  const timer = videoRingClaimTimers.get(sessionId)
+  if (timer) clearTimeout(timer)
+  videoRingClaimTimers.delete(sessionId)
+}
+
+function clearVideoRingClaimTimers() {
+  videoRingClaimTimers.forEach(timer => clearTimeout(timer))
+  videoRingClaimTimers.clear()
+}
+
+async function claimVideoFromMessage(sessionId: string) {
+  if (clientDevice.deviceType === 'desktop') {
+    await new Promise(resolve => setTimeout(resolve, 1200))
+  }
+  return store.claimVideoSessionRing(sessionId, clientDevice)
 }
 
 async function declineIncomingVideo() {
@@ -704,6 +768,11 @@ async function answerVideoMessage(message: ChatMessage) {
   const payload = parseVideoCallMessage(message)
   if (!payload?.sessionId) return
   try {
+    const claim = await claimVideoFromMessage(payload.sessionId)
+    if (!claim.claimed) {
+      showNotice('This call is ringing on another device.')
+      return
+    }
     setLocalVideoStatus(payload.sessionId, 'joining')
     await store.updateVideoSessionStatus(payload.sessionId, 'joining')
     await openVideoSession(payload.sessionId)
@@ -716,6 +785,11 @@ async function rejectVideoMessage(message: ChatMessage) {
   const payload = parseVideoCallMessage(message)
   if (!payload?.sessionId) return
   try {
+    const claim = await claimVideoFromMessage(payload.sessionId)
+    if (!claim.claimed) {
+      showNotice('This call is ringing on another device.')
+      return
+    }
     const updated = await store.updateVideoSessionStatus(payload.sessionId, 'rejected')
     setLocalVideoStatus(payload.sessionId, updated.status)
     showNotice('Video call declined.')

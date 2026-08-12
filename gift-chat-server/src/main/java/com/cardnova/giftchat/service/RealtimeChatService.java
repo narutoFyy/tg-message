@@ -240,6 +240,27 @@ public class RealtimeChatService {
         broadcastPayload(channelKey, payload);
     }
 
+    public void broadcastVideoRingClaim(
+        String channelKey,
+        String channelType,
+        String channelId,
+        String sessionId,
+        String receiverUserId,
+        String deviceId,
+        String deviceType
+    ) {
+        Map<String, String> payload = Map.of(
+            "eventType", "video_ring_claimed",
+            "channelType", channelType,
+            "channelId", channelId,
+            "sessionId", sessionId,
+            "receiverUserId", receiverUserId,
+            "deviceId", deviceId,
+            "deviceType", deviceType
+        );
+        broadcastPayload(channelKey, payload);
+    }
+
     public void broadcastPresence(String channelKey, String channelType, String channelId, String userId, boolean online) {
         Map<String, Object> payload = Map.of(
             "eventType", "presence",
@@ -285,7 +306,14 @@ public class RealtimeChatService {
             String viewerUserId = (String) session.getAttributes().get("userId");
             Object sessionPayload = payload;
             if (payload instanceof ChatMessage message) {
-                String author = senderUserId != null && senderUserId.equals(viewerUserId) ? selfAuthor : otherAuthor;
+                String author = resolveSessionAuthor(
+                    channelKey,
+                    session,
+                    senderUserId,
+                    viewerUserId,
+                    selfAuthor,
+                    otherAuthor
+                );
                 sessionPayload = new ChatMessage(
                     message.id(),
                     author,
@@ -305,6 +333,25 @@ public class RealtimeChatService {
             }
             sendSafely(session, sessionPayload);
         }
+    }
+
+    private String resolveSessionAuthor(
+        String channelKey,
+        WebSocketSession session,
+        String senderUserId,
+        String viewerUserId,
+        String selfAuthor,
+        String otherAuthor
+    ) {
+        if (senderUserId != null && senderUserId.equals(viewerUserId)) {
+            return selfAuthor;
+        }
+        String viewerRole = String.valueOf(session.getAttributes().getOrDefault("roleCode", ""));
+        boolean staffViewer = "AGENT".equalsIgnoreCase(viewerRole) || "ADMIN".equalsIgnoreCase(viewerRole);
+        if (channelKey.startsWith("support:") && staffViewer) {
+            return "support".equalsIgnoreCase(otherAuthor) ? "me" : "support";
+        }
+        return otherAuthor;
     }
 
     private void publish(

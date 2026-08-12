@@ -9,6 +9,7 @@ import type {
   ChatMessage,
   ChatMessageSync,
   CountryCodeRule,
+  CustomerBalanceSummary,
   CurrencyExchangeRateItem,
   FriendProfile,
   FriendRequest,
@@ -24,6 +25,8 @@ import type {
   LotteryWinnerItem,
   NotificationItem,
   PushDeviceItem,
+  WebPushConfiguration,
+  WebPushSubscriptionItem,
   ReferralRewardConfigItem,
   ReferralRewardItem,
   RegistrationBonusConfigItem,
@@ -43,6 +46,7 @@ import type {
   UploadAsset,
   VideoSessionBootstrap,
   VideoSessionItem,
+  VideoRingClaimResult,
   VipSummary,
   VipBenefitClaimItem,
   VipBenefitConfigItem,
@@ -276,6 +280,21 @@ export function approveSupportLotteryAccess(conversationId: string) {
   return request<LotteryAccessInfo>(`/support/conversations/${conversationId}/lottery-access/approve`, 'POST')
 }
 
+export function adjustSupportCustomerWallet(
+  conversationId: string,
+  payload: { amount: string; action: 'ADD' | 'SUBTRACT'; reason: string }
+) {
+  return request<CustomerBalanceSummary>(`/support/conversations/${conversationId}/wallet-adjustment`, 'POST', payload)
+}
+
+export function unlockSupportCustomerLockedBalance(conversationId: string, reason?: string) {
+  return request<CustomerBalanceSummary>(
+    `/support/conversations/${conversationId}/locked-balance/unlock`,
+    'POST',
+    { reason: reason?.trim() || undefined }
+  )
+}
+
 export function fetchSupportLedger() {
   return request<SupportLedgerReport>('/support/ledger')
 }
@@ -401,6 +420,22 @@ export function disablePushDevice(deviceId: string) {
   return request<PushDeviceItem>(`/push/devices/${deviceId}`, 'DELETE')
 }
 
+export function fetchWebPushConfiguration() {
+  return request<WebPushConfiguration>('/push/web/config')
+}
+
+export function registerWebPushSubscription(payload: {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  userAgent?: string
+}) {
+  return request<WebPushSubscriptionItem>('/push/web/subscriptions', 'POST', payload)
+}
+
+export function disableWebPushSubscription(endpoint: string) {
+  return request<{ disabled: boolean }>('/push/web/subscriptions', 'DELETE', { endpoint })
+}
+
 export function fetchBroadcasts() {
   return request<BroadcastItem[]>('/broadcasts')
 }
@@ -461,6 +496,13 @@ export function fetchVideoSessionBootstrap(sessionId: string) {
 
 export function updateVideoSessionStatus(sessionId: string, status: VideoSessionItem['status']) {
   return request<VideoSessionItem>(`/video-sessions/${sessionId}/status`, 'POST', { status })
+}
+
+export function claimVideoSessionRing(
+  sessionId: string,
+  device: { deviceId: string; deviceType: 'mobile' | 'desktop' }
+) {
+  return request<VideoRingClaimResult>(`/video-sessions/${sessionId}/ring-claim`, 'POST', device)
 }
 
 export function createTransaction(payload: {

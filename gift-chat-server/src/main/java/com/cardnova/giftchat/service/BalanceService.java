@@ -9,6 +9,7 @@ import com.cardnova.giftchat.repository.SupportConversationRepository;
 import com.cardnova.giftchat.repository.TradeOrderRepository;
 import com.cardnova.giftchat.repository.UserRepository;
 import com.cardnova.giftchat.repository.WithdrawalRequestRepository;
+import com.cardnova.giftchat.repository.WalletOperationRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +36,7 @@ public class BalanceService {
     private final ReferralRewardService referralRewardService;
     private final RegistrationBonusService registrationBonusService;
     private final VipBenefitService vipBenefitService;
+    private final WalletOperationRepository walletOperationRepository;
 
     public BalanceService(
         CurrentUserService currentUserService,
@@ -44,7 +46,8 @@ public class BalanceService {
         WithdrawalRequestRepository withdrawalRequestRepository,
         ReferralRewardService referralRewardService,
         RegistrationBonusService registrationBonusService,
-        VipBenefitService vipBenefitService
+        VipBenefitService vipBenefitService,
+        WalletOperationRepository walletOperationRepository
     ) {
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
@@ -54,6 +57,7 @@ public class BalanceService {
         this.referralRewardService = referralRewardService;
         this.registrationBonusService = registrationBonusService;
         this.vipBenefitService = vipBenefitService;
+        this.walletOperationRepository = walletOperationRepository;
     }
 
     public BalanceSummary summary() {
@@ -144,11 +148,13 @@ public class BalanceService {
         BigDecimal registrationBonuses = registrationBonusService.availableBonusesForUsers(userIds);
         BigDecimal lockedBonuses = registrationBonusService.lockedBonusesForUsers(userIds);
         BigDecimal vipBenefits = vipBenefitService.availableCreditsForUsers(userIds);
+        BigDecimal manualAdjustments = walletOperationRepository.sumAmountDeltaByUserIds(userIds);
 
         BigDecimal available = completed
             .add(rewards)
             .add(registrationBonuses)
             .add(vipBenefits)
+            .add(manualAdjustments == null ? BigDecimal.ZERO : manualAdjustments)
             .subtract(withdrawn)
             .subtract(pendingWithdrawal)
             .max(BigDecimal.ZERO);

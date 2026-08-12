@@ -20,6 +20,7 @@ import com.cardnova.giftchat.repository.SupportConversationRepository;
 import com.cardnova.giftchat.repository.TradeOrderSettlementAuditRepository;
 import com.cardnova.giftchat.repository.UploadAssetRepository;
 import com.cardnova.giftchat.repository.VipPointLedgerRepository;
+import com.cardnova.giftchat.repository.WalletOperationRepository;
 import com.cardnova.giftchat.service.ReferralRewardService;
 import com.cardnova.giftchat.service.RegistrationBonusService;
 import com.cardnova.giftchat.service.WebSocketChannelAuthorizationService;
@@ -125,6 +126,9 @@ class GiftChatServerApplicationTests {
 
     @Autowired
     private UploadAssetRepository uploadAssetRepository;
+
+    @Autowired
+    private WalletOperationRepository walletOperationRepository;
 
     @Test
     void healthEndpointIsPublic() throws Exception {
@@ -1260,6 +1264,87 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void mobileDeviceOverridesDesktopRingClaimAndAnswerStopsFurtherClaims() throws Exception {
+        String userToken = loginToken("cardnova_user");
+        String agentToken = loginToken("support_luna");
+
+        MvcResult videoResult = mockMvc.perform(post("/api/video-sessions")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"channelType\":\"support\",\"channelId\":\"support-1\"}"))
+            .andExpect(status().isOk())
+            .andReturn();
+        String sessionId = objectMapper.readTree(videoResult.getResponse().getContentAsString())
+            .at("/data/session/id")
+            .asText();
+
+        mockMvc.perform(post("/api/video-sessions/{sessionId}/ring-claim", sessionId)
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deviceId\":\"desktop-1\",\"deviceType\":\"desktop\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.claimed").value(true))
+            .andExpect(jsonPath("$.data.deviceId").value("desktop-1"));
+
+        mockMvc.perform(post("/api/video-sessions/{sessionId}/ring-claim", sessionId)
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deviceId\":\"mobile-1\",\"deviceType\":\"mobile\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.claimed").value(true))
+            .andExpect(jsonPath("$.data.deviceId").value("mobile-1"))
+            .andExpect(jsonPath("$.data.deviceType").value("mobile"));
+
+        mockMvc.perform(post("/api/video-sessions/{sessionId}/ring-claim", sessionId)
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deviceId\":\"desktop-1\",\"deviceType\":\"desktop\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.claimed").value(false))
+            .andExpect(jsonPath("$.data.deviceId").value("mobile-1"));
+
+        mockMvc.perform(post("/api/video-sessions/{sessionId}/ring-claim", sessionId)
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deviceId\":\"caller-device\",\"deviceType\":\"mobile\"}"))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/video-sessions/{sessionId}/status", sessionId)
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"joining\"}"))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/video-sessions/{sessionId}/ring-claim", sessionId)
+                .header("Authorization", bearer(agentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deviceId\":\"mobile-2\",\"deviceType\":\"mobile\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.claimed").value(false))
+            .andExpect(jsonPath("$.data.deviceId").value("mobile-1"));
+    }
+
+    @Test
+    void adminSupportViewGroupsStaffMessagesOnTheSupportSide() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String agentMessage = "Agent side " + suffix;
+        String customerMessage = "Customer side " + suffix;
+
+        sendSupportText(loginToken("support_luna"), "support-1", agentMessage, "admin-agent-" + suffix)
+            .andExpect(status().isOk());
+        sendSupportText(loginToken("cardnova_user"), "support-1", customerMessage, "admin-user-" + suffix)
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(loginToken("admin_mia"))))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[?(@.conversationId == 'support-1')].messages[?(@.content == '%s')].author"
+                .formatted(agentMessage)).value("me"))
+            .andExpect(jsonPath("$.data[?(@.conversationId == 'support-1')].messages[?(@.content == '%s')].author"
+                .formatted(customerMessage)).value("support"));
+    }
+
+    @Test
     void friendsEndpointUsesTokenIdentity() throws Exception {
         String user2Token = loginToken("gift_hunter");
 
@@ -1458,6 +1543,68 @@ class GiftChatServerApplicationTests {
                 .header("Authorization", bearer(user1Token)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.enabled").value(false));
+    }
+
+    @Test
+    void webPushSubscriptionIsIdempotentScopedAndDisabledWithoutVapidKeys() throws Exception {
+        String user1Token = loginToken("cardnova_user");
+        String user2Token = loginToken("gift_hunter");
+        String endpoint = "https://push.example.test/subscriptions/" + UUID.randomUUID();
+
+        mockMvc.perform(get("/api/push/web/config")
+                .header("Authorization", bearer(user1Token)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.enabled").value(false))
+            .andExpect(jsonPath("$.data.publicKey").value(""));
+
+        MvcResult firstResult = mockMvc.perform(post("/api/push/web/subscriptions")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "endpoint": "%s",
+                      "keys": {
+                        "p256dh": "test-p256dh-key",
+                        "auth": "test-auth-key"
+                      },
+                      "userAgent": "Xcard integration test"
+                    }
+                    """.formatted(endpoint)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.enabled").value(true))
+            .andReturn();
+        String subscriptionId = objectMapper.readTree(firstResult.getResponse().getContentAsString())
+            .at("/data/id")
+            .asText();
+
+        mockMvc.perform(post("/api/push/web/subscriptions")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "endpoint": "%s",
+                      "keys": {
+                        "p256dh": "updated-p256dh-key",
+                        "auth": "updated-auth-key"
+                      }
+                    }
+                    """.formatted(endpoint)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.id").value(subscriptionId));
+
+        mockMvc.perform(delete("/api/push/web/subscriptions")
+                .header("Authorization", bearer(user2Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"endpoint\":\"%s\"}".formatted(endpoint)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.disabled").value(false));
+
+        mockMvc.perform(delete("/api/push/web/subscriptions")
+                .header("Authorization", bearer(user1Token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"endpoint\":\"%s\"}".formatted(endpoint)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.disabled").value(true));
     }
 
     @Test
@@ -3134,6 +3281,75 @@ class GiftChatServerApplicationTests {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.availableTotal").value("12,000.00"))
             .andExpect(jsonPath("$.data.lockedTotal").value("0.00"));
+    }
+
+    @Test
+    void assignedSupportCanAdjustAndUnlockCustomerWalletWithAuditTrail() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String username = "support_wallet_" + suffix;
+        String userToken = registerToken(username, "NG");
+        String conversationId = supportConversations(userToken).get(0).path("conversationId").asText();
+        SupportConversationEntity conversation = supportConversationRepository.findById(conversationId).orElseThrow();
+        String assignedAgent = userRepository.findById(conversation.getAssignedAgent().getId()).orElseThrow().getUsername();
+        String otherAgent = "support_luna".equals(assignedAgent) ? "support_angela" : "support_luna";
+
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/wallet-adjustment", conversationId)
+                .header("Authorization", bearer(loginToken(otherAgent)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amount\":\"50.00\",\"action\":\"ADD\",\"reason\":\"Private trade credit\"}"))
+            .andExpect(status().isBadRequest());
+
+        String assignedAgentToken = loginToken(assignedAgent);
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/wallet-adjustment", conversationId)
+                .header("Authorization", bearer(assignedAgentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amount\":\"50.00\",\"action\":\"ADD\",\"reason\":\"Private trade credit\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("50.00"))
+            .andExpect(jsonPath("$.data.lockedTotal").value("2,000.00"));
+
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/wallet-adjustment", conversationId)
+                .header("Authorization", bearer(assignedAgentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amount\":\"10.00\",\"action\":\"SUBTRACT\",\"reason\":\"Private trade correction\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("40.00"));
+
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/wallet-adjustment", conversationId)
+                .header("Authorization", bearer(assignedAgentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amount\":\"40.01\",\"action\":\"SUBTRACT\",\"reason\":\"Excess debit check\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Subtract amount exceeds available balance"));
+
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/locked-balance/unlock", conversationId)
+                .header("Authorization", bearer(assignedAgentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Private trade completed\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.availableTotal").value("2,040.00"))
+            .andExpect(jsonPath("$.data.lockedTotal").value("0.00"));
+
+        mockMvc.perform(post("/api/support/conversations/{conversationId}/locked-balance/unlock", conversationId)
+                .header("Authorization", bearer(assignedAgentToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Customer has no locked balance to unlock"));
+
+        UserEntity customer = userRepository.findByUsername(username).orElseThrow();
+        var operations = walletOperationRepository.findAll().stream()
+            .filter(operation -> customer.getId().equals(operation.getUser().getId()))
+            .toList();
+        assertEquals(3, operations.size());
+        assertEquals(
+            new BigDecimal("2000.00"),
+            operations.stream()
+                .filter(operation -> "LOCKED_BONUS_UNLOCK".equals(operation.getActionType()))
+                .findFirst()
+                .orElseThrow()
+                .getAmountDelta()
+        );
     }
 
     @Test

@@ -118,6 +118,23 @@ export interface VideoSessionStatusEvent {
   updatedAt: string
 }
 
+export interface VideoRingClaimEvent {
+  eventType: 'video_ring_claimed'
+  channelType: 'friend' | 'support'
+  channelId: string
+  sessionId: string
+  receiverUserId: string
+  deviceId: string
+  deviceType: 'mobile' | 'desktop'
+}
+
+export interface VideoRingClaimResult {
+  sessionId: string
+  claimed: boolean
+  deviceId: string
+  deviceType: 'mobile' | 'desktop' | ''
+}
+
 export interface PresenceEvent {
   eventType: 'presence'
   channelType: 'friend' | 'support'
@@ -126,7 +143,7 @@ export interface PresenceEvent {
   online: boolean
 }
 
-export type ChatRealtimePayload = ChatMessage | ChatReadReceiptEvent | VideoInviteEvent | VideoSessionStatusEvent | PresenceEvent
+export type ChatRealtimePayload = ChatMessage | ChatReadReceiptEvent | VideoInviteEvent | VideoSessionStatusEvent | VideoRingClaimEvent | PresenceEvent
 
 export interface FriendProfile {
   id: string
@@ -549,6 +566,17 @@ export interface PushDeviceItem {
   appVersion: string
   enabled: boolean
   lastSeenAt: string
+}
+
+export interface WebPushConfiguration {
+  enabled: boolean
+  publicKey: string
+}
+
+export interface WebPushSubscriptionItem {
+  id: string
+  enabled: boolean
+  updatedAt: string
 }
 
 export interface UploadAsset {

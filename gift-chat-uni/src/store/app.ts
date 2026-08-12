@@ -29,6 +29,7 @@ import type {
   SupportMessageSearchResult,
   TransactionItem,
   VideoSessionBootstrap,
+  VideoRingClaimResult,
   VideoSessionStatusEvent,
   VideoSessionItem,
   VipSummary,
@@ -39,10 +40,12 @@ import type {
 import {
   acceptFriendRequest,
   approveSupportLotteryAccess as approveSupportLotteryAccessRequest,
+  adjustSupportCustomerWallet as adjustSupportCustomerWalletRequest,
   addBlacklist,
   markFriendConversationRead,
   markSupportConversationRead,
   updateSupportConversationNote,
+  unlockSupportCustomerLockedBalance as unlockSupportCustomerLockedBalanceRequest,
   removeBlacklist,
   removeFriend,
   createBroadcast as createBroadcastRequest,
@@ -51,6 +54,7 @@ import {
   createRate as createRateRequest,
   createSellOrder as createSellOrderRequest,
   createVideoSession as createVideoSessionRequest,
+  claimVideoSessionRing as claimVideoSessionRingRequest,
   deleteRate as deleteRateRequest,
   createTransaction as createTransactionRequest,
   createWithdrawal as createWithdrawalRequest,
@@ -318,7 +322,7 @@ function mergeUniqueMessage(messages: ChatMessage[], incomingMessage: ChatMessag
   const existingIndex = messages.findIndex((message) => message.id === incoming.id)
   if (existingIndex >= 0) {
     messages.splice(existingIndex, 1, incoming)
-    return
+    return false
   }
   const pendingIndex = messages.findIndex((message) =>
     message.id.startsWith('local-')
@@ -332,9 +336,10 @@ function mergeUniqueMessage(messages: ChatMessage[], incomingMessage: ChatMessag
   )
   if (pendingIndex >= 0) {
     messages.splice(pendingIndex, 1, incoming)
-    return
+    return false
   }
   messages.push(incoming)
+  return true
 }
 
 function replaceMessage(messages: ChatMessage[], localId: string, message: ChatMessage) {
@@ -702,21 +707,29 @@ export function useAppStore() {
     return fallback
   }
 
-  function pushSupportRealtime(message: ChatMessage, conversationId = state.supportConversationId) {
+  function pushSupportRealtime(
+    message: ChatMessage,
+    conversationId = state.supportConversationId,
+    options: { markIncomingUnread?: boolean } = {}
+  ) {
     rememberMessageCursor('support', conversationId, message)
     const conversation = state.supportConversations.find((item) => item.conversationId === conversationId)
+    let inserted = false
     if (conversation) {
-      mergeUniqueMessage(conversation.messages, message)
-      if (conversationId !== state.supportConversationId) {
-        conversation.unreadCount += 1
-      } else {
-        conversation.unreadCount = 0
+      inserted = mergeUniqueMessage(conversation.messages, message)
+      if (inserted) {
+        if (options.markIncomingUnread || conversationId !== state.supportConversationId) {
+          conversation.unreadCount += 1
+        } else {
+          conversation.unreadCount = 0
+        }
       }
     }
     if (conversationId === state.supportConversationId) {
       mergeUniqueMessage(state.supportMessages, message)
     }
     state.supportUnreadCount = totalSupportUnread()
+    return inserted
   }
 
   function applySupportReadReceipt(conversationId = state.supportConversationId) {
@@ -904,6 +917,27 @@ export function useAppStore() {
     if (!conversationId) throw new Error('Select a customer first')
     await approveSupportLotteryAccessRequest(conversationId)
     return refreshSupportCustomerProfile(conversationId, true, false)
+  }
+
+  async function adjustSupportCustomerWallet(
+    conversationId: string,
+    payload: { amount: string; action: 'ADD' | 'SUBTRACT'; reason: string }
+  ) {
+    const balance = await adjustSupportCustomerWalletRequest(conversationId, payload)
+    await Promise.all([
+      refreshSupportCustomerProfile(conversationId, true, false),
+      refreshSupportLedger()
+    ])
+    return balance
+  }
+
+  async function unlockSupportCustomerLockedBalance(conversationId: string, reason?: string) {
+    const balance = await unlockSupportCustomerLockedBalanceRequest(conversationId, reason)
+    await Promise.all([
+      refreshSupportCustomerProfile(conversationId, true, false),
+      refreshSupportLedger()
+    ])
+    return balance
   }
 
   async function refreshSupportLedger() {
@@ -1228,6 +1262,13 @@ export function useAppStore() {
     return updated
   }
 
+  async function claimVideoSessionRing(
+    sessionId: string,
+    device: { deviceId: string; deviceType: 'mobile' | 'desktop' }
+  ): Promise<VideoRingClaimResult> {
+    return claimVideoSessionRingRequest(sessionId, device)
+  }
+
   function applyVideoSessionStatus(event: VideoSessionStatusEvent) {
     const index = state.videoSessions.findIndex((item) => item.id === event.sessionId)
     if (index < 0) {
@@ -1371,6 +1412,8 @@ export function useAppStore() {
     updateSupportNote,
     refreshSupportCustomerProfile,
     approveSupportLotteryAccess,
+    adjustSupportCustomerWallet,
+    unlockSupportCustomerLockedBalance,
     refreshSupportLedger,
     clearSupportUnread,
     setActiveSupportConversation,
@@ -1418,6 +1461,7 @@ export function useAppStore() {
     createVideoSession,
     getVideoSessionBootstrap,
     updateVideoSessionStatus,
+    claimVideoSessionRing,
     applyVideoSessionStatus,
     refreshRanking,
     blockUser,

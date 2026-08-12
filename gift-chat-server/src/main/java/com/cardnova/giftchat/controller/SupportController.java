@@ -2,6 +2,8 @@ package com.cardnova.giftchat.controller;
 
 import com.cardnova.giftchat.api.ApiResponse;
 import com.cardnova.giftchat.dto.SendSupportMessageRequest;
+import com.cardnova.giftchat.dto.AdjustCustomerWalletRequest;
+import com.cardnova.giftchat.dto.UnlockLockedBalanceRequest;
 import com.cardnova.giftchat.dto.UpdateSupportConversationNoteRequest;
 import com.cardnova.giftchat.model.ChatMessage;
 import com.cardnova.giftchat.model.ChatMessageSync;
@@ -10,12 +12,14 @@ import com.cardnova.giftchat.model.SupportCustomerProfile;
 import com.cardnova.giftchat.model.SupportCustomerSearchResult;
 import com.cardnova.giftchat.model.SupportLedgerReport;
 import com.cardnova.giftchat.model.SupportMessageSearchResult;
+import com.cardnova.giftchat.model.CustomerBalanceSummary;
 import com.cardnova.giftchat.model.LotteryAccessInfo;
 import com.cardnova.giftchat.service.PersistentSupportService;
 import com.cardnova.giftchat.service.SupportCustomerProfileService;
 import com.cardnova.giftchat.service.SupportLedgerService;
 import com.cardnova.giftchat.service.SupportSearchService;
 import com.cardnova.giftchat.service.LotteryService;
+import com.cardnova.giftchat.service.SupportWalletService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,19 +40,22 @@ public class SupportController {
     private final SupportLedgerService supportLedgerService;
     private final SupportSearchService supportSearchService;
     private final LotteryService lotteryService;
+    private final SupportWalletService supportWalletService;
 
     public SupportController(
         PersistentSupportService persistentSupportService,
         SupportCustomerProfileService supportCustomerProfileService,
         SupportLedgerService supportLedgerService,
         SupportSearchService supportSearchService,
-        LotteryService lotteryService
+        LotteryService lotteryService,
+        SupportWalletService supportWalletService
     ) {
         this.persistentSupportService = persistentSupportService;
         this.supportCustomerProfileService = supportCustomerProfileService;
         this.supportLedgerService = supportLedgerService;
         this.supportSearchService = supportSearchService;
         this.lotteryService = lotteryService;
+        this.supportWalletService = supportWalletService;
     }
 
     @GetMapping("/conversations")
@@ -93,6 +100,22 @@ public class SupportController {
     @PostMapping("/conversations/{conversationId}/lottery-access/approve")
     public ApiResponse<LotteryAccessInfo> approveLotteryAccess(@PathVariable String conversationId) {
         return ApiResponse.success("lottery_access_approved", lotteryService.approveAccess(conversationId));
+    }
+
+    @PostMapping("/conversations/{conversationId}/wallet-adjustment")
+    public ApiResponse<CustomerBalanceSummary> adjustWallet(
+        @PathVariable String conversationId,
+        @Valid @RequestBody AdjustCustomerWalletRequest request
+    ) {
+        return ApiResponse.success("customer_wallet_adjusted", supportWalletService.adjust(conversationId, request));
+    }
+
+    @PostMapping("/conversations/{conversationId}/locked-balance/unlock")
+    public ApiResponse<CustomerBalanceSummary> unlockLockedBalance(
+        @PathVariable String conversationId,
+        @Valid @RequestBody UnlockLockedBalanceRequest request
+    ) {
+        return ApiResponse.success("customer_locked_balance_unlocked", supportWalletService.unlock(conversationId, request));
     }
 
     @GetMapping("/ledger")

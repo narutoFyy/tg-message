@@ -177,6 +177,24 @@ public class RegistrationBonusService {
         return true;
     }
 
+    @Transactional
+    public BigDecimal unlockLockedForSupport(UserEntity user, String reason) {
+        RegistrationBonusRecordEntity record = recordRepository.findByUser_IdForUpdate(user.getId())
+            .orElseThrow(() -> new IllegalArgumentException("Locked balance record not found"));
+        if (!"LOCKED".equalsIgnoreCase(record.getStatusCode())) {
+            throw new IllegalArgumentException("Customer has no locked balance to unlock");
+        }
+        BigDecimal amount = record.getBonusAmount();
+        record.setStatusCode("AVAILABLE");
+        record.setUnlockedByOrder(null);
+        record.setUnlockedAt(LocalDateTime.now());
+        record.setReasonNote(StringUtils.hasText(reason)
+            ? "Unlocked manually by customer support: " + reason.trim()
+            : "Unlocked manually by customer support");
+        recordRepository.save(record);
+        return amount == null ? BigDecimal.ZERO : amount;
+    }
+
     public RegistrationBonusRecordItem recordForUser(String userId) {
         return recordRepository.findByUser_Id(userId).map(this::toRecordItem).orElse(null);
     }

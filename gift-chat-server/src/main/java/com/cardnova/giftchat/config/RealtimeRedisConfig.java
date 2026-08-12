@@ -13,7 +13,7 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import java.nio.charset.StandardCharsets;
 
 @Configuration
-@EnableConfigurationProperties({RealtimeRedisProperties.class, TencentChatProperties.class})
+@EnableConfigurationProperties({RealtimeRedisProperties.class, TencentChatProperties.class, WebPushProperties.class})
 public class RealtimeRedisConfig {
 
     @Bean

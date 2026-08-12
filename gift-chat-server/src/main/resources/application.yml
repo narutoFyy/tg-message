@@ -56,6 +56,12 @@ app:
     redis:
       enabled: ${APP_REALTIME_REDIS_ENABLED:false}
       channel: ${APP_REALTIME_REDIS_CHANNEL:gift-chat:realtime}
+  web-push:
+    enabled: ${APP_WEB_PUSH_ENABLED:false}
+    public-key: ${APP_WEB_PUSH_PUBLIC_KEY:}
+    private-key: ${APP_WEB_PUSH_PRIVATE_KEY:}
+    subject: ${APP_WEB_PUSH_SUBJECT:mailto:support@stonetradex.com}
+    ttl-seconds: ${APP_WEB_PUSH_TTL_SECONDS:300}
   login-rate-limit:
     redis:
       enabled: ${APP_LOGIN_RATE_LIMIT_REDIS_ENABLED:false}

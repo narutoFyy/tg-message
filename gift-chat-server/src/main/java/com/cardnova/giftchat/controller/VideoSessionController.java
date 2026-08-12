@@ -2,9 +2,11 @@ package com.cardnova.giftchat.controller;
 
 import com.cardnova.giftchat.api.ApiResponse;
 import com.cardnova.giftchat.dto.CreateVideoSessionRequest;
+import com.cardnova.giftchat.dto.ClaimVideoRingRequest;
 import com.cardnova.giftchat.dto.UpdateVideoSessionStatusRequest;
 import com.cardnova.giftchat.model.VideoSessionBootstrap;
 import com.cardnova.giftchat.model.VideoSessionItem;
+import com.cardnova.giftchat.model.VideoRingClaimResult;
 import com.cardnova.giftchat.service.VideoSessionService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -47,5 +49,13 @@ public class VideoSessionController {
         @Valid @RequestBody UpdateVideoSessionStatusRequest request
     ) {
         return ApiResponse.success("video_session_status_updated", videoSessionService.updateStatus(sessionId, request.status()));
+    }
+
+    @PostMapping("/{sessionId}/ring-claim")
+    public ApiResponse<VideoRingClaimResult> claimRing(
+        @PathVariable String sessionId,
+        @Valid @RequestBody ClaimVideoRingRequest request
+    ) {
+        return ApiResponse.success("video_ring_claimed", videoSessionService.claimRing(sessionId, request));
     }
 }

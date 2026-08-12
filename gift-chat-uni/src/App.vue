@@ -1,10 +1,33 @@
 <script setup lang="ts">
-import { onLaunch } from '@dcloudio/uni-app'
+import { watch } from 'vue'
+import { onLaunch, onShow } from '@dcloudio/uni-app'
+import { useAppStore } from '@/store/app'
+import {
+  initializeGlobalSupportNotifications,
+  syncGlobalSupportNotifications
+} from '@/utils/globalSupportNotifications'
 import { registerNativePushDevice } from '@/utils/push'
 
+const store = useAppStore()
+
 onLaunch(() => {
+  initializeGlobalSupportNotifications()
   registerNativePushDevice().catch(() => {})
 })
+
+onShow(() => {
+  syncGlobalSupportNotifications()
+})
+
+watch(
+  () => [
+    store.state.currentUser?.accessToken || '',
+    store.state.currentUser?.roleCode || '',
+    store.state.supportConversationId,
+    store.state.supportConversations.map((item) => item.conversationId).join('|')
+  ],
+  () => syncGlobalSupportNotifications()
+)
 </script>
 
 <style lang="scss">

@@ -46,6 +46,15 @@ public class VideoSessionEntity {
     @Column(name = "ended_at")
     private LocalDateTime endedAt;
 
+    @Column(name = "ringing_device_id", length = 64)
+    private String ringingDeviceId;
+
+    @Column(name = "ringing_device_type", length = 16)
+    private String ringingDeviceType;
+
+    @Column(name = "ringing_claimed_at")
+    private LocalDateTime ringingClaimedAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -130,6 +139,30 @@ public class VideoSessionEntity {
 
     public void setEndedAt(LocalDateTime endedAt) {
         this.endedAt = endedAt;
+    }
+
+    public String getRingingDeviceId() {
+        return ringingDeviceId;
+    }
+
+    public void setRingingDeviceId(String ringingDeviceId) {
+        this.ringingDeviceId = ringingDeviceId;
+    }
+
+    public String getRingingDeviceType() {
+        return ringingDeviceType;
+    }
+
+    public void setRingingDeviceType(String ringingDeviceType) {
+        this.ringingDeviceType = ringingDeviceType;
+    }
+
+    public LocalDateTime getRingingClaimedAt() {
+        return ringingClaimedAt;
+    }
+
+    public void setRingingClaimedAt(LocalDateTime ringingClaimedAt) {
+        this.ringingClaimedAt = ringingClaimedAt;
     }
 
     public LocalDateTime getCreatedAt() {

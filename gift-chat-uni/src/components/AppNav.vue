@@ -7,7 +7,7 @@
     <view :class="['tab-item', 'nav-chat', current === 'chat' && 'active']" @click="go('/pages/support/index')">
       <view class="tab-icon-wrap">
         <image class="tab-icon-image" :src="current === 'chat' ? navIcons.chat.active : navIcons.chat.inactive" mode="aspectFit" />
-        <view v-if="store.state.supportUnreadCount > 0" class="tab-unread-badge">{{ store.state.supportUnreadCount > 99 ? '99+' : store.state.supportUnreadCount }}</view>
+        <view v-if="store.state.supportUnreadCount > 0" class="tab-unread-badge" aria-label="Unread support messages" />
       </view>
       <text :class="['tab-label', current === 'chat' && 'active']">Chat</text>
     </view>
@@ -113,20 +113,12 @@ function go(url: string) {
   position: absolute;
   top: -13rpx;
   right: -20rpx;
-  min-width: 30rpx;
-  height: 30rpx;
-  padding: 0 7rpx;
+  width: 18rpx;
+  height: 18rpx;
   box-sizing: border-box;
   border: 3rpx solid #ffffff;
-  border-radius: 16rpx;
+  border-radius: 50%;
   background: #e5484d;
-  color: #ffffff;
-  font-size: 17rpx;
-  font-weight: 800;
-  line-height: 24rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .tab-label {

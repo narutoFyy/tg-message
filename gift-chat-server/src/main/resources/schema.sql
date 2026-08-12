@@ -399,6 +399,9 @@ CREATE TABLE IF NOT EXISTS video_session (
     receiver_user_id VARCHAR(36) NOT NULL,
     status_code VARCHAR(32) NOT NULL,
     vendor_code VARCHAR(32) NOT NULL,
+    ringing_device_id VARCHAR(64),
+    ringing_device_type VARCHAR(16),
+    ringing_claimed_at TIMESTAMP,
     started_at TIMESTAMP NULL,
     ended_at TIMESTAMP NULL,
     created_at TIMESTAMP NOT NULL,
@@ -601,4 +604,34 @@ CREATE TABLE IF NOT EXISTS user_hidden_record (
     restored_at TIMESTAMP,
     CONSTRAINT fk_user_hidden_record_user FOREIGN KEY (user_id) REFERENCES app_user (id),
     CONSTRAINT ux_user_hidden_record UNIQUE (user_id, target_type, target_id, hidden_scope)
+);
+
+CREATE TABLE IF NOT EXISTS wallet_operation (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    operator_user_id VARCHAR(36) NOT NULL,
+    action_type VARCHAR(32) NOT NULL,
+    amount_delta DECIMAL(18, 2) NOT NULL,
+    currency_code VARCHAR(16) NOT NULL,
+    reference_id VARCHAR(64),
+    note VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_wallet_operation_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    CONSTRAINT fk_wallet_operation_operator FOREIGN KEY (operator_user_id) REFERENCES app_user (id),
+    INDEX idx_wallet_operation_user_created (user_id, created_at)
+);
+
+CREATE TABLE IF NOT EXISTS web_push_subscription (
+    id VARCHAR(68) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    endpoint VARCHAR(2048) NOT NULL,
+    p256dh_key VARCHAR(255) NOT NULL,
+    auth_key VARCHAR(255) NOT NULL,
+    user_agent VARCHAR(255),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    last_seen_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    CONSTRAINT fk_web_push_subscription_user FOREIGN KEY (user_id) REFERENCES app_user (id),
+    INDEX idx_web_push_subscription_user_enabled (user_id, enabled)
 );

@@ -47,6 +47,7 @@ public class PersistentSupportService {
     private final ConversationReadService conversationReadService;
     private final RealtimeChatService realtimeChatService;
     private final TencentMessageMirrorDispatcher tencentMessageMirrorDispatcher;
+    private final WebPushNotificationDispatcher webPushNotificationDispatcher;
     private final MessageRateLimitService messageRateLimitService;
     private final UserPresenceService userPresenceService;
     private final UserRepository userRepository;
@@ -67,6 +68,7 @@ public class PersistentSupportService {
         ConversationReadService conversationReadService,
         RealtimeChatService realtimeChatService,
         TencentMessageMirrorDispatcher tencentMessageMirrorDispatcher,
+        WebPushNotificationDispatcher webPushNotificationDispatcher,
         MessageRateLimitService messageRateLimitService,
         UserPresenceService userPresenceService,
         UserRepository userRepository,
@@ -86,6 +88,7 @@ public class PersistentSupportService {
         this.conversationReadService = conversationReadService;
         this.realtimeChatService = realtimeChatService;
         this.tencentMessageMirrorDispatcher = tencentMessageMirrorDispatcher;
+        this.webPushNotificationDispatcher = webPushNotificationDispatcher;
         this.messageRateLimitService = messageRateLimitService;
         this.userPresenceService = userPresenceService;
         this.userRepository = userRepository;
@@ -301,6 +304,12 @@ public class PersistentSupportService {
 
         ChatMessage message = normalizeOwnSupportMessage(saved);
         mirrorAfterCommit(saved);
+        if (isStaff(currentUser)) {
+            webPushNotificationDispatcher.dispatchAfterCommit(
+                conversation.getCustomerUser().getId(),
+                conversation.getId()
+            );
+        }
         realtimeChatService.broadcast(
             RealtimeChatService.supportChannel(conversationId),
             currentUser.getId(),
@@ -713,6 +722,12 @@ public class PersistentSupportService {
     private String resolveAuthor(SupportMessageEntity message, UserEntity currentUser) {
         if (message.getSenderUser() == null) {
             return "system";
+        }
+        if (isStaff(currentUser)) {
+            String senderRole = message.getSenderRole() == null ? "" : message.getSenderRole();
+            return "SUPPORT".equalsIgnoreCase(senderRole) || "ADMIN".equalsIgnoreCase(senderRole)
+                ? "me"
+                : "support";
         }
         if (message.getSenderUser().getId().equals(currentUser.getId())) {
             return "me";

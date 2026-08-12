@@ -1,4 +1,4 @@
-const CACHE_NAME = "xcard-pwa-v3";
+const CACHE_NAME = "xcard-pwa-v4";
 const APP_SHELL = [
   "/",
   "/install/",
@@ -77,4 +77,48 @@ self.addEventListener("fetch", (event) => {
       }),
     );
   }
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_error) {
+    payload = {};
+  }
+
+  const targetUrl = typeof payload.url === "string" && payload.url.startsWith("/")
+    ? payload.url
+    : "/#/pages/support/index";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      if (clients.some((client) => client.visibilityState === "visible")) return undefined;
+      return self.registration.showNotification("Xcard", {
+        body: "\u60a8\u6536\u5230\u4e86\u4e00\u6761\u6d88\u606f",
+        icon: "/static/pwa/icons/xcard-192.png",
+        badge: "/static/pwa/icons/xcard-192.png",
+        tag: "support-message",
+        renotify: true,
+        data: { url: targetUrl },
+      });
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data && event.notification.data.url
+    ? event.notification.data.url
+    : "/#/pages/support/index";
+  const absoluteUrl = new URL(targetUrl, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
+      for (const client of clients) {
+        if ("navigate" in client) await client.navigate(absoluteUrl);
+        if ("focus" in client) return client.focus();
+      }
+      return self.clients.openWindow(absoluteUrl);
+    }),
+  );
 });

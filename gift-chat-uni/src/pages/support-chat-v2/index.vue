@@ -347,28 +347,53 @@
         <view class="profile-section ledger-section">
           <view class="section-head">
             <text class="section-title">{{ ledgerTitleText }}</text>
-            <text class="section-count">{{ supportLedger?.summary.userCount || 0 }}</text>
           </view>
           <view class="ledger-summary-grid">
             <view class="ledger-summary-item">
-              <text class="metric-label">{{ workbenchText.available }}</text>
-              <text class="metric-value">{{ supportLedger?.summary.availableTotal || '0.00' }}</text>
+              <view class="metric-label-row">
+                <text class="metric-label">{{ workbenchText.available }}</text>
+                <view class="wallet-inline-actions">
+                  <button
+                    class="wallet-icon-button add"
+                    :disabled="walletActionSubmitting"
+                    :title="walletAddLabel"
+                    :aria-label="walletAddLabel"
+                    @click.stop="openWalletAdjustment('ADD')"
+                  >+</button>
+                  <button
+                    class="wallet-icon-button subtract"
+                    :disabled="walletActionSubmitting"
+                    :title="walletSubtractLabel"
+                    :aria-label="walletSubtractLabel"
+                    @click.stop="openWalletAdjustment('SUBTRACT')"
+                  >-</button>
+                </view>
+              </view>
+              <text class="metric-value">{{ profile.balance.availableTotal }}</text>
             </view>
             <view class="ledger-summary-item locked-metric">
-              <text class="metric-label">{{ lockedBalanceText }}</text>
-              <text class="metric-value">{{ supportLedger?.summary.lockedTotal || '0.00' }}</text>
+              <view class="metric-label-row">
+                <text class="metric-label">{{ lockedBalanceText }}</text>
+                <button
+                  v-if="canUnlockLockedBalance"
+                  class="wallet-unlock-button"
+                  :disabled="walletUnlockSubmitting"
+                  @click.stop="confirmUnlockLockedBalance"
+                >{{ walletUnlockSubmitting ? walletUnlockingLabel : walletUnlockLabel }}</button>
+              </view>
+              <text class="metric-value">{{ profile.balance.lockedTotal }}</text>
             </view>
             <view class="ledger-summary-item">
               <text class="metric-label">{{ workbenchText.pendingBalance }}</text>
-              <text class="metric-value">{{ supportLedger?.summary.pendingTotal || '0.00' }}</text>
+              <text class="metric-value">{{ profile.balance.pendingTotal }}</text>
             </view>
             <view class="ledger-summary-item">
               <text class="metric-label">{{ workbenchText.pendingWithdrawal }}</text>
-              <text class="metric-value">{{ supportLedger?.summary.pendingWithdrawalTotal || '0.00' }}</text>
+              <text class="metric-value">{{ profile.balance.pendingWithdrawalTotal }}</text>
             </view>
             <view class="ledger-summary-item">
               <text class="metric-label">{{ workbenchText.withdrawn }}</text>
-              <text class="metric-value">{{ supportLedger?.summary.withdrawnTotal || '0.00' }}</text>
+              <text class="metric-value">{{ profile.balance.withdrawnTotal }}</text>
             </view>
           </view>
           <view v-if="store.state.supportLedgerLoading" class="mini-empty">{{ ledgerLoadingText }}</view>
@@ -480,29 +505,6 @@
             <text class="work-line">{{ risk.reason }}</text>
             <text class="work-line">{{ risk.bankName }} / {{ risk.accountName }} / {{ risk.accountNumber }}</text>
             <text class="work-line">{{ risk.phoneCountryCode || '-' }} / {{ risk.assignedAgent || '-' }}</text>
-          </view>
-        </view>
-
-        <view class="profile-section metric-grid">
-          <view class="metric-item">
-            <text class="metric-label">{{ workbenchText.available }}</text>
-            <text class="metric-value">{{ profile.balance.availableTotal }}</text>
-          </view>
-          <view class="metric-item locked-metric">
-            <text class="metric-label">{{ lockedBalanceText }}</text>
-            <text class="metric-value">{{ profile.balance.lockedTotal }}</text>
-          </view>
-          <view class="metric-item">
-            <text class="metric-label">{{ workbenchText.pendingBalance }}</text>
-            <text class="metric-value">{{ profile.balance.pendingTotal }}</text>
-          </view>
-          <view class="metric-item">
-            <text class="metric-label">{{ workbenchText.pendingWithdrawal }}</text>
-            <text class="metric-value">{{ profile.balance.pendingWithdrawalTotal }}</text>
-          </view>
-          <view class="metric-item">
-            <text class="metric-label">{{ workbenchText.withdrawn }}</text>
-            <text class="metric-value">{{ profile.balance.withdrawnTotal }}</text>
           </view>
         </view>
 
@@ -737,6 +739,41 @@
       </view>
     </view>
 
+    <view v-if="walletDialogOpen" class="settlement-mask" @click="closeWalletDialog">
+      <view class="settlement-dialog wallet-dialog" @click.stop>
+        <view class="settlement-dialog-head">
+          <view>
+            <text class="settlement-dialog-kicker">{{ walletDialogKicker }}</text>
+            <text class="settlement-dialog-title">{{ profileDisplayName }}</text>
+          </view>
+          <view class="settlement-dialog-close" :title="walletCancelLabel" @click="closeWalletDialog">×</view>
+        </view>
+
+        <view class="settlement-estimate">
+          <text>{{ workbenchText.available }}</text>
+          <text>{{ profile?.balance.availableTotal || '0.00' }}</text>
+        </view>
+
+        <label class="settlement-field">
+          <text>{{ walletAmountLabel }}</text>
+          <input v-model="walletForm.amount" type="digit" placeholder="0.00" />
+        </label>
+        <label class="settlement-field">
+          <text>{{ walletReasonLabel }}</text>
+          <textarea v-model="walletForm.reason" maxlength="255" :placeholder="walletReasonPlaceholder" />
+        </label>
+
+        <text v-if="walletError" class="settlement-error">{{ walletError }}</text>
+
+        <view class="settlement-dialog-actions">
+          <button class="settlement-button secondary" :disabled="walletActionSubmitting" @click="closeWalletDialog">{{ walletCancelLabel }}</button>
+          <button class="settlement-button primary" :disabled="walletActionSubmitting" @click="submitWalletAdjustment">
+            {{ walletActionSubmitting ? walletSavingLabel : walletConfirmLabel }}
+          </button>
+        </view>
+      </view>
+    </view>
+
     <view v-if="incomingVideoInvite" class="incoming-call-mask">
       <view class="incoming-call-dialog">
         <text class="incoming-call-title">Video call</text>
@@ -759,10 +796,11 @@ import ComposerAttachmentPreview from '@/components/chat/ComposerAttachmentPrevi
 import { useComposerAttachments, type ComposerAttachmentKind } from '@/components/chat/useComposerAttachments'
 import { fetchAgents, fetchStaffVipBenefitClaims, reviewVipBenefitClaim, translateToChinese, uploadImage, uploadVideo } from '@/utils/api'
 import { connectChatSocket } from '@/utils/realtime'
+import { getClientDeviceIdentity } from '@/utils/deviceIdentity'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import { notifyIncomingSupportMessage, requestMessageNotificationPermission, setAppUnreadBadge } from '@/utils/messageNotifications'
 import { cardLogoFor, uiIcons } from '@/utils/art'
-import type { AgentItem, ChatMessage, ChatOrderItem, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
+import type { AgentItem, ChatMessage, ChatOrderItem, PresenceEvent, SupportConversationItem, VideoCallMessagePayload, VideoInviteEvent, VideoRingClaimEvent, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import type { ChatRealtimePayload, ChatReadReceiptEvent } from '@/types'
 import type { LotteryFulfillmentItem, TransactionItem, VipBenefitClaimItem, WithdrawalItem } from '@/types'
 
@@ -815,6 +853,8 @@ const activeConversationId = ref('')
 const showHeaderMenu = ref(false)
 const showComposerTools = ref(false)
 const handledVideoInvites = new Set<string>()
+const videoRingClaimTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const clientDevice = getClientDeviceIdentity()
 const localVideoStatuses = ref<Record<string, VideoSessionItem['status']>>({})
 const incomingVideoInvite = ref<VideoInviteEvent | null>(null)
 const translations = reactive<Record<string, string>>({})
@@ -827,6 +867,15 @@ const unreadSnapshot = new Map<string, number>()
 let unreadSnapshotReady = false
 const vipBenefitClaims = ref<VipBenefitClaimItem[]>([])
 const orderRefreshLoading = ref(false)
+const walletDialogOpen = ref(false)
+const walletActionSubmitting = ref(false)
+const walletUnlockSubmitting = ref(false)
+const walletError = ref('')
+const walletForm = reactive({
+  action: 'ADD' as 'ADD' | 'SUBTRACT',
+  amount: '',
+  reason: ''
+})
 
 const conversation = computed(() => store.state.supportMessages)
 const isAgent = computed(() => store.state.currentUser?.roleCode === 'AGENT' || store.state.currentUser?.roleCode === 'ADMIN')
@@ -942,6 +991,26 @@ const ledgerLoadingText = computed(() => workbenchLanguage.value === 'zh' ? '正
 const ledgerEmptyText = computed(() => workbenchLanguage.value === 'zh' ? '暂无账务数据' : 'No ledger data')
 const orderRefreshLabel = computed(() => workbenchLanguage.value === 'zh' ? '刷新订单' : 'Refresh orders')
 const lockedBalanceText = computed(() => workbenchLanguage.value === 'zh' ? '锁定余额' : 'Locked')
+const walletAddLabel = computed(() => workbenchLanguage.value === 'zh' ? '给用户加余额' : 'Add balance')
+const walletSubtractLabel = computed(() => workbenchLanguage.value === 'zh' ? '从用户余额扣除' : 'Subtract balance')
+const walletUnlockLabel = computed(() => workbenchLanguage.value === 'zh' ? '解锁' : 'Unlock')
+const walletUnlockingLabel = computed(() => workbenchLanguage.value === 'zh' ? '处理中' : 'Unlocking')
+const walletDialogKicker = computed(() => walletForm.action === 'ADD' ? walletAddLabel.value : walletSubtractLabel.value)
+const walletAmountLabel = computed(() => workbenchLanguage.value === 'zh' ? '金额' : 'Amount')
+const walletReasonLabel = computed(() => workbenchLanguage.value === 'zh' ? '操作原因' : 'Reason')
+const walletReasonPlaceholder = computed(() => workbenchLanguage.value === 'zh' ? '必填，方便以后核对账目' : 'Required for the audit trail')
+const walletCancelLabel = computed(() => workbenchLanguage.value === 'zh' ? '取消' : 'Cancel')
+const walletSavingLabel = computed(() => workbenchLanguage.value === 'zh' ? '保存中...' : 'Saving...')
+const walletConfirmLabel = computed(() => {
+  if (workbenchLanguage.value === 'zh') return walletForm.action === 'ADD' ? '确认加款' : '确认扣款'
+  return walletForm.action === 'ADD' ? 'Confirm add' : 'Confirm subtract'
+})
+const canUnlockLockedBalance = computed(() => {
+  const locked = Number((profile.value?.balance.lockedTotal || '').replace(/,/g, ''))
+  return Number.isFinite(locked)
+    && locked > 0
+    && profile.value?.registrationBonus?.status?.toUpperCase() === 'LOCKED'
+})
 const workbenchCopy = {
   zh: {
     customer: '客户',
@@ -1148,6 +1217,7 @@ onUnmounted(() => {
   }
   stopPresenceRefresh()
   stopReadRefresh()
+  clearVideoRingClaimTimers()
   closeSocket()
   detachPasteListener()
   detachContextMenuPointListener()
@@ -1515,6 +1585,83 @@ function closeSettlementDialog() {
   settlementError.value = ''
 }
 
+function openWalletAdjustment(action: 'ADD' | 'SUBTRACT') {
+  if (!profile.value || walletActionSubmitting.value) return
+  walletForm.action = action
+  walletForm.amount = ''
+  walletForm.reason = ''
+  walletError.value = ''
+  walletDialogOpen.value = true
+}
+
+function closeWalletDialog() {
+  if (walletActionSubmitting.value) return
+  walletDialogOpen.value = false
+  walletError.value = ''
+}
+
+async function submitWalletAdjustment() {
+  const conversationId = profile.value?.conversationId
+  const amount = Number(walletForm.amount)
+  const reason = walletForm.reason.trim()
+  if (!conversationId || walletActionSubmitting.value) return
+  if (!Number.isFinite(amount) || amount <= 0) {
+    walletError.value = workbenchLanguage.value === 'zh' ? '请输入大于 0 的金额。' : 'Enter an amount greater than zero.'
+    return
+  }
+  if (!reason) {
+    walletError.value = workbenchLanguage.value === 'zh' ? '请填写操作原因。' : 'Enter a reason for this operation.'
+    return
+  }
+
+  walletActionSubmitting.value = true
+  walletError.value = ''
+  try {
+    await store.adjustSupportCustomerWallet(conversationId, {
+      amount: amount.toFixed(2),
+      action: walletForm.action,
+      reason
+    })
+    walletDialogOpen.value = false
+    uni.showToast({
+      title: workbenchLanguage.value === 'zh' ? '余额已更新' : 'Balance updated',
+      icon: 'success'
+    })
+  } catch (error) {
+    walletError.value = error instanceof Error ? error.message : 'Wallet operation failed'
+  } finally {
+    walletActionSubmitting.value = false
+  }
+}
+
+function confirmUnlockLockedBalance() {
+  const conversationId = profile.value?.conversationId
+  if (!conversationId || !canUnlockLockedBalance.value || walletUnlockSubmitting.value) return
+  uni.showModal({
+    title: walletUnlockLabel.value,
+    content: workbenchLanguage.value === 'zh'
+      ? `确认把 ${profile.value?.balance.lockedTotal || '0.00'} 锁定余额转入可用钱包？`
+      : `Move ${profile.value?.balance.lockedTotal || '0.00'} from locked balance to the available wallet?`,
+    confirmText: walletUnlockLabel.value,
+    confirmColor: '#14854d',
+    success: async (result) => {
+      if (!result.confirm) return
+      walletUnlockSubmitting.value = true
+      try {
+        await store.unlockSupportCustomerLockedBalance(conversationId)
+        uni.showToast({
+          title: workbenchLanguage.value === 'zh' ? '锁定余额已解锁' : 'Locked balance unlocked',
+          icon: 'success'
+        })
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : 'Unlock failed', icon: 'none' })
+      } finally {
+        walletUnlockSubmitting.value = false
+      }
+    }
+  })
+}
+
 async function submitSettlement() {
   const order = settlementTarget.value
   if (!order || settlementSubmitting.value) return
@@ -1751,6 +1898,11 @@ async function answerVideoMessage(message: ChatMessage) {
   const payload = parseVideoCallMessage(message)
   if (!payload?.sessionId) return
   try {
+    const claim = await claimVideoFromMessage(payload.sessionId)
+    if (!claim.claimed) {
+      uni.showToast({ title: 'Call is ringing on another device', icon: 'none' })
+      return
+    }
     setLocalVideoStatus(payload.sessionId, 'joining')
     await store.updateVideoSessionStatus(payload.sessionId, 'joining')
     await openVideoSession(payload.sessionId)
@@ -1763,6 +1915,11 @@ async function rejectVideoMessage(message: ChatMessage) {
   const payload = parseVideoCallMessage(message)
   if (!payload?.sessionId) return
   try {
+    const claim = await claimVideoFromMessage(payload.sessionId)
+    if (!claim.claimed) {
+      uni.showToast({ title: 'Call is ringing on another device', icon: 'none' })
+      return
+    }
     const updated = await store.updateVideoSessionStatus(payload.sessionId, 'rejected')
     setLocalVideoStatus(payload.sessionId, updated.status)
     uni.showToast({ title: '已拒绝视频通话', icon: 'none' })
@@ -1953,6 +2110,11 @@ function connectSocket() {
         return
       }
 
+      if (isVideoRingClaim(payload)) {
+        handleVideoRingClaim(payload)
+        return
+      }
+
       // 处理普通消息
       if (shouldPlayIncomingSound(payload, conversationId)) {
         playIncomingSound()
@@ -2087,6 +2249,7 @@ function startReadRefresh() {
 }
 
 function closeSocket() {
+  clearVideoRingClaimTimers()
   socketTask.value?.close({})
   socketTask.value = null
 }
@@ -2109,6 +2272,10 @@ function isVideoSessionStatus(payload: ChatRealtimePayload): payload is VideoSes
   return 'eventType' in payload && payload.eventType === 'video_session_status'
 }
 
+function isVideoRingClaim(payload: ChatRealtimePayload): payload is VideoRingClaimEvent {
+  return 'eventType' in payload && payload.eventType === 'video_ring_claimed'
+}
+
 function isPresenceEvent(payload: ChatRealtimePayload): payload is PresenceEvent {
   return 'eventType' in payload && payload.eventType === 'presence'
 }
@@ -2116,7 +2283,10 @@ function isPresenceEvent(payload: ChatRealtimePayload): payload is PresenceEvent
 function handleVideoSessionStatus(event: VideoSessionStatusEvent) {
   const updated = store.applyVideoSessionStatus(event)
   setLocalVideoStatus(event.sessionId, updated?.status || event.status)
-  if (incomingVideoInvite.value?.sessionId === event.sessionId && isTerminalVideoStatus(event.status)) {
+  if (event.status !== 'created') {
+    clearVideoRingClaimTimer(event.sessionId)
+  }
+  if (incomingVideoInvite.value?.sessionId === event.sessionId && event.status !== 'created') {
     incomingVideoInvite.value = null
   }
 }
@@ -2129,7 +2299,51 @@ function handleVideoInvite(invite: VideoInviteEvent) {
   const currentUsername = store.state.currentUser?.username
   if (!currentUsername || invite.initiatorUsername === currentUsername) return
 
-  incomingVideoInvite.value = invite
+  const delay = clientDevice.deviceType === 'mobile' ? 0 : 1200
+  const timer = setTimeout(() => {
+    videoRingClaimTimers.delete(invite.sessionId)
+    claimIncomingVideo(invite)
+  }, delay)
+  videoRingClaimTimers.set(invite.sessionId, timer)
+}
+
+async function claimIncomingVideo(invite: VideoInviteEvent) {
+  try {
+    const claim = await store.claimVideoSessionRing(invite.sessionId, clientDevice)
+    if (claim.claimed && claim.deviceId === clientDevice.deviceId) {
+      incomingVideoInvite.value = invite
+    }
+  } catch {
+    // The call may already be answered or claimed by another device.
+  }
+}
+
+function handleVideoRingClaim(event: VideoRingClaimEvent) {
+  if (event.channelId !== activeConversationId.value || event.deviceId === clientDevice.deviceId) return
+  const otherDeviceHasPriority = clientDevice.deviceType === 'desktop' || event.deviceType === 'mobile'
+  if (!otherDeviceHasPriority) return
+  clearVideoRingClaimTimer(event.sessionId)
+  if (incomingVideoInvite.value?.sessionId === event.sessionId) {
+    incomingVideoInvite.value = null
+  }
+}
+
+function clearVideoRingClaimTimer(sessionId: string) {
+  const timer = videoRingClaimTimers.get(sessionId)
+  if (timer) clearTimeout(timer)
+  videoRingClaimTimers.delete(sessionId)
+}
+
+function clearVideoRingClaimTimers() {
+  videoRingClaimTimers.forEach(timer => clearTimeout(timer))
+  videoRingClaimTimers.clear()
+}
+
+async function claimVideoFromMessage(sessionId: string) {
+  if (clientDevice.deviceType === 'desktop') {
+    await new Promise(resolve => setTimeout(resolve, 1200))
+  }
+  return store.claimVideoSessionRing(sessionId, clientDevice)
 }
 
 function isTerminalVideoStatus(status: VideoSessionItem['status']) {
@@ -2859,6 +3073,29 @@ function previewImage(url: string) {
   background: rgba(231, 246, 229, 0.82);
 }
 
+.ledger-summary-item .metric-label-row {
+  gap: 2px;
+}
+
+.ledger-summary-item .wallet-inline-actions {
+  gap: 2px;
+}
+
+.ledger-summary-item .wallet-icon-button {
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.ledger-summary-item .wallet-unlock-button {
+  min-width: 34px;
+  height: 18px;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-size: 9px;
+}
+
 .ledger-row {
   margin-top: 8px;
   padding: 9px 10px;
@@ -2955,6 +3192,69 @@ function previewImage(url: string) {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.metric-label-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.wallet-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.wallet-icon-button,
+.wallet-unlock-button {
+  box-sizing: border-box;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 900;
+}
+
+.wallet-icon-button {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.wallet-icon-button.add {
+  color: #0a7a44;
+  background: rgba(18, 201, 107, 0.14);
+}
+
+.wallet-icon-button.subtract {
+  color: #b53636;
+  background: rgba(214, 66, 66, 0.12);
+}
+
+.wallet-icon-button:disabled,
+.wallet-unlock-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.wallet-unlock-button {
+  min-width: 42px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: #7a4b00;
+  background: rgba(239, 184, 63, 0.2);
+  font-size: 10px;
 }
 
 .order-refresh-button {
@@ -4998,6 +5298,10 @@ function previewImage(url: string) {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 20px 56px rgba(8, 19, 14, 0.24);
+}
+
+.wallet-dialog {
+  max-width: 420px;
 }
 
 .settlement-dialog-head,

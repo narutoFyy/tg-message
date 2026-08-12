@@ -2,6 +2,7 @@ package com.cardnova.giftchat.service;
 
 import com.cardnova.giftchat.api.ForbiddenException;
 import com.cardnova.giftchat.dto.CreateVideoSessionRequest;
+import com.cardnova.giftchat.dto.ClaimVideoRingRequest;
 import com.cardnova.giftchat.entity.DirectMessageEntity;
 import com.cardnova.giftchat.entity.FriendshipEntity;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
@@ -9,6 +10,7 @@ import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.entity.VideoSessionEntity;
 import com.cardnova.giftchat.model.VideoSessionBootstrap;
 import com.cardnova.giftchat.model.VideoSessionItem;
+import com.cardnova.giftchat.model.VideoRingClaimResult;
 import com.cardnova.giftchat.repository.DirectMessageRepository;
 import com.cardnova.giftchat.repository.FriendshipRepository;
 import com.cardnova.giftchat.repository.SupportConversationRepository;
@@ -181,6 +183,56 @@ public class VideoSessionService {
         return toItem(saved);
     }
 
+    @Transactional
+    public VideoRingClaimResult claimRing(String sessionId, ClaimVideoRingRequest request) {
+        UserEntity currentUser = currentUserService.getCurrentUser();
+        VideoSessionEntity entity = videoSessionRepository.findByIdForUpdate(sessionId)
+            .orElseThrow(() -> new IllegalArgumentException("Video session not found"));
+        if (!entity.getReceiverUser().getId().equals(currentUser.getId())) {
+            throw new ForbiddenException("Only the call receiver can claim ringing");
+        }
+
+        String deviceId = request.deviceId().trim();
+        String deviceType = request.deviceType().trim().toLowerCase();
+        if (!"created".equalsIgnoreCase(entity.getStatusCode())) {
+            return ringClaimResult(entity, deviceId);
+        }
+
+        boolean unclaimed = entity.getRingingDeviceId() == null || entity.getRingingDeviceId().isBlank();
+        boolean sameDevice = deviceId.equals(entity.getRingingDeviceId());
+        boolean mobileOverridesDesktop = "mobile".equals(deviceType)
+            && !"mobile".equalsIgnoreCase(entity.getRingingDeviceType());
+        if (unclaimed || sameDevice || mobileOverridesDesktop) {
+            entity.setRingingDeviceId(deviceId);
+            entity.setRingingDeviceType(deviceType.toUpperCase());
+            entity.setRingingClaimedAt(LocalDateTime.now());
+            videoSessionRepository.save(entity);
+            realtimeChatService.broadcastVideoRingClaim(
+                channelKeyFor(entity),
+                entity.getChannelType().toLowerCase(),
+                entity.getChannelId(),
+                entity.getId(),
+                entity.getReceiverUser().getId(),
+                deviceId,
+                deviceType
+            );
+        }
+        return ringClaimResult(entity, deviceId);
+    }
+
+    private VideoRingClaimResult ringClaimResult(VideoSessionEntity entity, String requestingDeviceId) {
+        String claimedDeviceId = entity.getRingingDeviceId() == null ? "" : entity.getRingingDeviceId();
+        String claimedDeviceType = entity.getRingingDeviceType() == null
+            ? ""
+            : entity.getRingingDeviceType().toLowerCase();
+        return new VideoRingClaimResult(
+            entity.getId(),
+            requestingDeviceId.equals(claimedDeviceId),
+            claimedDeviceId,
+            claimedDeviceType
+        );
+    }
+
     private boolean isTerminalStatus(String status) {
         return List.of("ended", "missed", "rejected").contains(status);
     }
@@ -297,6 +349,9 @@ public class VideoSessionService {
         entity.setVendorCode("TRTC");
         entity.setStartedAt(null);
         entity.setEndedAt(null);
+        entity.setRingingDeviceId(null);
+        entity.setRingingDeviceType(null);
+        entity.setRingingClaimedAt(null);
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
         return entity;

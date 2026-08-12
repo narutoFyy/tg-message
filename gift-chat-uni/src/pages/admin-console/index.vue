@@ -47,6 +47,7 @@
         <button :class="['ghost-button', activeTab === 'risks' && 'active-tab']" @click="activeTab = 'risks'">风控安全</button>
         <button :class="['ghost-button', activeTab === 'loans' && 'active-tab']" @click="activeTab = 'loans'">贷款申请</button>
         <button :class="['ghost-button', activeTab === 'rewards' && 'active-tab']" @click="activeTab = 'rewards'">奖励配置</button>
+        <button :class="['ghost-button', activeTab === 'promotion' && 'active-tab']" @click="activeTab = 'promotion'">推广邀请码</button>
         <button :class="['ghost-button', activeTab === 'notifications' && 'active-tab']" @click="activeTab = 'notifications'">系统通知</button>
       </view>
 
@@ -653,6 +654,64 @@
         </view>
       </view>
 
+      <view v-if="activeTab === 'promotion'" class="panel">
+        <text class="section-title">创建推广邀请码</text>
+        <text class="row-meta">输入用户注册时实际填写的邀请码，仅支持字母和数字，保存后统一显示为大写。</text>
+        <view class="promotion-create-row">
+          <input
+            v-model.trim="promotionCodeDraft"
+            class="field-input promotion-code-input"
+            maxlength="32"
+            placeholder="例如 MARY2026"
+            @input="normalizePromotionCodeDraft"
+          />
+          <button class="primary-button promotion-create-button" :disabled="promotionSubmitting" @click="submitPromotionCode">
+            {{ promotionSubmitting ? '创建中...' : '创建邀请码' }}
+          </button>
+        </view>
+      </view>
+
+      <view v-if="activeTab === 'promotion'" class="panel">
+        <text class="section-title">推广邀请码列表</text>
+        <view style="height: 18rpx"></view>
+        <view v-if="!promotionCodes.length" class="empty-row">暂无推广邀请码</view>
+        <view v-for="item in promotionCodes" :key="item.code" class="promotion-code-card">
+          <view class="list-row compact-row">
+            <view>
+              <text class="row-title">{{ item.code }}</text>
+              <text class="row-meta">邀请 {{ item.registrationCount }} 人 / {{ item.enabled ? '启用中' : '已停用' }}</text>
+              <text class="row-meta">创建人 {{ item.createdBy || '-' }} / {{ item.createdAt }}</text>
+            </view>
+            <view class="promotion-actions">
+              <button class="ghost-button mini-button" @click="togglePromotionDetails(item.code)">
+                {{ expandedPromotionCode === item.code ? '收起用户' : '查看用户' }}
+              </button>
+              <button
+                :class="['ghost-button', 'mini-button', item.enabled ? 'danger-button' : 'active-button']"
+                @click="togglePromotionStatus(item)"
+              >
+                {{ item.enabled ? '停用' : '启用' }}
+              </button>
+            </view>
+          </view>
+          <view v-if="expandedPromotionCode === item.code" class="promotion-users">
+            <text v-if="promotionDetailsLoading" class="row-meta">正在加载用户...</text>
+            <template v-else-if="promotionDetails?.users.length">
+              <view v-for="user in promotionDetails.users" :key="user.userId" class="promotion-user-row">
+                <text class="row-title">@{{ user.username }}</text>
+                <text class="row-meta">客服：{{ user.assignedAgent || '待分配' }} / 注册：{{ user.registeredAt }}</text>
+              </view>
+              <view v-if="promotionDetails.totalPages > 1" class="promotion-pagination">
+                <button class="ghost-button mini-button" :disabled="promotionDetails.page <= 0" @click="loadPromotionDetails(item.code, promotionDetails.page - 1)">上一页</button>
+                <text class="row-meta">{{ promotionDetails.page + 1 }} / {{ promotionDetails.totalPages }}</text>
+                <button class="ghost-button mini-button" :disabled="promotionDetails.page + 1 >= promotionDetails.totalPages" @click="loadPromotionDetails(item.code, promotionDetails.page + 1)">下一页</button>
+              </view>
+            </template>
+            <text v-else class="row-meta">暂无注册用户</text>
+          </view>
+        </view>
+      </view>
+
       <text v-if="notice" class="notice-text">{{ notice }}</text>
     </view>
   </view>
@@ -675,6 +734,8 @@ import type {
   LotteryPrizeItem,
   LotteryRecordItem,
   NotificationItem,
+  PromotionInviteCodeItem,
+  PromotionInviteRegistrationPage,
   ReferralRewardConfigItem,
   ReferralRewardItem,
   RegistrationBonusConfigItem,
@@ -692,6 +753,7 @@ import {
   completeTransaction,
   createBroadcast,
   createAgent,
+  createPromotionInviteCode,
   fetchAdminDirectConversations,
   fetchAdminBankAccounts,
   fetchAdminBankAccountRisks,
@@ -705,6 +767,8 @@ import {
   fetchLoans,
   fetchLotteryFulfillments,
   fetchNotifications,
+  fetchPromotionInviteCodes,
+  fetchPromotionInviteRegistrations,
   fetchReferralRewardConfig,
   fetchReferralRewards,
   fetchRegistrationBonusConfigs,
@@ -720,6 +784,7 @@ import {
   updateAdminUserBirthday,
   updateAdminVipBenefitConfig,
   updateLoanStatus,
+  updatePromotionInviteCodeStatus,
   updateReferralRewardConfig,
   updateRegistrationBonusConfig,
   updateTransactionStatus,
@@ -734,7 +799,7 @@ import { useAppStore } from '@/store/app'
 
 const store = useAppStore()
 const isAdminReady = ref(false)
-const activeTab = ref<'users' | 'growth' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'risks' | 'loans' | 'rewards' | 'notifications'>('users')
+const activeTab = ref<'users' | 'growth' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'risks' | 'loans' | 'rewards' | 'promotion' | 'notifications'>('users')
 const notice = ref('')
 const users = ref<AdminUserItem[]>([])
 const agents = ref<AgentItem[]>([])
@@ -757,6 +822,12 @@ const referralRewards = ref<ReferralRewardItem[]>([])
 const registrationBonusConfigs = ref<RegistrationBonusConfigItem[]>([])
 const registrationBonusRecords = ref<RegistrationBonusRecordItem[]>([])
 const notifications = ref<NotificationItem[]>([])
+const promotionCodes = ref<PromotionInviteCodeItem[]>([])
+const promotionCodeDraft = ref('')
+const promotionSubmitting = ref(false)
+const expandedPromotionCode = ref('')
+const promotionDetails = ref<PromotionInviteRegistrationPage | null>(null)
+const promotionDetailsLoading = ref(false)
 const directSearch = ref('')
 const assignDrafts = reactive<Record<string, string>>({})
 const welcomeDrafts = reactive<Record<string, { content: string; enabled: boolean }>>({})
@@ -861,6 +932,7 @@ async function refreshAll() {
       nextRewards,
       nextRegistrationBonusConfigs,
       nextRegistrationBonusRecords,
+      nextPromotionCodes,
       nextNotifications,
       nextBenefitConfig,
       nextVipHolidays,
@@ -882,6 +954,7 @@ async function refreshAll() {
       fetchReferralRewards(),
       fetchRegistrationBonusConfigs(),
       fetchRegistrationBonusRecords(),
+      fetchPromotionInviteCodes(),
       fetchNotifications(),
       fetchAdminVipBenefitConfig(),
       fetchAdminVipHolidays(),
@@ -903,6 +976,7 @@ async function refreshAll() {
     referralRewards.value = nextRewards
     registrationBonusConfigs.value = nextRegistrationBonusConfigs
     registrationBonusRecords.value = nextRegistrationBonusRecords
+    promotionCodes.value = nextPromotionCodes
     applyRewardConfig(nextRewardConfig)
     applyRegistrationBonusConfigs(nextRegistrationBonusConfigs)
     notifications.value = nextNotifications
@@ -931,6 +1005,61 @@ function applyRewardConfig(config: ReferralRewardConfigItem) {
   rewardForm.registrationCashbackAmount = config.registrationCashbackAmount
   rewardForm.tradeRebateEnabled = config.tradeRebateEnabled
   rewardForm.tradeRebatePercent = config.tradeRebatePercent
+}
+
+function normalizePromotionCodeDraft() {
+  promotionCodeDraft.value = promotionCodeDraft.value.toUpperCase()
+}
+
+async function submitPromotionCode() {
+  const code = promotionCodeDraft.value.trim()
+  if (!code) {
+    notice.value = '请输入推广邀请码。'
+    return
+  }
+  promotionSubmitting.value = true
+  try {
+    await createPromotionInviteCode(code)
+    promotionCodeDraft.value = ''
+    notice.value = '推广邀请码已创建。'
+    promotionCodes.value = await fetchPromotionInviteCodes()
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : '创建推广邀请码失败'
+  } finally {
+    promotionSubmitting.value = false
+  }
+}
+
+async function togglePromotionStatus(item: PromotionInviteCodeItem) {
+  try {
+    const updated = await updatePromotionInviteCodeStatus(item.code, !item.enabled)
+    const index = promotionCodes.value.findIndex(code => code.code === updated.code)
+    if (index >= 0) promotionCodes.value.splice(index, 1, updated)
+    notice.value = updated.enabled ? `${updated.code} 已启用。` : `${updated.code} 已停用，历史统计已保留。`
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : '更新邀请码状态失败'
+  }
+}
+
+async function togglePromotionDetails(code: string) {
+  if (expandedPromotionCode.value === code) {
+    expandedPromotionCode.value = ''
+    promotionDetails.value = null
+    return
+  }
+  expandedPromotionCode.value = code
+  await loadPromotionDetails(code, 0)
+}
+
+async function loadPromotionDetails(code: string, page: number) {
+  promotionDetailsLoading.value = true
+  try {
+    promotionDetails.value = await fetchPromotionInviteRegistrations(code, page, 20)
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : '加载邀请用户失败'
+  } finally {
+    promotionDetailsLoading.value = false
+  }
 }
 
 function applyRegistrationBonusConfigs(configs: RegistrationBonusConfigItem[]) {
@@ -1955,6 +2084,80 @@ async function assignConversation(conversationId: string) {
   text-align: center;
   font-size: 24rpx;
   color: #5d646d;
+}
+
+.promotion-create-row {
+  display: flex;
+  gap: 14rpx;
+  align-items: center;
+  margin-top: 18rpx;
+}
+
+.promotion-code-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.promotion-create-button {
+  width: 220rpx;
+  margin: 0;
+}
+
+.promotion-code-card {
+  border-top: 1rpx solid #e9edf1;
+}
+
+.promotion-actions,
+.promotion-pagination {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.promotion-users {
+  padding: 0 18rpx 18rpx;
+  background: #f7f9fa;
+}
+
+.promotion-user-row {
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid #e4e9ed;
+}
+
+.promotion-pagination {
+  justify-content: flex-end;
+  padding-top: 14rpx;
+}
+
+.empty-row {
+  padding: 24rpx 0;
+  color: #818891;
+  font-size: 24rpx;
+  text-align: center;
+}
+
+.danger-button {
+  color: #b42318;
+  border-color: #f0b7b2;
+  background: #fff3f2;
+}
+
+.active-button {
+  color: #166534;
+  border-color: #a9d8b4;
+  background: #f0fbf3;
+}
+
+@media (max-width: 640px) {
+  .promotion-create-row,
+  .promotion-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .promotion-create-button {
+    width: 100%;
+  }
 }
 
 @media (max-width: 760px) {

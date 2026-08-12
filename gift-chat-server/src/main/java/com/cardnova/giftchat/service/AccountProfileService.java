@@ -18,19 +18,22 @@ public class AccountProfileService {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final CountryCodeService countryCodeService;
+    private final InviteCodeService inviteCodeService;
 
     public AccountProfileService(
         CurrentUserService currentUserService,
         UploadAssetRepository uploadAssetRepository,
         UserRepository userRepository,
         JwtService jwtService,
-        CountryCodeService countryCodeService
+        CountryCodeService countryCodeService,
+        InviteCodeService inviteCodeService
     ) {
         this.currentUserService = currentUserService;
         this.uploadAssetRepository = uploadAssetRepository;
         this.userRepository = userRepository;
         this.jwtService = jwtService;
         this.countryCodeService = countryCodeService;
+        this.inviteCodeService = inviteCodeService;
     }
 
     public LoginResponse currentProfile() {
@@ -90,6 +93,7 @@ public class AccountProfileService {
             user.getPhone(),
             user.getAvatarUrl() == null ? "" : user.getAvatarUrl(),
             user.getInviteCode() == null ? "" : user.getInviteCode(),
+            inviteCodeService.invitedByLabel(user),
             country == null ? "" : country.code(),
             country == null ? "" : country.countryName(),
             country == null ? "" : country.currencyCode(),

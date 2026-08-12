@@ -9,6 +9,8 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface UserRepository extends JpaRepository<UserEntity, String> {
 
@@ -33,6 +35,10 @@ public interface UserRepository extends JpaRepository<UserEntity, String> {
     Optional<UserEntity> findByInviteCode(String inviteCode);
 
     List<UserEntity> findByReferredByUserId(String referredByUserId);
+
+    Page<UserEntity> findByRegistrationInviteCode_CodeOrderByCreatedAtDesc(String inviteCode, Pageable pageable);
+
+    long countByRegistrationInviteCode_Code(String inviteCode);
 
     List<UserEntity> findByRoleCodeOrderByCreatedAtDesc(String roleCode);
 

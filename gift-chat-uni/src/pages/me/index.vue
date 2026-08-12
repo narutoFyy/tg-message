@@ -23,6 +23,7 @@
             <text class="invite">Invite code: {{ inviteCode }}</text>
             <image class="copy-icon" :src="uiIcons.copy" mode="aspectFit" />
           </view>
+          <text class="invited-by">Invited by: {{ invitedBy }}</text>
         </view>
       </view>
 
@@ -174,6 +175,7 @@ const avatarSrc = computed(() => {
   return avatarUrl ? resolveMediaUrl(avatarUrl) : uiIcons.user
 })
 const inviteCode = computed(() => store.state.currentUser?.inviteCode || 'Not available')
+const invitedBy = computed(() => store.state.currentUser?.invitedBy || 'Direct registration')
 
 const completedPayout = computed(() =>
   store.state.transactions
@@ -354,6 +356,13 @@ function shareInvite() {
 
 .profile-copy {
   min-width: 0;
+}
+
+.invited-by {
+  display: block;
+  margin-top: 8rpx;
+  color: #6e7772;
+  font-size: 22rpx;
 }
 
 .profile-name {

@@ -25,6 +25,8 @@ import type {
   LotteryWinnerItem,
   NotificationItem,
   PushDeviceItem,
+  PromotionInviteCodeItem,
+  PromotionInviteRegistrationPage,
   WebPushConfiguration,
   WebPushSubscriptionItem,
   ReferralRewardConfigItem,
@@ -667,6 +669,29 @@ export function updateReferralRewardConfig(payload: {
 
 export function fetchReferralRewards() {
   return request<ReferralRewardItem[]>('/admin/referral-rewards')
+}
+
+export function fetchPromotionInviteCodes() {
+  return request<PromotionInviteCodeItem[]>('/admin/promotion-invite-codes')
+}
+
+export function createPromotionInviteCode(code: string) {
+  return request<PromotionInviteCodeItem>('/admin/promotion-invite-codes', 'POST', { code })
+}
+
+export function updatePromotionInviteCodeStatus(code: string, enabled: boolean) {
+  return request<PromotionInviteCodeItem>(
+    `/admin/promotion-invite-codes/${encodeURIComponent(code)}/status`,
+    'POST',
+    { enabled }
+  )
+}
+
+export function fetchPromotionInviteRegistrations(code: string, page = 0, pageSize = 20) {
+  const query = `?page=${encodeURIComponent(String(page))}&pageSize=${encodeURIComponent(String(pageSize))}`
+  return request<PromotionInviteRegistrationPage>(
+    `/admin/promotion-invite-codes/${encodeURIComponent(code)}/registrations${query}`
+  )
 }
 
 export function fetchRegistrationBonusConfigs() {

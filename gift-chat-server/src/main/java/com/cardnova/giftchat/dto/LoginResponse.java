@@ -7,6 +7,7 @@ public record LoginResponse(
     String phone,
     String avatarUrl,
     String inviteCode,
+    String invitedBy,
     String countryCode,
     String countryName,
     String currencyCode,

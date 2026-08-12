@@ -643,6 +643,7 @@ export interface SupportCustomerInfo {
   online: boolean
   assignedAgent: string
   referrerUsername: string
+  invitedBy: string
   lotteryAccess: LotteryAccessInfo
   createdAt: string
   updatedAt: string
@@ -729,6 +730,7 @@ export interface SessionUser {
   phone?: string
   avatarUrl?: string
   inviteCode?: string
+  invitedBy?: string
   countryCode?: string
   countryName?: string
   currencyCode?: string
@@ -758,6 +760,32 @@ export interface ReferralRewardItem {
   ratePercent: string
   status: string
   createdAt: string
+}
+
+export interface PromotionInviteCodeItem {
+  code: string
+  type: 'promotion'
+  enabled: boolean
+  registrationCount: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PromotionInviteRegistrationItem {
+  userId: string
+  username: string
+  assignedAgent: string
+  registeredAt: string
+}
+
+export interface PromotionInviteRegistrationPage {
+  code: string
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+  users: PromotionInviteRegistrationItem[]
 }
 
 export interface RegistrationBonusConfigItem {

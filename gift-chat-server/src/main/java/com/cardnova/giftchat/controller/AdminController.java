@@ -3,18 +3,22 @@ package com.cardnova.giftchat.controller;
 import com.cardnova.giftchat.api.ApiResponse;
 import com.cardnova.giftchat.dto.AssignSupportConversationRequest;
 import com.cardnova.giftchat.dto.CreateAgentRequest;
+import com.cardnova.giftchat.dto.CreatePromotionInviteCodeRequest;
 import com.cardnova.giftchat.dto.ResetLotteryEligibilityRequest;
 import com.cardnova.giftchat.dto.UpdateLotteryRecordStatusRequest;
 import com.cardnova.giftchat.dto.UpdateAgentWelcomeMessageRequest;
 import com.cardnova.giftchat.dto.UpdateRegistrationBonusConfigRequest;
 import com.cardnova.giftchat.dto.UpdateReferralRewardConfigRequest;
 import com.cardnova.giftchat.dto.UpdateUserStatusRequest;
+import com.cardnova.giftchat.dto.UpdatePromotionInviteCodeStatusRequest;
 import com.cardnova.giftchat.model.AdminDirectConversation;
 import com.cardnova.giftchat.model.AdminUserItem;
 import com.cardnova.giftchat.model.AgentItem;
 import com.cardnova.giftchat.model.BankAccountItem;
 import com.cardnova.giftchat.model.BankAccountRiskMatch;
 import com.cardnova.giftchat.model.LotteryRecordItem;
+import com.cardnova.giftchat.model.PromotionInviteCodeItem;
+import com.cardnova.giftchat.model.PromotionInviteRegistrationPage;
 import com.cardnova.giftchat.model.ReferralRewardConfigItem;
 import com.cardnova.giftchat.model.ReferralRewardItem;
 import com.cardnova.giftchat.model.RegistrationBonusConfigItem;
@@ -25,6 +29,7 @@ import com.cardnova.giftchat.service.BankAccountService;
 import com.cardnova.giftchat.service.BankAccountRiskService;
 import com.cardnova.giftchat.service.CurrentUserService;
 import com.cardnova.giftchat.service.LotteryService;
+import com.cardnova.giftchat.service.PromotionInviteCodeAdminService;
 import com.cardnova.giftchat.service.ReferralRewardService;
 import com.cardnova.giftchat.service.RegistrationBonusService;
 import jakarta.validation.Valid;
@@ -49,6 +54,7 @@ public class AdminController {
     private final BankAccountRiskService bankAccountRiskService;
     private final CurrentUserService currentUserService;
     private final LotteryService lotteryService;
+    private final PromotionInviteCodeAdminService promotionInviteCodeAdminService;
 
     public AdminController(
         AdminService adminService,
@@ -57,7 +63,8 @@ public class AdminController {
         BankAccountService bankAccountService,
         BankAccountRiskService bankAccountRiskService,
         CurrentUserService currentUserService,
-        LotteryService lotteryService
+        LotteryService lotteryService,
+        PromotionInviteCodeAdminService promotionInviteCodeAdminService
     ) {
         this.adminService = adminService;
         this.referralRewardService = referralRewardService;
@@ -66,6 +73,7 @@ public class AdminController {
         this.bankAccountRiskService = bankAccountRiskService;
         this.currentUserService = currentUserService;
         this.lotteryService = lotteryService;
+        this.promotionInviteCodeAdminService = promotionInviteCodeAdminService;
     }
 
     @GetMapping("/users")
@@ -132,6 +140,38 @@ public class AdminController {
     @GetMapping("/referral-rewards")
     public ApiResponse<List<ReferralRewardItem>> referralRewards() {
         return ApiResponse.success(referralRewardService.rewards());
+    }
+
+    @GetMapping("/promotion-invite-codes")
+    public ApiResponse<List<PromotionInviteCodeItem>> promotionInviteCodes() {
+        return ApiResponse.success(promotionInviteCodeAdminService.list());
+    }
+
+    @PostMapping("/promotion-invite-codes")
+    public ApiResponse<PromotionInviteCodeItem> createPromotionInviteCode(
+        @Valid @RequestBody CreatePromotionInviteCodeRequest request
+    ) {
+        return ApiResponse.success("promotion_invite_code_created", promotionInviteCodeAdminService.create(request));
+    }
+
+    @PostMapping("/promotion-invite-codes/{code}/status")
+    public ApiResponse<PromotionInviteCodeItem> updatePromotionInviteCodeStatus(
+        @PathVariable String code,
+        @Valid @RequestBody UpdatePromotionInviteCodeStatusRequest request
+    ) {
+        return ApiResponse.success(
+            "promotion_invite_code_status_updated",
+            promotionInviteCodeAdminService.updateStatus(code, request.enabled())
+        );
+    }
+
+    @GetMapping("/promotion-invite-codes/{code}/registrations")
+    public ApiResponse<PromotionInviteRegistrationPage> promotionInviteCodeRegistrations(
+        @PathVariable String code,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int pageSize
+    ) {
+        return ApiResponse.success(promotionInviteCodeAdminService.registrations(code, page, pageSize));
     }
 
     @GetMapping("/registration-bonuses/config")

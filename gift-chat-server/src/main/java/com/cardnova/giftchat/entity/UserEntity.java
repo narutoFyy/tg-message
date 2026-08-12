@@ -48,6 +48,10 @@ public class UserEntity {
     @Column(name = "referred_by_user_id", length = 36)
     private String referredByUserId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "registration_invite_code")
+    private InviteCodeEntity registrationInviteCode;
+
     @Column(name = "onboarding_policy_version", nullable = false)
     private int onboardingPolicyVersion = 0;
 
@@ -172,6 +176,9 @@ public class UserEntity {
     public void setReferredByUserId(String referredByUserId) {
         this.referredByUserId = referredByUserId;
     }
+
+    public InviteCodeEntity getRegistrationInviteCode() { return registrationInviteCode; }
+    public void setRegistrationInviteCode(InviteCodeEntity registrationInviteCode) { this.registrationInviteCode = registrationInviteCode; }
 
     public int getOnboardingPolicyVersion() { return onboardingPolicyVersion; }
     public void setOnboardingPolicyVersion(int onboardingPolicyVersion) { this.onboardingPolicyVersion = onboardingPolicyVersion; }

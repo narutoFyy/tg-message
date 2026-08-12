@@ -16,7 +16,6 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -29,29 +28,27 @@ import java.util.UUID;
 public class ReferralRewardService {
 
     private static final String CONFIG_ID = "default";
-    private static final int INVITE_USERNAME_LENGTH = 12;
-    private static final int INVITE_SUFFIX_LENGTH = 3;
-    private static final int INVITE_GENERATION_ATTEMPTS = 100;
-    private static final String INVITE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DecimalFormat MONEY_FORMAT = new DecimalFormat("#,##0.00");
-    private static final SecureRandom INVITE_RANDOM = new SecureRandom();
 
     private final ReferralRewardConfigRepository configRepository;
     private final ReferralRewardRepository rewardRepository;
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
+    private final InviteCodeService inviteCodeService;
 
     public ReferralRewardService(
         ReferralRewardConfigRepository configRepository,
         ReferralRewardRepository rewardRepository,
         UserRepository userRepository,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        InviteCodeService inviteCodeService
     ) {
         this.configRepository = configRepository;
         this.rewardRepository = rewardRepository;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
+        this.inviteCodeService = inviteCodeService;
     }
 
     public ReferralRewardConfigItem config() {
@@ -81,23 +78,14 @@ public class ReferralRewardService {
     }
 
     public String generateInviteCode(String username) {
-        String prefix = inviteUsernamePrefix(username);
-        for (int attempt = 0; attempt < INVITE_GENERATION_ATTEMPTS; attempt++) {
-            String candidate = prefix + randomInviteSuffix();
-            if (userRepository.findByInviteCode(candidate).isEmpty()) {
-                return candidate;
-            }
-        }
-        throw new IllegalStateException("Unable to generate a unique invite code");
+        return inviteCodeService.generatePersonalCode(username);
     }
 
     public UserEntity resolveReferrer(String inviteCode) {
-        String normalized = normalizeInviteCode(inviteCode);
-        if (!StringUtils.hasText(normalized)) {
-            return null;
-        }
-        return userRepository.findByInviteCode(normalized)
-            .orElseThrow(() -> new IllegalArgumentException("Invite code not found"));
+        var resolved = inviteCodeService.resolveForRegistration(inviteCode);
+        return resolved != null && InviteCodeService.PERSONAL.equals(resolved.getCodeType())
+            ? resolved.getOwnerUser()
+            : null;
     }
 
     @Transactional
@@ -246,30 +234,6 @@ public class ReferralRewardService {
             reward.getStatusCode().toLowerCase(Locale.ROOT),
             TIME_FORMATTER.format(reward.getCreatedAt())
         );
-    }
-
-    private String normalizeInviteCode(String value) {
-        return StringUtils.hasText(value)
-            ? value.trim().replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT)
-            : null;
-    }
-
-    private String inviteUsernamePrefix(String username) {
-        String normalized = StringUtils.hasText(username)
-            ? username.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT)
-            : "";
-        if (!StringUtils.hasText(normalized)) {
-            normalized = "USER";
-        }
-        return normalized.substring(0, Math.min(normalized.length(), INVITE_USERNAME_LENGTH));
-    }
-
-    private String randomInviteSuffix() {
-        StringBuilder suffix = new StringBuilder(INVITE_SUFFIX_LENGTH);
-        for (int index = 0; index < INVITE_SUFFIX_LENGTH; index++) {
-            suffix.append(INVITE_CHARACTERS.charAt(INVITE_RANDOM.nextInt(INVITE_CHARACTERS.length())));
-        }
-        return suffix.toString();
     }
 
     private BigDecimal amountFromText(String value) {

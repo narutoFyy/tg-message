@@ -3,6 +3,7 @@ package com.cardnova.giftchat.service;
 import com.cardnova.giftchat.dto.LoginResponse;
 import com.cardnova.giftchat.dto.RegisterRequest;
 import com.cardnova.giftchat.entity.SupportConversationEntity;
+import com.cardnova.giftchat.entity.InviteCodeEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +32,7 @@ public class PersistentAccountService {
     private final ReferralRewardService referralRewardService;
     private final RegistrationBonusService registrationBonusService;
     private final CountryCodeService countryCodeService;
+    private final InviteCodeService inviteCodeService;
 
     public PersistentAccountService(
         UserRepository userRepository,
@@ -43,7 +45,8 @@ public class PersistentAccountService {
         AccountProfileService accountProfileService,
         ReferralRewardService referralRewardService,
         RegistrationBonusService registrationBonusService,
-        CountryCodeService countryCodeService
+        CountryCodeService countryCodeService,
+        InviteCodeService inviteCodeService
     ) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
@@ -56,6 +59,7 @@ public class PersistentAccountService {
         this.referralRewardService = referralRewardService;
         this.registrationBonusService = registrationBonusService;
         this.countryCodeService = countryCodeService;
+        this.inviteCodeService = inviteCodeService;
     }
 
     public Optional<UserEntity> findByUsername(String username) {
@@ -126,6 +130,7 @@ public class PersistentAccountService {
             throw new IllegalArgumentException("Phone already exists");
         }
 
+        InviteCodeEntity registrationInviteCode = inviteCodeService.resolveForRegistration(request.inviteCode());
         UserEntity entity = new UserEntity();
         entity.setId(UUID.randomUUID().toString());
         entity.setUsername(username);
@@ -141,13 +146,17 @@ public class PersistentAccountService {
         entity.setInviteCode(referralRewardService.generateInviteCode(username));
         entity.setOnboardingPolicyVersion(1);
         entity.setLotteryAccessStatus("APPROVED");
-        UserEntity referrer = referralRewardService.resolveReferrer(request.inviteCode());
-        if (referrer != null) {
-            entity.setReferredByUserId(referrer.getId());
+        entity.setRegistrationInviteCode(registrationInviteCode);
+        if (registrationInviteCode != null
+            && InviteCodeService.PERSONAL.equals(registrationInviteCode.getCodeType())
+            && registrationInviteCode.getOwnerUser() != null) {
+            entity.setReferredByUserId(registrationInviteCode.getOwnerUser().getId());
         }
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
-        return userRepository.save(entity);
+        UserEntity saved = userRepository.save(entity);
+        inviteCodeService.registerPersonalCode(saved);
+        return saved;
     }
 
     @Transactional

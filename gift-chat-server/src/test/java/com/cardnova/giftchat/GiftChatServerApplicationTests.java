@@ -822,6 +822,118 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
+    void adminCanCreatePromotionCodeAndInspectBalancedRegistrations() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        String code = "MEDIA" + suffix;
+        String adminToken = loginToken("admin_mia");
+
+        mockMvc.perform(post("/api/admin/promotion-invite-codes")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"%s\"}".formatted(code.toLowerCase())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.code").value(code))
+            .andExpect(jsonPath("$.data.type").value("promotion"))
+            .andExpect(jsonPath("$.data.enabled").value(true))
+            .andExpect(jsonPath("$.data.registrationCount").value(0));
+
+        String username = "promotion_" + suffix.toLowerCase();
+        String promotionUserToken = registerTokenWithInvite(username, code.toLowerCase());
+        UserEntity user = userRepository.findByUsername(username).orElseThrow();
+        assertTrue(user.getReferredByUserId() == null);
+
+        SupportConversationEntity conversation = supportConversationRepository
+            .findFirstByCustomerUser_IdOrderByUpdatedAtDesc(user.getId()).orElseThrow();
+        assertEquals("AUTO_ASSIGNED", conversation.getAssignmentStatus());
+
+        mockMvc.perform(get("/api/account/me")
+                .header("Authorization", bearer(promotionUserToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.invitedBy").value(code));
+
+        mockMvc.perform(get("/api/support/conversations/{conversationId}/customer-profile", conversation.getId())
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.customer.invitedBy").value(code));
+
+        mockMvc.perform(get("/api/admin/promotion-invite-codes/{code}/registrations", code)
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.code").value(code))
+            .andExpect(jsonPath("$.data.total").value(1))
+            .andExpect(jsonPath("$.data.users[0].username").value(username))
+            .andExpect(jsonPath("$.data.users[0].assignedAgent").isNotEmpty());
+
+        mockMvc.perform(get("/api/admin/promotion-invite-codes")
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("\"code\":\"" + code + "\"")))
+            .andExpect(content().string(containsString("\"registrationCount\":1")));
+    }
+
+    @Test
+    void disabledPromotionCodeKeepsHistoryAndRejectsNewRegistrations() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        String code = "PAUSED" + suffix;
+        String adminToken = loginToken("admin_mia");
+
+        mockMvc.perform(post("/api/admin/promotion-invite-codes")
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"%s\"}".formatted(code)))
+            .andExpect(status().isOk());
+
+        String existingUsername = "paused_existing_" + suffix.toLowerCase();
+        registerTokenWithInvite(existingUsername, code);
+
+        mockMvc.perform(post("/api/admin/promotion-invite-codes/{code}/status", code)
+                .header("Authorization", bearer(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":false}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.enabled").value(false))
+            .andExpect(jsonPath("$.data.registrationCount").value(1));
+
+        String rejectedUsername = "paused_rejected_" + suffix.toLowerCase();
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "countryCode": "NG",
+                      "username": "%s",
+                      "email": "%s@example.com",
+                      "password": "demo12345",
+                      "inviteCode": "%s"
+                    }
+                    """.formatted(rejectedUsername, rejectedUsername, code)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Invite code is disabled"));
+
+        assertTrue(userRepository.findByUsername(rejectedUsername).isEmpty());
+        mockMvc.perform(get("/api/admin/promotion-invite-codes/{code}/registrations", code)
+                .header("Authorization", bearer(adminToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.total").value(1))
+            .andExpect(jsonPath("$.data.users[0].username").value(existingUsername));
+    }
+
+    @Test
+    void promotionInviteCodeAdminEndpointsRequireAdmin() throws Exception {
+        String userToken = loginToken("cardnova_user");
+
+        mockMvc.perform(get("/api/admin/promotion-invite-codes")
+                .header("Authorization", bearer(userToken)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("Admin access required"));
+
+        mockMvc.perform(post("/api/admin/promotion-invite-codes")
+                .header("Authorization", bearer(userToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"CREATORONLY\"}"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
     void currencyRatesAreSeparateFromGiftCardPayoutRates() throws Exception {
         String userToken = loginToken("cardnova_user");
         String adminToken = loginToken("admin_mia");
@@ -2870,6 +2982,7 @@ class GiftChatServerApplicationTests {
             .andExpect(jsonPath("$.data.customer.username").value("john_smith"))
             .andExpect(jsonPath("$.data.customer.assignedAgent").value("support_luna"))
             .andExpect(jsonPath("$.data.customer.referrerUsername").value("cardnova_user"))
+            .andExpect(jsonPath("$.data.customer.invitedBy").value("@cardnova_user"))
             .andExpect(jsonPath("$.data.balance.availableTotal").isString())
             .andExpect(jsonPath("$.data.orders").isArray())
             .andExpect(jsonPath("$.data.withdrawals").isArray())
@@ -2881,7 +2994,8 @@ class GiftChatServerApplicationTests {
                 .header("Authorization", bearer(agentToken)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.customer.username").value("mary_jane"))
-            .andExpect(jsonPath("$.data.customer.referrerUsername").value(""));
+            .andExpect(jsonPath("$.data.customer.referrerUsername").value(""))
+            .andExpect(jsonPath("$.data.customer.invitedBy").value(""));
 
         mockMvc.perform(get("/api/support/conversations/support-2/customer-profile")
                 .header("Authorization", bearer(otherAgentToken)))

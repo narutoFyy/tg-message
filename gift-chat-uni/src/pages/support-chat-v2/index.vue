@@ -423,33 +423,33 @@
         </view>
 
         <view class="profile-section">
-          <view class="profile-row">
+          <view class="profile-row copyable-profile-row" @longpress="copyProfileValue('@' + profile.customer.username)">
             <text class="profile-label">{{ workbenchText.username }}</text>
-            <text class="profile-value">@{{ profile.customer.username }}</text>
+            <text class="profile-value copyable-profile-value" user-select>@{{ profile.customer.username }}</text>
           </view>
-          <view class="profile-row">
+          <view class="profile-row copyable-profile-row" @longpress="copyProfileValue(profile.customer.invitedBy || 'Direct registration')">
             <text class="profile-label">Invited by</text>
-            <text class="profile-value">{{ profile.customer.referrerUsername ? '@' + profile.customer.referrerUsername : 'Direct registration' }}</text>
+            <text class="profile-value copyable-profile-value" user-select>{{ profile.customer.invitedBy || 'Direct registration' }}</text>
           </view>
-          <view class="profile-row">
+          <view class="profile-row copyable-profile-row" @longpress="copyProfileValue(profile.customer.assignedAgent || '-')">
             <text class="profile-label">{{ workbenchText.agent }}</text>
-            <text class="profile-value">{{ profile.customer.assignedAgent || '-' }}</text>
+            <text class="profile-value copyable-profile-value" user-select>{{ profile.customer.assignedAgent || '-' }}</text>
           </view>
-          <view class="profile-row">
+          <view class="profile-row copyable-profile-row" @longpress="copyProfileValue(profile.customer.phone || '-')">
             <text class="profile-label">{{ workbenchText.phone }}</text>
-            <text class="profile-value">{{ profile.customer.phone || '-' }}</text>
+            <text class="profile-value copyable-profile-value" user-select>{{ profile.customer.phone || '-' }}</text>
           </view>
-          <view class="profile-row">
+          <view class="profile-row copyable-profile-row" @longpress="copyProfileValue(profile.customer.phoneCountryCode || '-')">
             <text class="profile-label">Country code</text>
-            <text class="profile-value">{{ profile.customer.phoneCountryCode || '-' }}</text>
+            <text class="profile-value copyable-profile-value" user-select>{{ profile.customer.phoneCountryCode || '-' }}</text>
           </view>
-          <view class="profile-row">
+          <view class="profile-row copyable-profile-row" @longpress="copyProfileValue(profile.customer.email || '-')">
             <text class="profile-label">{{ workbenchText.email }}</text>
-            <text class="profile-value">{{ profile.customer.email || '-' }}</text>
+            <text class="profile-value copyable-profile-value" user-select>{{ profile.customer.email || '-' }}</text>
           </view>
-          <view class="profile-row">
+          <view class="profile-row copyable-profile-row" @longpress="copyProfileValue(profile.customer.createdAt)">
             <text class="profile-label">{{ workbenchText.joined }}</text>
-            <text class="profile-value">{{ profile.customer.createdAt }}</text>
+            <text class="profile-value copyable-profile-value" user-select>{{ profile.customer.createdAt }}</text>
           </view>
         </view>
 
@@ -1492,6 +1492,17 @@ function quoteContextMessage() {
     author: message.author,
     content: copyableMessageContent(message)
   }
+}
+
+function copyProfileValue(value: string) {
+  const data = value?.trim()
+  if (!data || data === '-') return
+  uni.setClipboardData({
+    data,
+    success() {
+      uni.showToast({ title: '已复制', icon: 'none' })
+    }
+  })
 }
 
 function handleComposerKeydown(event: KeyboardEvent) {
@@ -3106,6 +3117,16 @@ function previewImage(url: string) {
   padding: 9px 7px;
   border-radius: 8px;
   background: rgba(231, 246, 229, 0.82);
+}
+
+.copyable-profile-value {
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.copyable-profile-row {
+  -webkit-touch-callout: default;
 }
 
 .ledger-summary-item .metric-label-row {

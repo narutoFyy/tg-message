@@ -14,6 +14,7 @@
         <view class="info-row"><text class="info-label">Username</text><text class="value-copy">{{ store.state.currentUser?.username || 'Not signed in' }}</text></view>
         <view class="info-row"><text class="info-label">Email</text><text class="value-copy">{{ store.state.currentUser?.email || 'Not set' }}</text></view>
         <view class="info-row"><text class="info-label">Phone</text><text class="value-copy">{{ store.state.currentUser?.phone || 'Not set' }}</text></view>
+        <view class="info-row"><text class="info-label">Invited by</text><text class="value-copy">{{ invitedBy }}</text></view>
         <view class="info-row"><text class="info-label">Role</text><text class="value-copy">{{ store.state.currentUser?.roleCode || 'Not signed in' }}</text></view>
       </view>
 
@@ -61,6 +62,7 @@ import {
 const store = useAppStore()
 const notice = ref('')
 const inviteCode = computed(() => store.state.currentUser?.inviteCode || 'Unavailable')
+const invitedBy = computed(() => store.state.currentUser?.invitedBy || 'Direct registration')
 const pushBusy = ref(false)
 const pushSwitchKey = ref(0)
 const pushState = ref<WebPushState>({

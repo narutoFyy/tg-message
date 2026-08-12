@@ -83,7 +83,14 @@
               <text></text>
             </view>
           </view>
-          <input v-model="draft" class="message-input" maxlength="2000" placeholder="Type a message..." @focus="closeComposerTools" @confirm="handleSend" />
+          <textarea
+            v-model="draft"
+            class="message-input"
+            maxlength="2000"
+            auto-height
+            placeholder="Type a message..."
+            @focus="closeComposerTools"
+          />
           <view class="send-btn" :class="{ active: canSend }" @click="handleSend">
             <text>Send</text>
           </view>
@@ -229,12 +236,14 @@ onUnmounted(() => {
   stopReadRefresh()
   detachPasteListener()
   detachContextMenuPointListener()
+  detachComposerKeyboardListener()
   setGlobalSupportNotificationsSuspended(false)
 })
 
 onMounted(() => {
   attachPasteListener()
   attachContextMenuPointListener()
+  attachComposerKeyboardListener()
 })
 
 watch(
@@ -288,7 +297,7 @@ function canQuoteMessage(message: ChatMessage) {
 }
 
 function canHideMessage(message: ChatMessage) {
-  return message.author !== 'system' && !message.id.startsWith('local-')
+  return message.author !== 'system'
 }
 
 function rememberContextMenuPoint(event: MouseEvent) {
@@ -360,6 +369,27 @@ function quoteContextMessage() {
   }
 }
 
+function handleComposerKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' || event.shiftKey) return
+  const target = event.target as HTMLElement | null
+  if (!target?.matches('textarea') || !target.closest('.message-input')) return
+  if (!window.matchMedia('(pointer: fine)').matches) return
+  event.preventDefault()
+  handleSend()
+}
+
+function attachComposerKeyboardListener() {
+  // #ifdef H5
+  window.addEventListener('keydown', handleComposerKeydown, true)
+  // #endif
+}
+
+function detachComposerKeyboardListener() {
+  // #ifdef H5
+  window.removeEventListener('keydown', handleComposerKeydown, true)
+  // #endif
+}
+
 function hideContextMessage() {
   const message = messageContextMenu.value?.message
   closeMessageMenu()
@@ -372,6 +402,11 @@ function hideContextMessage() {
     success: async (result) => {
       if (!result.confirm) return
       try {
+        if (message.id.startsWith('local-')) {
+          store.removeSupportMessage(message.id)
+          showNotice('Failed message removed.')
+          return
+        }
         await store.hideRecord({
           targetType: 'MESSAGE',
           targetId: message.id,
@@ -1786,11 +1821,17 @@ function isVideoFileMessage(message: ChatMessage) {
 .message-input {
   flex: 1;
   min-width: 0;
+  min-height: 42px;
+  max-height: 132px;
   padding: 10px 14px;
   border: 1px solid rgba(90, 123, 89, 0.25);
   border-radius: 6px;
   font-size: 14px;
+  line-height: 20px;
   background: rgba(255, 255, 255, 0.9);
+  overflow-y: auto;
+  resize: none;
+  box-sizing: border-box;
 }
 
 .send-btn {

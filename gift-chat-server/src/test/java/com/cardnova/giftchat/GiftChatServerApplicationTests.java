@@ -3150,51 +3150,29 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void newUserNeedsAssignedSupportApprovalBeforeLotteryAccess() throws Exception {
+    void newUserCanUseOneLotteryChanceImmediatelyAfterRegistration() throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String username = "lottery_approval_" + suffix;
         String userToken = registerToken(username);
-        String conversationId = supportConversations(userToken).get(0).path("conversationId").asText();
-        SupportConversationEntity conversation = supportConversationRepository.findById(conversationId).orElseThrow();
-        String assignedAgent = userRepository.findById(conversation.getAssignedAgent().getId()).orElseThrow().getUsername();
-        String otherAgent = "support_luna".equals(assignedAgent) ? "support_angela" : "support_luna";
-
-        mockMvc.perform(get("/api/lottery/eligibility").header("Authorization", bearer(userToken)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.accessStatus").value("pending"))
-            .andExpect(jsonPath("$.data.eligible").value(false))
-            .andExpect(jsonPath("$.data.availableChances").value(0))
-            .andExpect(jsonPath("$.data.message").value(
-                "Lucky Wheel access is pending support approval. Please contact your assigned support agent."
-            ));
-
-        mockMvc.perform(post("/api/lottery/spin").header("Authorization", bearer(userToken)))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.message").value(
-                "Lucky Wheel access is pending support approval. Please contact your assigned support agent."
-            ));
-
-        mockMvc.perform(post("/api/support/conversations/{conversationId}/lottery-access/approve", conversationId)
-                .header("Authorization", bearer(loginToken(otherAgent))))
-            .andExpect(status().isBadRequest());
-
-        mockMvc.perform(post("/api/support/conversations/{conversationId}/lottery-access/approve", conversationId)
-                .header("Authorization", bearer(loginToken(assignedAgent))))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.status").value("approved"))
-            .andExpect(jsonPath("$.data.approvedBy").value(assignedAgent))
-            .andExpect(jsonPath("$.data.canApprove").value(false));
-
-        mockMvc.perform(post("/api/support/conversations/{conversationId}/lottery-access/approve", conversationId)
-                .header("Authorization", bearer(loginToken("admin_mia"))))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.data.approvedBy").value(assignedAgent));
 
         mockMvc.perform(get("/api/lottery/eligibility").header("Authorization", bearer(userToken)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.accessStatus").value("approved"))
             .andExpect(jsonPath("$.data.eligible").value(true))
+            .andExpect(jsonPath("$.data.periodType").value("ONCE"))
+            .andExpect(jsonPath("$.data.periodKey").value("WELCOME"))
             .andExpect(jsonPath("$.data.availableChances").value(1));
+
+        mockMvc.perform(post("/api/lottery/spin").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.eligibility.eligible").value(false))
+            .andExpect(jsonPath("$.data.eligibility.availableChances").value(0));
+
+        mockMvc.perform(get("/api/lottery/eligibility").header("Authorization", bearer(userToken)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.accessStatus").value("approved"))
+            .andExpect(jsonPath("$.data.eligible").value(false))
+            .andExpect(jsonPath("$.data.availableChances").value(0));
     }
 
     @Test
@@ -3614,6 +3592,17 @@ class GiftChatServerApplicationTests {
 
         mockMvc.perform(get("/api/support/conversations")
                 .header("Authorization", bearer(assignedAgentToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString(uniqueMessage)));
+
+        hideRecord(assignedAgentToken, "MESSAGE", messageId, "SINGLE");
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(assignedAgentToken)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString(uniqueMessage))));
+
+        mockMvc.perform(get("/api/support/conversations")
+                .header("Authorization", bearer(adminToken)))
             .andExpect(status().isOk())
             .andExpect(content().string(containsString(uniqueMessage)));
     }

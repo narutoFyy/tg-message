@@ -1210,7 +1210,7 @@ export function useAppStore() {
       state.transactions = state.transactions.filter((item) => item.id !== hidden.targetId)
     }
     if (targetType === 'message') {
-      state.supportMessages = state.supportMessages.filter((item) => item.id !== hidden.targetId)
+      removeSupportMessage(hidden.targetId)
       state.friends.forEach((friend) => {
         friend.messages = friend.messages.filter((item) => item.id !== hidden.targetId)
       })
@@ -1220,6 +1220,14 @@ export function useAppStore() {
       state.friends = state.friends.filter((item) => item.id !== hidden.targetId)
     }
     return hidden
+  }
+
+  function removeSupportMessage(messageId: string) {
+    if (!messageId) return
+    state.supportMessages = state.supportMessages.filter((item) => item.id !== messageId)
+    state.supportConversations.forEach((conversation) => {
+      conversation.messages = conversation.messages.filter((item) => item.id !== messageId)
+    })
   }
 
   async function refreshHiddenRecords() {
@@ -1456,6 +1464,7 @@ export function useAppStore() {
     searchSupportMessages,
     clearSupportSearchResults,
     hideRecord,
+    removeSupportMessage,
     refreshHiddenRecords,
     createBroadcast,
     createVideoSession,

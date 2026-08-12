@@ -713,9 +713,6 @@ public class PersistentSupportService {
     }
 
     private java.util.Set<String> hiddenMessageIds(UserEntity currentUser, java.util.Collection<String> messageIds) {
-        if (!"USER".equalsIgnoreCase(currentUser.getRoleCode())) {
-            return java.util.Set.of();
-        }
         return userHiddenRecordService.hiddenTargetIds(currentUser.getId(), UserHiddenRecordService.TYPE_MESSAGE, messageIds);
     }
 

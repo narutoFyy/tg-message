@@ -140,7 +140,7 @@ public class PersistentAccountService {
         entity.setCountryBoundAt(LocalDateTime.now());
         entity.setInviteCode(referralRewardService.generateInviteCode(username));
         entity.setOnboardingPolicyVersion(1);
-        entity.setLotteryAccessStatus("PENDING");
+        entity.setLotteryAccessStatus("APPROVED");
         UserEntity referrer = referralRewardService.resolveReferrer(request.inviteCode());
         if (referrer != null) {
             entity.setReferredByUserId(referrer.getId());

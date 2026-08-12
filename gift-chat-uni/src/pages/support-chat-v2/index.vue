@@ -286,7 +286,14 @@
               </view>
             </view>
           </view>
-          <input v-model="draft" class="message-input" maxlength="2000" placeholder="输入消息..." @focus="closeComposerTools" @confirm="handleSend" />
+          <textarea
+            v-model="draft"
+            class="message-input"
+            maxlength="2000"
+            auto-height
+            placeholder="输入消息..."
+            @focus="closeComposerTools"
+          />
           <view class="send-btn" :class="{ 'active': canSend }" @click="handleSend">
             <text>发送</text>
           </view>
@@ -1148,6 +1155,7 @@ onMounted(() => {
   loadCollapsedCountryGroups()
   attachPasteListener()
   attachContextMenuPointListener()
+  attachComposerKeyboardListener()
   startPresenceRefresh()
   window.addEventListener('resize', checkMobile)
 })
@@ -1221,6 +1229,7 @@ onUnmounted(() => {
   closeSocket()
   detachPasteListener()
   detachContextMenuPointListener()
+  detachComposerKeyboardListener()
   window.removeEventListener('resize', checkMobile)
 })
 
@@ -1412,7 +1421,7 @@ function canQuoteMessage(message: ChatMessage) {
 }
 
 function canHideMessage(message: ChatMessage) {
-  return message.author !== 'system' && !message.id.startsWith('local-')
+  return message.author !== 'system'
 }
 
 function rememberContextMenuPoint(event: MouseEvent) {
@@ -1485,6 +1494,27 @@ function quoteContextMessage() {
   }
 }
 
+function handleComposerKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' || event.shiftKey) return
+  const target = event.target as HTMLElement | null
+  if (!target?.matches('textarea') || !target.closest('.message-input')) return
+  if (!window.matchMedia('(pointer: fine)').matches) return
+  event.preventDefault()
+  handleSend()
+}
+
+function attachComposerKeyboardListener() {
+  // #ifdef H5
+  window.addEventListener('keydown', handleComposerKeydown, true)
+  // #endif
+}
+
+function detachComposerKeyboardListener() {
+  // #ifdef H5
+  window.removeEventListener('keydown', handleComposerKeydown, true)
+  // #endif
+}
+
 function hideContextMessage() {
   const message = messageContextMenu.value?.message
   closeMessageMenu()
@@ -1497,6 +1527,11 @@ function hideContextMessage() {
     success: async (result) => {
       if (!result.confirm) return
       try {
+        if (message.id.startsWith('local-')) {
+          store.removeSupportMessage(message.id)
+          uni.showToast({ title: '失败消息已移除', icon: 'none' })
+          return
+        }
         await store.hideRecord({
           targetType: 'MESSAGE',
           targetId: message.id,
@@ -4101,6 +4136,8 @@ function previewImage(url: string) {
 
 /* ============ 右侧聊天区域 ============ */
 .chat-main {
+  position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 360px;
   display: flex;
@@ -5021,7 +5058,7 @@ function previewImage(url: string) {
 .message-menu-mask {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 120;
   background: transparent;
 }
 
@@ -5063,12 +5100,16 @@ function previewImage(url: string) {
 .message-input {
   flex: 1;
   min-width: 0;
-  height: 42px;
-  padding: 0 14px;
+  min-height: 42px;
+  max-height: 132px;
+  padding: 10px 14px;
   border: 1px solid rgba(80, 116, 93, 0.22);
   border-radius: 8px;
   font-size: 14px;
+  line-height: 20px;
   background: rgba(255, 255, 255, 0.9);
+  overflow-y: auto;
+  resize: none;
   box-sizing: border-box;
 }
 
@@ -5264,8 +5305,9 @@ function previewImage(url: string) {
   }
 
   .message-input {
-    height: 40px;
-    padding: 0 11px;
+    min-height: 40px;
+    max-height: 112px;
+    padding: 9px 11px;
   }
 
   .send-btn {

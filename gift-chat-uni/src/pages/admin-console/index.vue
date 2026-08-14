@@ -739,7 +739,7 @@
 
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { cardLogoFor } from '@/utils/art'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
 import type {
@@ -824,6 +824,7 @@ const isAdminReady = ref(false)
 const activeTab = ref<'users' | 'growth' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'risks' | 'loans' | 'rewards' | 'promotion' | 'notifications'>('users')
 const notice = ref('')
 const users = ref<AdminUserItem[]>([])
+const adminUsersLoaded = ref(false)
 const userPage = ref<AdminUserPage>({ items: [], page: 0, pageSize: 20, total: 0, totalPages: 0 })
 const userPageLoading = ref(false)
 const userFilters = reactive({ keyword: '', role: '', status: '' })
@@ -916,6 +917,12 @@ onShow(() => {
   }
 })
 
+watch(activeTab, (tab) => {
+  if ((tab === 'growth' || tab === 'broadcast') && !adminUsersLoaded.value) {
+    loadAdminUsersForTools()
+  }
+})
+
 function requireAdmin() {
   if (store.state.currentUser?.roleCode === 'ADMIN') {
     isAdminReady.value = true
@@ -968,7 +975,7 @@ async function refreshAll() {
       nextVipHolidays,
       nextVipBenefitClaims
     ] = await Promise.all([
-      fetchAdminUsers(),
+      Promise.resolve([] as AdminUserItem[]),
       fetchAgents(),
       fetchAdminSupportConversations(),
       fetchBroadcasts(),
@@ -1027,6 +1034,15 @@ async function refreshAll() {
     }
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Admin data failed'
+  }
+}
+
+async function loadAdminUsersForTools() {
+  try {
+    users.value = await fetchAdminUsers()
+    adminUsersLoaded.value = true
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'User data failed'
   }
 }
 
@@ -1501,6 +1517,7 @@ async function refreshGrowthData() {
       fetchLotteryPrizes()
     ])
     users.value = nextUsers
+    adminUsersLoaded.value = true
     lotteryRecords.value = nextRecords
     lotteryPrizes.value = nextPrizes
     notice.value = 'Growth data refreshed.'

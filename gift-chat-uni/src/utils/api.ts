@@ -1,6 +1,7 @@
 import type {
   AdminDirectConversationItem,
   AdminUserItem,
+  AdminUserPage,
   BalanceSummary,
   AgentItem,
   BankAccountItem,
@@ -623,6 +624,23 @@ function normalizeRateText(value: string) {
 
 export function fetchAdminUsers() {
   return request<AdminUserItem[]>('/admin/users')
+}
+
+export function fetchAdminUsersPage(params: {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  role?: string
+  status?: string
+} = {}) {
+  const query = new URLSearchParams({
+    page: String(params.page ?? 0),
+    pageSize: String(params.pageSize ?? 20),
+    ...(params.keyword?.trim() ? { keyword: params.keyword.trim() } : {}),
+    ...(params.role ? { role: params.role } : {}),
+    ...(params.status ? { status: params.status } : {})
+  }).toString()
+  return request<AdminUserPage>(`/admin/users/page?${query}`)
 }
 
 export function fetchAgents() {

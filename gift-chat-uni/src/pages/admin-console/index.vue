@@ -78,8 +78,22 @@
 
       <view v-if="activeTab === 'users'" class="panel">
         <text class="section-title">用户管理</text>
-        <view style="height: 18rpx"></view>
-        <view v-for="user in users" :key="user.id" class="list-row">
+        <view class="user-filter-toolbar">
+          <input v-model="userFilters.keyword" class="field-input user-search-input" placeholder="Search username, email, or phone" @confirm="searchUsers" />
+          <picker mode="selector" :range="userRoleFilterLabels" :value="userRoleFilterIndex" @change="onUserRoleFilterChange">
+            <view class="user-filter-picker">{{ userRoleFilterLabels[userRoleFilterIndex] }} <text>⌄</text></view>
+          </picker>
+          <picker mode="selector" :range="userStatusFilterLabels" :value="userStatusFilterIndex" @change="onUserStatusFilterChange">
+            <view class="user-filter-picker">{{ userStatusFilterLabels[userStatusFilterIndex] }} <text>⌄</text></view>
+          </picker>
+          <button class="primary-button mini-button" @click="searchUsers">Search</button>
+          <button class="ghost-button mini-button" @click="resetUserFilters">Reset</button>
+        </view>
+        <view class="user-list-summary">
+          <text class="row-meta">{{ userPage.total }} users found</text>
+          <text class="row-meta">Page {{ userPage.page + 1 }} / {{ Math.max(userPage.totalPages, 1) }}</text>
+        </view>
+        <view v-for="user in userPage.items" :key="user.id" class="list-row">
           <view>
             <text class="row-title">{{ user.username }}</text>
             <text class="row-meta">{{ user.phone || '无手机号' }} / {{ user.email || '无邮箱' }}</text>
@@ -88,6 +102,12 @@
           <text :class="['status-pill', user.blacklisted ? 'paused' : 'active']">
             {{ user.blacklisted ? '已拉黑' : '正常' }}
           </text>
+        </view>
+        <view v-if="!userPage.items.length" class="empty-row">No users match the current filters.</view>
+        <view class="user-pagination">
+          <button class="ghost-button mini-button" :disabled="userPage.page <= 0 || userPageLoading" @click="changeUserPage(userPage.page - 1)">Previous</button>
+          <text class="row-meta">{{ userPage.page + 1 }} / {{ Math.max(userPage.totalPages, 1) }}</text>
+          <button class="ghost-button mini-button" :disabled="userPage.page + 1 >= userPage.totalPages || userPageLoading" @click="changeUserPage(userPage.page + 1)">Next</button>
         </view>
       </view>
 
@@ -725,6 +745,7 @@ import { resolveMediaUrl } from '@/utils/mediaUrl'
 import type {
   AdminDirectConversationItem,
   AdminUserItem,
+  AdminUserPage,
   AgentItem,
   BankAccountItem,
   BankAccountRiskMatch,
@@ -760,6 +781,7 @@ import {
   fetchAdminLotteryRecords,
   fetchAdminSupportConversations,
   fetchAdminUsers,
+  fetchAdminUsersPage,
   fetchAdminVipBenefitConfig,
   fetchAdminVipHolidays,
   fetchAgents,
@@ -802,6 +824,13 @@ const isAdminReady = ref(false)
 const activeTab = ref<'users' | 'growth' | 'agents' | 'support' | 'direct' | 'broadcast' | 'orders' | 'withdrawals' | 'risks' | 'loans' | 'rewards' | 'promotion' | 'notifications'>('users')
 const notice = ref('')
 const users = ref<AdminUserItem[]>([])
+const userPage = ref<AdminUserPage>({ items: [], page: 0, pageSize: 20, total: 0, totalPages: 0 })
+const userPageLoading = ref(false)
+const userFilters = reactive({ keyword: '', role: '', status: '' })
+const userRoleFilterLabels = ['All roles', 'User', 'Support', 'Admin']
+const userStatusFilterLabels = ['All statuses', 'Active', 'Disabled', 'Blocked']
+const userRoleFilterIndex = ref(0)
+const userStatusFilterIndex = ref(0)
 const agents = ref<AgentItem[]>([])
 const conversations = ref<SupportConversationItem[]>([])
 const directConversations = ref<AdminDirectConversationItem[]>([])
@@ -883,6 +912,7 @@ const rewardForm = reactive({
 onShow(() => {
   if (requireAdmin()) {
     refreshAll()
+    refreshUserPage()
   }
 })
 
@@ -998,6 +1028,57 @@ async function refreshAll() {
   } catch (error) {
     notice.value = error instanceof Error ? error.message : 'Admin data failed'
   }
+}
+
+function selectedUserRole() {
+  return ['', 'USER', 'AGENT', 'ADMIN'][userRoleFilterIndex.value] || ''
+}
+
+function selectedUserStatus() {
+  return ['', 'ACTIVE', 'DISABLED', 'BLOCKED'][userStatusFilterIndex.value] || ''
+}
+
+function onUserRoleFilterChange(event: { detail?: { value?: number | string } }) {
+  userRoleFilterIndex.value = Number(event.detail?.value || 0)
+  searchUsers()
+}
+
+function onUserStatusFilterChange(event: { detail?: { value?: number | string } }) {
+  userStatusFilterIndex.value = Number(event.detail?.value || 0)
+  searchUsers()
+}
+
+async function refreshUserPage(page = 0) {
+  userPageLoading.value = true
+  try {
+    userPage.value = await fetchAdminUsersPage({
+      page,
+      pageSize: 20,
+      keyword: userFilters.keyword,
+      role: selectedUserRole(),
+      status: selectedUserStatus()
+    })
+  } catch (error) {
+    notice.value = error instanceof Error ? error.message : 'User list failed'
+  } finally {
+    userPageLoading.value = false
+  }
+}
+
+function searchUsers() {
+  refreshUserPage(0)
+}
+
+function resetUserFilters() {
+  userFilters.keyword = ''
+  userRoleFilterIndex.value = 0
+  userStatusFilterIndex.value = 0
+  refreshUserPage(0)
+}
+
+function changeUserPage(page: number) {
+  if (page < 0 || (userPage.value.totalPages > 0 && page >= userPage.value.totalPages)) return
+  refreshUserPage(page)
 }
 
 function applyRewardConfig(config: ReferralRewardConfigItem) {
@@ -2086,6 +2167,46 @@ async function assignConversation(conversationId: string) {
   color: #5d646d;
 }
 
+.user-filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin: 18rpx 0 12rpx;
+}
+
+.user-search-input {
+  flex: 1 1 360rpx;
+  min-width: 220rpx;
+}
+
+.user-filter-picker {
+  min-width: 170rpx;
+  padding: 16rpx 18rpx;
+  border: 1rpx solid #d9dde3;
+  border-radius: 4rpx;
+  background: #fff;
+  color: #26313b;
+  font-size: 23rpx;
+  white-space: nowrap;
+}
+
+.user-list-summary,
+.user-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.user-list-summary {
+  padding: 4rpx 0 12rpx;
+}
+
+.user-pagination {
+  justify-content: center;
+  padding-top: 18rpx;
+}
+
 .promotion-create-row {
   display: flex;
   gap: 14rpx;
@@ -2157,6 +2278,20 @@ async function assignConversation(conversationId: string) {
 
   .promotion-create-button {
     width: 100%;
+  }
+
+  .user-filter-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .user-search-input {
+    flex-basis: 100%;
+  }
+
+  .user-filter-toolbar .user-filter-picker,
+  .user-filter-toolbar .mini-button {
+    flex: 1;
   }
 }
 

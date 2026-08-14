@@ -601,6 +601,14 @@ export interface AdminUserItem {
   createdAt: string
 }
 
+export interface AdminUserPage {
+  items: AdminUserItem[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
 export interface AgentItem {
   id: string
   username: string

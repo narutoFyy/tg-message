@@ -13,6 +13,7 @@ import com.cardnova.giftchat.dto.UpdateUserStatusRequest;
 import com.cardnova.giftchat.dto.UpdatePromotionInviteCodeStatusRequest;
 import com.cardnova.giftchat.model.AdminDirectConversation;
 import com.cardnova.giftchat.model.AdminUserItem;
+import com.cardnova.giftchat.model.AdminUserPage;
 import com.cardnova.giftchat.model.AgentItem;
 import com.cardnova.giftchat.model.BankAccountItem;
 import com.cardnova.giftchat.model.BankAccountRiskMatch;
@@ -79,6 +80,17 @@ public class AdminController {
     @GetMapping("/users")
     public ApiResponse<List<AdminUserItem>> users() {
         return ApiResponse.success(adminService.users());
+    }
+
+    @GetMapping("/users/page")
+    public ApiResponse<AdminUserPage> usersPage(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int pageSize,
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) String role,
+        @RequestParam(required = false) String status
+    ) {
+        return ApiResponse.success(adminService.usersPage(page, pageSize, keyword, role, status));
     }
 
     @GetMapping("/agents")

@@ -9,6 +9,7 @@ import com.cardnova.giftchat.entity.SupportConversationEntity;
 import com.cardnova.giftchat.entity.UserEntity;
 import com.cardnova.giftchat.model.AdminDirectConversation;
 import com.cardnova.giftchat.model.AdminUserItem;
+import com.cardnova.giftchat.model.AdminUserPage;
 import com.cardnova.giftchat.model.AgentItem;
 import com.cardnova.giftchat.model.ChatMessage;
 import com.cardnova.giftchat.model.SupportConversation;
@@ -27,6 +28,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 @Service
 @Transactional(readOnly = true)
@@ -75,6 +78,28 @@ public class AdminService {
         return userRepository.findAll().stream()
             .map(this::toAdminUserItem)
             .toList();
+    }
+
+    public AdminUserPage usersPage(int requestedPage, int requestedPageSize, String keyword, String role, String status) {
+        requireAdmin();
+        int page = Math.max(0, requestedPage);
+        int pageSize = Math.max(10, Math.min(requestedPageSize, 100));
+        String normalizedKeyword = normalizeNullable(keyword);
+        String normalizedRole = normalizeFilter(role, List.of("USER", "AGENT", "ADMIN"));
+        String normalizedStatus = normalizeFilter(status, List.of("ACTIVE", "DISABLED", "BLOCKED"));
+        var result = userRepository.searchAdminUsers(
+            normalizedKeyword,
+            normalizedRole,
+            normalizedStatus,
+            PageRequest.of(page, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+        return new AdminUserPage(
+            result.getContent().stream().map(this::toAdminUserItem).toList(),
+            result.getNumber(),
+            result.getSize(),
+            result.getTotalElements(),
+            result.getTotalPages()
+        );
     }
 
     public List<AgentItem> agents() {
@@ -277,6 +302,18 @@ public class AdminService {
             throw new IllegalArgumentException("Unsupported user status");
         }
         return normalized;
+    }
+
+    private String normalizeFilter(String value, List<String> allowed) {
+        String normalized = normalizeNullable(value);
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        String upper = normalized.toUpperCase();
+        if (!allowed.contains(upper)) {
+            throw new IllegalArgumentException("Unsupported user filter");
+        }
+        return upper;
     }
 
     private String normalizeNullable(String value) {

@@ -42,5 +42,22 @@ public interface UserRepository extends JpaRepository<UserEntity, String> {
 
     List<UserEntity> findByRoleCodeOrderByCreatedAtDesc(String roleCode);
 
+    @Query("""
+        select user from UserEntity user
+        where (:keyword is null or
+            lower(user.username) like lower(concat('%', :keyword, '%')) or
+            lower(coalesce(user.email, '')) like lower(concat('%', :keyword, '%')) or
+            lower(coalesce(user.phone, '')) like lower(concat('%', :keyword, '%')))
+          and (:role is null or user.roleCode = :role)
+          and (:status is null or user.statusCode = :status)
+        order by user.createdAt desc
+        """)
+    Page<UserEntity> searchAdminUsers(
+        @Param("keyword") String keyword,
+        @Param("role") String role,
+        @Param("status") String status,
+        Pageable pageable
+    );
+
     List<UserEntity> findByRoleCodeAndStatusCodeOrderByCreatedAtAsc(String roleCode, String statusCode);
 }

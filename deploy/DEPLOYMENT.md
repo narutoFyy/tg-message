@@ -16,7 +16,7 @@ cp .env.example .env
 
 Edit `.env` with real MySQL passwords, a Redis password, a long random JWT secret, exact public origin values, and TRTC values if video calls are enabled.
 The backend intentionally refuses to start with placeholder JWT secrets, demo fallback, localhost CORS origins, wildcard tunnel origins, or `your-domain` values in production.
-Keep `APP_AUTH_ACCESS_TOKEN_MINUTES` short for production; the template uses 30 minutes.
+`APP_AUTH_STAFF_ACCESS_TOKEN_DAYS` controls administrator and support sessions; the template uses 30 days.
 
 ## 3. Start the stack
 

@@ -389,7 +389,7 @@ class GiftChatServerApplicationTests {
     }
 
     @Test
-    void ordinaryUsersReceivePersistentSessionsWhileStaffSessionsStayShort() throws Exception {
+    void usersAndStaffReceivePersistentSessions() throws Exception {
         Instant requestedAt = Instant.now();
         MvcResult userResult = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -419,7 +419,7 @@ class GiftChatServerApplicationTests {
             .at("/data/expiresAt").asText());
 
         assertTrue(Duration.between(requestedAt, userExpiry).toDays() >= 29);
-        assertTrue(Duration.between(requestedAt, staffExpiry).toDays() < 1);
+        assertTrue(Duration.between(requestedAt, staffExpiry).toDays() >= 29);
     }
 
     @Test

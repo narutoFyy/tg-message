@@ -18,18 +18,18 @@ public class JwtService {
 
     private final Algorithm algorithm;
     private final JWTVerifier verifier;
-    private final long accessTokenMinutes;
     private final long userAccessTokenDays;
+    private final long staffAccessTokenDays;
 
     public JwtService(
         @Value("${app.auth.jwt-secret}") String secret,
-        @Value("${app.auth.access-token-minutes}") long accessTokenMinutes,
-        @Value("${app.auth.user-access-token-days:30}") long userAccessTokenDays
+        @Value("${app.auth.user-access-token-days:30}") long userAccessTokenDays,
+        @Value("${app.auth.staff-access-token-days:30}") long staffAccessTokenDays
     ) {
         this.algorithm = Algorithm.HMAC256(secret);
         this.verifier = JWT.require(algorithm).withIssuer("gift-chat-server").build();
-        this.accessTokenMinutes = accessTokenMinutes;
         this.userAccessTokenDays = userAccessTokenDays;
+        this.staffAccessTokenDays = staffAccessTokenDays;
     }
 
     public String issueAccessToken(UserEntity user) {
@@ -62,6 +62,6 @@ public class JwtService {
         if (user != null && "USER".equalsIgnoreCase(user.getRoleCode())) {
             return issuedAt.plus(userAccessTokenDays, ChronoUnit.DAYS);
         }
-        return issuedAt.plus(accessTokenMinutes, ChronoUnit.MINUTES);
+        return issuedAt.plus(staffAccessTokenDays, ChronoUnit.DAYS);
     }
 }

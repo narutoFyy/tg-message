@@ -16,5 +16,5 @@ spring:
 app:
   auth:
     jwt-secret: ${APP_AUTH_JWT_SECRET:dev-only-local-jwt-secret-please-do-not-use-in-production}
-    access-token-minutes: ${APP_AUTH_ACCESS_TOKEN_MINUTES:720}
+    staff-access-token-days: ${APP_AUTH_STAFF_ACCESS_TOKEN_DAYS:30}
     demo-fallback: true

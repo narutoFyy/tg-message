@@ -193,38 +193,110 @@ function validateLocalPhone(phone: string) {
 
 <style scoped lang="scss">
 .register-page {
-  padding-bottom: 48rpx;
+  --register-gold: #dfc285;
+  --register-text: #f2f2f0;
+  --register-muted: #a3a5a9;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: max(64px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: #101112;
+  color: var(--register-text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0;
+  box-sizing: border-box;
 }
 
-.page-header-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
+.register-page .page-stack {
+  width: 100%;
+  max-width: 660px;
+  gap: 0;
 }
 
 .register-hero {
-  padding: 26rpx 28rpx;
-  align-items: center;
-  border-bottom: 0;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  padding: 0 0 32px;
+  border: 0;
+  border-bottom: 1px solid #343536;
+  border-radius: 0;
+  background: transparent;
+}
+
+.register-hero::before {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 56px;
+  height: 2px;
+  background: var(--register-gold);
+}
+
+.page-header-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.page-header-copy::before {
+  content: "";
+  display: block;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 22px;
+  background: url('/static/lottery/stone-technology-icon.png') center / contain no-repeat;
+}
+
+.register-page .eyebrow {
+  color: var(--register-gold);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.register-page .title {
+  max-width: 430px;
+  margin: 0;
+  color: var(--register-text);
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0;
 }
 
 .signin-link {
   flex: 0 0 auto;
-  padding: 16rpx 0;
-  color: #002fa7;
-  font-size: 26rpx;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  color: var(--register-gold);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+  text-decoration-color: #746441;
 }
 
 .register-form {
-  padding: 30rpx 28rpx;
-  box-shadow: 0 12rpx 34rpx rgba(34, 54, 74, 0.07);
+  padding: 32px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 24rpx;
+  gap: 24px;
 }
 
 .form-field,
@@ -232,10 +304,53 @@ function validateLocalPhone(phone: string) {
   min-width: 0;
 }
 
+.register-page .field-label {
+  display: block;
+  margin-bottom: 10px;
+  color: #d7d8db;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.register-page .field-input,
+.country-picker {
+  width: 100%;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  border: 1px solid #3e4043;
+  border-radius: 6px;
+  background: #1b1d20;
+  color: var(--register-text);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: normal;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.register-page .field-input:focus-within,
+.country-control:focus-within .country-picker {
+  border-color: var(--register-gold);
+  background: #202225;
+  box-shadow: 0 0 0 3px rgb(223 194 133 / 12%);
+}
+
+.register-page :deep(.uni-input-placeholder),
+.register-page :deep(input::placeholder) {
+  color: var(--register-muted);
+  opacity: 1;
+}
+
+.register-page :deep(input) {
+  caret-color: var(--register-gold);
+}
+
 .phone-row {
   display: grid;
-  grid-template-columns: minmax(176rpx, 220rpx) minmax(0, 1fr);
-  gap: 12rpx;
+  grid-template-columns: minmax(140px, 190px) minmax(0, 1fr);
+  gap: 12px;
   align-items: stretch;
   width: 100%;
 }
@@ -245,21 +360,26 @@ function validateLocalPhone(phone: string) {
 }
 
 .country-picker {
-  height: 88rpx;
-  width: 100%;
-  padding: 0 16rpx;
-  box-sizing: border-box;
-  border-radius: 6rpx;
-  background: #f7f7f8;
-  border: 1rpx solid #c8c9cf;
   display: flex;
   align-items: center;
+  padding-right: 32px;
+  position: relative;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 24rpx;
-  font-weight: 700;
-  color: #111111;
+  cursor: pointer;
+}
+
+.country-picker::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 20px;
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid var(--register-gold);
+  border-bottom: 1px solid var(--register-gold);
+  transform: rotate(45deg);
 }
 
 .phone-input {
@@ -269,31 +389,118 @@ function validateLocalPhone(phone: string) {
 
 .phone-help {
   display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  line-height: 1.4;
-  color: #6f7178;
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--register-muted);
 }
 
 .form-notice {
   display: block;
-  margin-top: 22rpx;
-  color: #b42318;
-  font-size: 24rpx;
+  margin-top: 24px;
+  padding: 12px 14px;
+  border-left: 2px solid #ef9ca6;
+  background: #2c1f24;
+  color: #ffc3cc;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.submit-button {
+.register-page .submit-button {
   width: 100%;
-  margin-top: 28rpx;
+  min-height: 52px;
+  margin-top: 32px;
+  padding: 15px 24px;
+  border: 1px solid var(--register-gold);
+  border-radius: 6px;
+  background: var(--register-gold);
+  color: #191711;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 20px;
+  box-shadow: none;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.register-page .submit-button:focus-visible {
+  outline: 2px solid var(--register-text);
+  outline-offset: 4px;
+}
+
+.register-page .submit-button:active {
+  background: #c9ab6d;
+  border-color: #c9ab6d;
+}
+
+@media (hover: hover) {
+  .register-page .submit-button:hover {
+    background: #ecd5a7;
+    border-color: #ecd5a7;
+  }
+
+  .signin-link:hover {
+    color: #f3ddb0;
+    text-decoration-color: currentColor;
+  }
 }
 
 @media (min-width: 768px) {
   .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 24px;
   }
 
   .form-field-wide {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .register-page {
+    padding-top: max(32px, env(safe-area-inset-top));
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-left: max(20px, env(safe-area-inset-left));
+  }
+
+  .register-hero {
+    gap: 16px;
+    padding-bottom: 24px;
+  }
+
+  .page-header-copy::before {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 10px;
+  }
+
+  .register-page .title {
+    font-size: 26px;
+  }
+
+  .register-form {
+    padding-top: 24px;
+  }
+
+  .form-grid {
+    gap: 20px;
+  }
+
+  .phone-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .register-page .field-input {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .register-page .field-input,
+  .country-picker,
+  .register-page .submit-button {
+    transition: none;
   }
 }
 </style>

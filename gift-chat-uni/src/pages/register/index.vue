@@ -1,5 +1,6 @@
 <template>
   <view class="page-shell soft-page register-page">
+    <PrivacyConsent />
     <view class="page-stack">
       <view class="page-header register-hero tone-market">
         <view class="page-header-copy">
@@ -38,7 +39,8 @@
             <input v-model.trim="form.inviteCode" class="field-input" placeholder="Optional invite code" />
           </view>
         </view>
-        <text v-if="notice" class="form-notice">{{ notice }}</text>
+        <AgreementCheckbox v-model="agreement" />
+        <text v-if="notice" class="form-notice" role="alert">{{ notice }}</text>
         <button class="primary-button submit-button" @click="handleSubmit">Create account</button>
       </view>
     </view>
@@ -46,7 +48,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
+import PrivacyConsent from '@/components/PrivacyConsent.vue'
+import AgreementCheckbox from '@/components/AgreementCheckbox.vue'
+import { privacyAccepted, hasPrivacyConsent } from '@/utils/privacy'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { safeRouteForRole } from '@/utils/routeGuard'
@@ -56,6 +61,7 @@ import { fallbackCountryCodeRules } from '@/data/supported-countries'
 
 const store = useAppStore()
 const notice = ref('')
+const agreement = ref(false)
 const countryCodes = ref<CountryCodeRule[]>(fallbackCountryCodeRules)
 const selectedCountryIndex = ref(0)
 const countryCodeLabels = computed(() => countryCodes.value.map((item) => `${item.countryCode} ${item.countryName}`))
@@ -69,15 +75,9 @@ const form = reactive({
 })
 
 onShow(() => {
-  form.username = ''
-  form.email = ''
-  form.phone = ''
-  form.password = ''
-  form.inviteCode = ''
-  notice.value = ''
-  selectedCountryIndex.value = 0
-  loadCountryCodes()
+  if (hasPrivacyConsent()) loadCountryCodes()
 })
+watch(privacyAccepted, (accepted) => { if (accepted) loadCountryCodes() })
 
 const selectedCountry = computed(() => {
   const rule = countryCodes.value[selectedCountryIndex.value] || countryCodes.value[0]
@@ -95,6 +95,10 @@ const phoneHelpText = computed(() => {
 })
 
 async function handleSubmit() {
+  if (!hasPrivacyConsent() || !agreement.value) {
+    notice.value = 'Please read and agree to the Terms of Use and Privacy Policy.'
+    return
+  }
   try {
     const username = form.username.trim()
     const email = form.email.trim()

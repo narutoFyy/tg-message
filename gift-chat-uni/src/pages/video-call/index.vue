@@ -80,7 +80,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
-import TRTC from 'trtc-sdk-v5'
 import type { ChatRealtimePayload, VideoSessionBootstrap, VideoSessionItem, VideoSessionStatusEvent } from '@/types'
 import { useAppStore } from '@/store/app'
 import { uiIcons } from '@/utils/art'
@@ -107,7 +106,7 @@ const micLevel = ref(0)
 const speakerEnabled = ref(true)
 const usingFrontCamera = ref(true)
 const switchingCamera = ref(false)
-const trtc = ref<TRTC | null>(null)
+const trtc = ref<any | null>(null)
 const joined = ref(false)
 const statusSocketTask = ref<UniApp.SocketTask | null>(null)
 const terminalStatusHandled = ref(false)
@@ -192,15 +191,21 @@ async function joinRoom() {
     return
   }
 
-  const environmentNotice = await getEnvironmentNotice()
+  const trtcApi = await loadTrtcApi()
+  if (!trtcApi) {
+    notice.value = '视频通话目前仅支持网页版，请使用 HTTPS 网页打开。'
+    return
+  }
+
+  const environmentNotice = await getEnvironmentNotice(trtcApi)
   if (environmentNotice) {
     notice.value = environmentNotice
     return
   }
 
-  const client = TRTC.create()
+  const client = trtcApi.create()
   trtc.value = client
-  bindTrtcEvents(client)
+  bindTrtcEvents(client, trtcApi)
   await store.updateVideoSessionStatus(sessionId.value, 'joining')
 
   await client.enterRoom({
@@ -208,7 +213,7 @@ async function joinRoom() {
     userId: currentBootstrap.userId,
     userSig: currentBootstrap.userSig,
     strRoomId: currentBootstrap.session.roomId,
-    scene: TRTC.TYPE.SCENE_RTC,
+    scene: trtcApi.TYPE.SCENE_RTC,
     autoReceiveAudio: true,
     autoReceiveVideo: false
   })
@@ -224,9 +229,9 @@ async function joinRoom() {
   }
 }
 
-function bindTrtcEvents(client: TRTC) {
-  client.on(TRTC.EVENT.AUDIO_VOLUME, (event) => {
-    const localVolume = event?.result?.find((item) => item.userId === '')
+function bindTrtcEvents(client: any, trtcApi: any) {
+  client.on(trtcApi.EVENT.AUDIO_VOLUME, (event: any) => {
+    const localVolume = event?.result?.find((item: any) => item.userId === '')
     if (!localVolume || mutedAudio.value || !localAudioStarted.value) {
       micLevel.value = 0
       return
@@ -234,12 +239,12 @@ function bindTrtcEvents(client: TRTC) {
     micLevel.value = Math.max(0, Math.min(100, Math.round(localVolume.volume || 0)))
   })
 
-  client.on(TRTC.EVENT.REMOTE_USER_ENTER, () => {
+  client.on(trtcApi.EVENT.REMOTE_USER_ENTER, () => {
     remoteUserJoined.value = true
     clearUnansweredCallTimer()
   })
 
-  client.on(TRTC.EVENT.REMOTE_VIDEO_AVAILABLE, async ({ userId, streamType }) => {
+  client.on(trtcApi.EVENT.REMOTE_VIDEO_AVAILABLE, async ({ userId, streamType }: any) => {
     remoteUserJoined.value = true
     remoteVideoAvailable.value = true
     clearUnansweredCallTimer()
@@ -252,22 +257,22 @@ function bindTrtcEvents(client: TRTC) {
     }
   })
 
-  client.on(TRTC.EVENT.REMOTE_VIDEO_UNAVAILABLE, () => {
+  client.on(trtcApi.EVENT.REMOTE_VIDEO_UNAVAILABLE, () => {
     remoteVideoAvailable.value = false
     hasRemoteVideo.value = false
   })
 
-  client.on(TRTC.EVENT.REMOTE_AUDIO_AVAILABLE, () => {
+  client.on(trtcApi.EVENT.REMOTE_AUDIO_AVAILABLE, () => {
     remoteUserJoined.value = true
     remoteAudioAvailable.value = true
     clearUnansweredCallTimer()
   })
 
-  client.on(TRTC.EVENT.REMOTE_AUDIO_UNAVAILABLE, () => {
+  client.on(trtcApi.EVENT.REMOTE_AUDIO_UNAVAILABLE, () => {
     remoteAudioAvailable.value = false
   })
 
-  client.on(TRTC.EVENT.REMOTE_USER_EXIT, () => {
+  client.on(trtcApi.EVENT.REMOTE_USER_EXIT, () => {
     remoteUserJoined.value = false
     remoteAudioAvailable.value = false
     remoteVideoAvailable.value = false
@@ -275,12 +280,12 @@ function bindTrtcEvents(client: TRTC) {
     notice.value = 'The other side left the call'
   })
 
-  client.on(TRTC.EVENT.ERROR, (error) => {
+  client.on(trtcApi.EVENT.ERROR, (error: any) => {
     notice.value = error?.message || 'TRTC error'
   })
 }
 
-async function startLocalDevices(client: TRTC) {
+async function startLocalDevices(client: any) {
   const failures: string[] = []
   localDeviceFailed.value = false
   try {
@@ -330,18 +335,26 @@ function toDeviceMessage(error: unknown, device: 'camera' | 'microphone') {
   return `${deviceName} failed to start. Check browser permissions and retry.`
 }
 
-async function getEnvironmentNotice() {
+async function getEnvironmentNotice(trtcApi: any) {
   if (!isSecureOrigin()) {
     return '当前访问地址不是 HTTPS，浏览器会禁止网页调用摄像头和麦克风。请用 HTTPS 域名重新打开。'
   }
 
   try {
-    const checkResult = await TRTC.isSupported()
+    const checkResult = await trtcApi.isSupported()
     if (checkResult?.result) return ''
     return buildUnsupportedMessage(checkResult?.detail)
   } catch {
     return '当前浏览器环境检测失败，请使用最新版 Chrome、Edge、Safari 或 Firefox 重试。'
   }
+}
+
+async function loadTrtcApi(): Promise<any | null> {
+  // #ifdef H5
+  const module = await import('trtc-sdk-v5')
+  return module.default
+  // #endif
+  return null
 }
 
 function isSecureOrigin() {

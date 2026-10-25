@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS app_user (
     country_bound_at TIMESTAMP,
     country_bound_by VARCHAR(36),
     birth_date DATE,
+    deleted_at TIMESTAMP NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     CONSTRAINT fk_app_user_referred_by FOREIGN KEY (referred_by_user_id) REFERENCES app_user (id),

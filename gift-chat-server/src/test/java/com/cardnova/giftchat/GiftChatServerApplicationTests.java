@@ -80,6 +80,92 @@ import java.util.UUID;
 class GiftChatServerApplicationTests {
 
     @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate deletionJdbc;
+
+    @Test
+    void accountDeletionRequiresBearerPasswordAndUserRole() throws Exception {
+        mockMvc.perform(post("/api/account/delete").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"password\":\"demo12345\"}"))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/account/delete").header("X-Demo-User", "cardnova_user")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"demo12345\"}"))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/account/delete").header("Authorization", bearer(loginToken("admin_mia")))
+            .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"demo12345\"}"))
+            .andExpect(status().isForbidden());
+        String username = "delguard_" + randomDigits(10);
+        String token = registerToken(username);
+        mockMvc.perform(post("/api/account/delete").header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"wrong-password\"}"))
+            .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/account/delete").header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"\"}"))
+            .andExpect(status().isBadRequest());
+        assertEquals("ACTIVE", userRepository.findByUsername(username).orElseThrow().getStatusCode());
+        mockMvc.perform(get("/api/account/me").header("Authorization", bearer(token))).andExpect(status().isOk());
+    }
+
+    @Test
+    void accountDeletionScrubsProfileAndPushAndRevokesExistingSessions() throws Exception {
+        String username = "deluser_" + randomDigits(10);
+        String token = registerToken(username);
+        UserEntity before = userRepository.findByUsername(username).orElseThrow();
+        String userId = before.getId();
+        String inviteCode = before.getInviteCode();
+        deletionJdbc.update("UPDATE app_user SET phone=?, avatar_url=?, birth_date=? WHERE id=?",
+            "+234" + randomDigits(10), "/uploads/images/deletion-fixture.png", LocalDate.of(1990, 1, 1), userId);
+        deletionJdbc.update("INSERT INTO push_device (id,user_id,platform,provider,device_token,enabled,last_seen_at,created_at,updated_at) VALUES (?,?,?,?,?,TRUE,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
+            UUID.randomUUID().toString(), userId, "android", "test", UUID.randomUUID().toString());
+        deletionJdbc.update("INSERT INTO web_push_subscription (id,user_id,endpoint,p256dh_key,auth_key,enabled,last_seen_at,created_at,updated_at) VALUES (?,?,?,?,?,TRUE,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
+            UUID.randomUUID().toString(), userId, "https://example.invalid/push", "fixture-key", "fixture-auth");
+        String bankId = UUID.randomUUID().toString();
+        deletionJdbc.update("INSERT INTO user_bank_account (id,owner_user_id,country,account_name,bank_name,account_number,normalized_bank_name,normalized_account_number,account_fingerprint,masked_account_number,status_code,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
+            bankId, userId, "Nigeria", "Delete Me", "Test Bank", "1234567890", "testbank", "1234567890", UUID.randomUUID().toString(), "******7890", "ACTIVE");
+        String otherName = "delother_" + randomDigits(10);
+        String otherToken = registerToken(otherName);
+        mockMvc.perform(post("/api/account/delete").header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"demo12345\",\"userId\":\"ignored\"}"))
+            .andExpect(status().isOk());
+        UserEntity deleted = userRepository.findById(userId).orElseThrow();
+        assertEquals("DELETED", deleted.getStatusCode());
+        assertNotNull(deleted.getDeletedAt());
+        assertTrue(deleted.getUsername().startsWith("deleted_"));
+        assertEquals(null, deleted.getEmail());
+        assertEquals(null, deleted.getPhone());
+        assertEquals(null, deleted.getAvatarUrl());
+        assertEquals(null, deleted.getBirthDate());
+        assertEquals("deleted", deleted.getPasswordHash());
+        assertEquals(0, deletionJdbc.queryForObject("SELECT COUNT(*) FROM push_device WHERE user_id=?", Integer.class, userId));
+        assertEquals(0, deletionJdbc.queryForObject("SELECT COUNT(*) FROM web_push_subscription WHERE user_id=?", Integer.class, userId));
+        assertEquals(false, deletionJdbc.queryForObject("SELECT enabled FROM invite_code_registry WHERE code=?", Boolean.class, inviteCode));
+        assertEquals("", deletionJdbc.queryForObject("SELECT account_number FROM user_bank_account WHERE id=?", String.class, bankId));
+        mockMvc.perform(get("/api/account/me").header("Authorization", bearer(token))).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/account/delete").header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"demo12345\"}"))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"identifier\":\"" + username + "\",\"password\":\"demo12345\",\"countryCode\":\"NG\"}"))
+            .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/account/me").header("Authorization", bearer(otherToken))).andExpect(status().isOk());
+        assertThrows(ForbiddenException.class, () -> webSocketChannelAuthorizationService.requireAccess(userId, "support", "ignored"));
+    }
+
+    @Test
+    void accountDeletionPasswordGuessingIsRateLimited() throws Exception {
+        String username = "dellimit_" + randomDigits(10);
+        String token = registerToken(username);
+        for (int attempt = 0; attempt < 5; attempt++) {
+            mockMvc.perform(post("/api/account/delete").header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"wrong-password\"}"))
+                .andExpect(status().isBadRequest());
+        }
+        mockMvc.perform(post("/api/account/delete").header("Authorization", bearer(token))
+            .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"demo12345\"}"))
+            .andExpect(status().isTooManyRequests());
+        assertEquals("ACTIVE", userRepository.findByUsername(username).orElseThrow().getStatusCode());
+    }
+
+    @Autowired
     private MockMvc mockMvc;
 
     @Autowired

@@ -1,5 +1,6 @@
 <template>
   <view class="page-shell soft-page admin-login-page">
+    <PrivacyConsent />
     <view class="admin-login-card surface-card">
       <text class="eyebrow">管理员登录</text>
       <view style="height: 12rpx"></view>
@@ -17,6 +18,7 @@
       <input v-model="form.password" class="field-input" password placeholder="请输入密码" />
       <view style="height: 26rpx"></view>
 
+      <AgreementCheckbox v-model="agreement" />
       <button class="primary-button" @click="handleSubmit">进入管理员后台</button>
       <view style="height: 16rpx"></view>
       <button class="ghost-button" @click="goUserLogin">返回用户登录</button>
@@ -29,12 +31,16 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import PrivacyConsent from '@/components/PrivacyConsent.vue'
+import AgreementCheckbox from '@/components/AgreementCheckbox.vue'
+import { hasPrivacyConsent } from '@/utils/privacy'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { safeRouteForRole } from '@/utils/routeGuard'
 
 const store = useAppStore()
 const notice = ref('')
+const agreement = ref(false)
 
 const form = reactive({
   identifier: '',
@@ -42,12 +48,11 @@ const form = reactive({
 })
 
 onShow(() => {
-  form.identifier = ''
-  form.password = ''
-  notice.value = ''
+  // Keep form values when returning from policy pages.
 })
 
 async function handleSubmit() {
+  if (!hasPrivacyConsent() || !agreement.value) { notice.value = '请阅读并勾选用户协议和隐私政策。'; return }
   try {
     const identifier = form.identifier.trim()
     const password = form.password

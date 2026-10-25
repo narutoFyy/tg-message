@@ -36,6 +36,8 @@
       </view>
 
       <view class="settings-group action-group">
+        <button class="action-row legal-action" @click="openLegal('privacy')">Privacy Policy</button>
+        <button class="action-row legal-action" @click="openLegal('terms')">Terms of Use</button>
         <view class="action-row" @click="copyInvite"><text>Copy invite code</text><text class="action-value">{{ inviteCode }}</text></view>
         <view class="action-row" @click="goSupport"><text>Support</text><text class="action-value">Open chat</text></view>
         <view v-if="store.state.currentUser?.roleCode === 'ADMIN'" class="action-row" @click="goAdminRates"><text>Rate admin</text><text class="action-value">Open</text></view>
@@ -43,7 +45,23 @@
       </view>
 
       <button class="logout-button" @click="logout">Log out</button>
+      <view v-if="store.state.currentUser?.roleCode === 'USER'" class="delete-section">
+        <text class="delete-title">Delete account</text>
+        <text class="delete-copy">Permanently close your account and remove identifying profile details. Transaction records and conversation history may be retained. Contact Support about pending orders or balances first.</text>
+        <button class="delete-button" @click="openDeletion">Delete account</button>
+      </view>
       <text v-if="notice" class="notice-text">{{ notice }}</text>
+    </view>
+    <view v-if="deletionOpen" class="delete-overlay" @touchmove.stop.prevent>
+      <view class="delete-dialog" role="dialog" aria-modal="true" aria-label="Delete your account">
+        <text class="delete-title">Delete your account?</text>
+        <text class="delete-copy">This is permanent. You will be signed out and lose account access. Profile and saved bank details will be removed; messages, uploaded files and transaction records may be retained as explained in the Privacy Policy.</text>
+        <text class="delete-label">Confirm your password</text>
+        <input v-model="deletePassword" class="delete-input" password :disabled="deleteBusy" placeholder="Enter your password" />
+        <text v-if="deleteError" class="delete-error" role="alert">{{ deleteError }}</text>
+        <button class="delete-button" :disabled="deleteBusy || !deletePassword" :loading="deleteBusy" @click="confirmDeletion">{{ deleteBusy ? 'Deleting account…' : 'Permanently delete account' }}</button>
+        <button class="delete-cancel" :disabled="deleteBusy" @click="closeDeletion">Keep account</button>
+      </view>
     </view>
   </view>
 </template>
@@ -52,6 +70,7 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
+import { openLegal } from '@/utils/privacy'
 import {
   disableWebPushNotifications,
   enableWebPushNotifications,
@@ -61,6 +80,34 @@ import {
 
 const store = useAppStore()
 const notice = ref('')
+const deletionOpen = ref(false)
+const deletePassword = ref('')
+const deleteError = ref('')
+const deleteBusy = ref(false)
+
+function openDeletion() { deletePassword.value = ''; deleteError.value = ''; deletionOpen.value = true }
+function closeDeletion() { if (!deleteBusy.value) { deletionOpen.value = false; deletePassword.value = '' } }
+async function confirmDeletion() {
+  if (deleteBusy.value || !deletePassword.value) return
+  deleteBusy.value = true
+  deleteError.value = ''
+  try {
+    await store.deleteAccount(deletePassword.value)
+    deletePassword.value = ''
+    deletionOpen.value = false
+    // The server deletes push bindings; browser unsubscription is best effort.
+    // #ifdef H5
+    try {
+      const registration = await navigator.serviceWorker?.getRegistration('/')
+      await (await registration?.pushManager?.getSubscription())?.unsubscribe()
+    } catch { /* Account deletion has already succeeded. */ }
+    // #endif
+    uni.reLaunch({ url: '/pages/login/index' })
+    uni.showToast({ title: 'Account deleted.', icon: 'none' })
+  } catch (error) {
+    deleteError.value = error instanceof Error ? error.message : 'Deletion failed. Please try again.'
+  } finally { deleteBusy.value = false }
+}
 const inviteCode = computed(() => store.state.currentUser?.inviteCode || 'Unavailable')
 const invitedBy = computed(() => store.state.currentUser?.invitedBy || 'Direct registration')
 const pushBusy = ref(false)
@@ -130,6 +177,24 @@ async function logout() {
 </script>
 
 <style scoped lang="scss">
+.legal-action { width: 100%; margin: 0; background: transparent; text-align: left; border-radius: 0; line-height: 1.5; }
+.legal-action::after { border: 0; }
+.delete-section { padding: 24px; border-radius: 16px; background: var(--cb-surface); }
+.delete-title { display: block; font-size: 20px; font-weight: 700; color: var(--cb-ink); line-height: 1.4; }
+.delete-copy { display: block; margin-top: 12px; font-size: 14px; color: var(--cb-muted); line-height: 1.7; }
+.delete-button { width: 100%; min-height: 48px; margin-top: 20px; padding: 8px 16px; border: 1px solid #fecaca; border-radius: 10px; background: var(--cb-surface); color: #b91c1c; font-size: 14px; line-height: 1.6; font-weight: 600; }
+.delete-button::after, .delete-cancel::after { border: 0; }
+.delete-button:hover:not(:disabled) { background: #fef2f2; }
+.delete-button:disabled { opacity: .55; }
+.delete-button:focus-visible, .delete-cancel:focus-visible, .legal-action:focus-visible { outline: 3px solid var(--cb-accent); outline-offset: 2px; }
+.delete-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; background: rgba(15,23,42,.55); }
+.delete-dialog { width: 100%; max-width: 460px; max-height: 85vh; overflow-y: auto; padding: 28px; box-sizing: border-box; border-radius: 20px; background: var(--cb-surface); }
+.delete-label { display: block; margin: 20px 0 8px; font-size: 14px; font-weight: 600; }
+.delete-input { box-sizing: border-box; height: 48px; padding: 0 14px; border: 1px solid var(--cb-line); border-radius: 12px; font-size: 14px; color: var(--cb-ink); }
+.delete-input:focus-within { border-color: var(--cb-accent); }
+.delete-error { display: block; margin-top: 12px; font-size: 14px; color: #b91c1c; }
+.delete-cancel { width: 100%; margin-top: 8px; min-height: 48px; background: var(--cb-canvas); color: var(--cb-ink); border-radius: 10px; font-size: 14px; line-height: 48px; }
+.delete-cancel:hover:not(:disabled), .legal-action:hover { background: var(--cb-canvas); }
 .settings-page { padding-bottom: 48rpx; }
 .page-header-copy .eyebrow, .page-header-copy .title, .page-header-copy .subtitle { display: block; }
 .page-header-copy .title { margin-top: 7rpx; }

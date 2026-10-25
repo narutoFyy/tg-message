@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PushDeviceRepository extends JpaRepository<PushDeviceEntity, String> {
+    void deleteByUser_Id(String userId);
 
     Optional<PushDeviceEntity> findByProviderAndDeviceToken(String provider, String deviceToken);
 

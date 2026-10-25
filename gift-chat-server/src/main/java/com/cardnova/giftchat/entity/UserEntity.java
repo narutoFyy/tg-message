@@ -83,6 +83,12 @@ public class UserEntity {
     @Column(name = "birth_date")
     private LocalDate birthDate;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    public LocalDateTime getDeletedAt() { return deletedAt; }
+    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

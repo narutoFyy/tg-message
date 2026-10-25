@@ -245,6 +245,7 @@
 </template>
 
 <script setup lang="ts">
+import { chooseUploadImage } from '@/utils/systemMedia'
 import { onShow } from '@dcloudio/uni-app'
 import { computed, nextTick, reactive, ref } from 'vue'
 import { useAppStore } from '@/store/app'
@@ -505,7 +506,7 @@ function removeArtwork() {
 
 function chooseImageOnce() {
   return new Promise<string | File | null>((resolve, reject) => {
-    uni.chooseImage({
+    chooseUploadImage({
       count: 1,
       sizeType: ['compressed'],
       sourceType: ['album', 'camera'],

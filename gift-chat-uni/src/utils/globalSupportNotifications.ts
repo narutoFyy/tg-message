@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/app'
+import { hasPrivacyConsent } from '@/utils/privacy'
 import type { ChatMessage, ChatReadReceiptEvent, ChatRealtimePayload, PresenceEvent } from '@/types'
 import {
   installMessageAudioUnlock,
@@ -17,6 +18,7 @@ let initialized = false
 let lastNotificationAt = 0
 
 export function initializeGlobalSupportNotifications() {
+  if (!hasPrivacyConsent()) return
   if (!initialized) {
     initialized = true
     installMessageAudioUnlock()
@@ -35,7 +37,7 @@ export function syncGlobalSupportNotifications() {
   const conversationId = store.state.supportConversationId
   const conversationReady = store.state.supportConversations.some((item) => item.conversationId === conversationId)
 
-  if (suspended || user?.roleCode !== 'USER' || !user.accessToken || !conversationId || !conversationReady) {
+  if (!hasPrivacyConsent() || suspended || user?.roleCode !== 'USER' || !user.accessToken || !conversationId || !conversationReady) {
     closeGlobalSocket()
     return
   }

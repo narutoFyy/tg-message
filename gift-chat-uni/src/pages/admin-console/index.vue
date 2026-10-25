@@ -738,6 +738,7 @@
 </template>
 
 <script setup lang="ts">
+import { chooseUploadImage, chooseUploadVideo } from '@/utils/systemMedia'
 import { onShow } from '@dcloudio/uni-app'
 import { computed, reactive, ref, watch } from 'vue'
 import { cardLogoFor } from '@/utils/art'
@@ -1303,7 +1304,7 @@ function setAdminBroadcastType(type: BroadcastItem['messageType']) {
 }
 
 function chooseAdminBroadcastImage() {
-  uni.chooseImage({
+  chooseUploadImage({
     count: 1,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
@@ -1315,7 +1316,7 @@ function chooseAdminBroadcastImage() {
 }
 
 function chooseAdminBroadcastVideo() {
-  uni.chooseVideo({
+  chooseUploadVideo({
     sourceType: ['album', 'camera'],
     compressed: false,
     success(result) {

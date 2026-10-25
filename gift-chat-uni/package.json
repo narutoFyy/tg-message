@@ -2,6 +2,10 @@
   "name": "uni-preset-vue",
   "version": "0.0.0",
   "scripts": {
+    "predev:h5": "node scripts/build-legal.mjs",
+    "predev:app": "node scripts/build-legal.mjs",
+    "prebuild:h5": "node scripts/build-legal.mjs",
+    "prebuild:app": "node scripts/build-legal.mjs",
     "dev:custom": "uni -p",
     "dev:app": "uni -p app",
     "dev:h5": "uni",

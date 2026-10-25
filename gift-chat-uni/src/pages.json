@@ -13,6 +13,10 @@
       }
     },
     {
+      "path": "pages/legal/index",
+      "style": { "navigationStyle": "custom" }
+    },
+    {
       "path": "pages/admin-login/index",
       "style": {
         "navigationBarTitleText": "Admin Login"

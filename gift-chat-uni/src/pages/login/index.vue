@@ -1,5 +1,6 @@
 <template>
   <view class="page-shell login-page">
+    <PrivacyConsent />
     <view v-if="restoringSession" class="session-loading" aria-label="Loading">
       <view class="session-spinner" />
     </view>
@@ -45,10 +46,10 @@
             <input v-model="form.password" class="field-input" password placeholder="Enter your password" />
           </view>
 
-          <text v-if="notice" class="form-notice">{{ notice }}</text>
+          <AgreementCheckbox v-model="agreement" />
+          <text v-if="notice" class="form-notice" role="alert">{{ notice }}</text>
           <button class="primary-button submit-button" @click="handleSubmit">Sign in</button>
           <button class="ios-install-button" @click="openInstallPage">Install Xcard</button>
-          <text class="policy">By continuing, you agree to the Terms of Use and acknowledge the Privacy Policy.</text>
         </view>
       </view>
     </view>
@@ -56,14 +57,18 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
+import PrivacyConsent from '@/components/PrivacyConsent.vue'
+import AgreementCheckbox from '@/components/AgreementCheckbox.vue'
+import { privacyAccepted, hasPrivacyConsent } from '@/utils/privacy'
 import { onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
 import { safeRouteForRole } from '@/utils/routeGuard'
 
 const store = useAppStore()
 const notice = ref('')
-const restoringSession = ref(Boolean(store.state.currentUser?.accessToken))
+const agreement = ref(false)
+const restoringSession = ref(hasPrivacyConsent() && Boolean(store.state.currentUser?.accessToken))
 
 const form = reactive({
   identifier: '',
@@ -73,27 +78,31 @@ const form = reactive({
 onShow(() => {
   restorePersistedSession()
 })
+watch(privacyAccepted, (accepted) => { if (accepted) restorePersistedSession() })
 
 async function restorePersistedSession() {
+  if (!hasPrivacyConsent()) { restoringSession.value = false; return }
   if (!store.state.currentUser?.accessToken) {
     restoringSession.value = false
-    resetForm()
     return
   }
 
   restoringSession.value = true
   notice.value = ''
+  let restoreNotice = ''
   try {
     const session = await store.refreshCurrentAccount()
     if (session) {
       uni.reLaunch({ url: safeRouteForRole(session.nextRoute, session, '/pages/support/index') })
       return
     }
-  } catch {
+  } catch (error) {
     // Keep the stored session so a temporary network failure does not sign the user out.
+    restoreNotice = error instanceof Error ? error.message : 'Connection failed. Please sign in or try again.'
   }
   restoringSession.value = false
   resetForm()
+  notice.value = restoreNotice
 }
 
 function resetForm() {
@@ -103,6 +112,10 @@ function resetForm() {
 }
 
 async function handleSubmit() {
+  if (!hasPrivacyConsent() || !agreement.value) {
+    notice.value = 'Please read and agree to the Terms of Use and Privacy Policy.'
+    return
+  }
   try {
     const identifier = form.identifier.trim()
     const password = form.password

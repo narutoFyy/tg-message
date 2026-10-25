@@ -1,0 +1,27 @@
+{
+  "version": "2026-10-26.1",
+  "updated": "26 October 2026",
+  "privacy": {
+    "title": "Privacy Policy",
+    "sections": [
+      { "title": "About Xcard", "body": "Xcard provides account, messaging, gift card exchange and related transaction services. This policy explains how information is used when you use these services." },
+      { "title": "Information we process", "body": "We process the username, contact details, country and password you provide; passwords are stored as hashes. We also process profile images, messages, files you choose to upload, support requests, transaction records and bank or payout details you submit. Optional birthday information is used for birthday features. Server request logs and session information are used to operate and secure the service." },
+      { "title": "How information is used", "body": "Information is used to create and authenticate accounts, deliver messages, provide customer support, process transactions and payouts, manage referrals and account benefits, and investigate fraud or service errors. Sharing information in a conversation makes it available to the recipients and relevant support staff." },
+      { "title": "Photos, camera and microphone", "body": "Android gallery uploads use the system Photo Picker, or the system document picker on older devices. The app receives access to the item you select, without requesting broad photo, video or storage access. Camera and microphone permissions are requested when you choose camera, voice or video-call features. You may decline optional permissions; the corresponding feature will remain unavailable. Selected media may be copied to the app cache before upload." },
+      { "title": "Service providers and notifications", "body": "Hosting and file storage providers process data needed to operate the service. Video calls use Tencent TRTC when configured, including participant identifiers and audio/video during calls. If message notifications are enabled, a device token or browser push subscription is processed to deliver them. Service providers may process information in countries where their infrastructure operates." },
+      { "title": "Retention and account deletion", "body": "You can delete your account in Settings > Delete account by confirming your password. Deletion closes the account, removes identifying profile and saved bank details, disables its invite code, and removes registered push devices and browser subscriptions. Existing sessions lose account access. Messages, uploaded files, transaction and payout records, and security or accounting records may remain where needed to preserve other participants' records, complete outstanding obligations or meet applicable requirements. Backups may retain prior copies until their normal rotation. Deleting the app alone does not delete your account." },
+      { "title": "Your choices", "body": "You can choose which media to share, manage device permissions and notifications, update your avatar, and request account deletion in Settings. For other access, correction or deletion requests, use the in-app Support conversation. Additional rights depend on your location." },
+      { "title": "Policy changes", "body": "A new policy version may require you to review the updated notice again before continuing." },
+      { "title": "Operator and privacy contact", "body": "Operator: ____________________\nPrivacy contact email: ____________________\nRetention schedule: ____________________" }
+    ]
+  },
+  "terms": {
+    "title": "Terms of Use",
+    "sections": [
+      { "title": "Using Xcard", "body": "Provide accurate account information, keep your password private and use the service only for activities permitted by applicable laws. You are responsible for the messages and materials you submit." },
+      { "title": "Messages and transactions", "body": "Only submit gift cards or other materials you are entitled to use. Review displayed rates, transaction details and payout information before confirming. Processing and verification may require additional information. Contact Support about disputed or pending transactions." },
+      { "title": "Account closure", "body": "You may delete your account through Settings after confirming your password. This action is permanent and ends account access. Contact Support about outstanding balances, pending orders or payouts before deletion. Relevant transaction records and conversation history may be retained as described in the Privacy Policy." },
+      { "title": "Availability and support", "body": "Service availability may be affected by maintenance, connectivity or third-party services. Contact the in-app Support team for account or service issues." }
+    ]
+  }
+}

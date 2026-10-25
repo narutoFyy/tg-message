@@ -58,6 +58,13 @@ public class CurrentUserService {
         throw new UnauthorizedException("Missing access token");
     }
 
+    public UserEntity getAuthenticatedUser() {
+        HttpServletRequest request = requestProvider.getIfAvailable();
+        String authorization = request == null ? null : request.getHeader("Authorization");
+        if (!StringUtils.hasText(authorization)) throw new UnauthorizedException("Missing access token");
+        return resolveByAuthorizationHeader(authorization.trim());
+    }
+
     public void requireAgent(UserEntity user) {
         if (!"AGENT".equalsIgnoreCase(user.getRoleCode())) {
             throw new ForbiddenException("Agent access required");
@@ -99,7 +106,7 @@ public class CurrentUserService {
     }
 
     private UserEntity requireActive(UserEntity user) {
-        if (!"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
+        if (user.getDeletedAt() != null || !"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
             throw new UnauthorizedException("Account is not active");
         }
         return user;

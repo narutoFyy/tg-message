@@ -120,6 +120,7 @@
 </template>
 
 <script setup lang="ts">
+import { chooseUploadImage } from '@/utils/systemMedia'
 import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
@@ -296,7 +297,7 @@ function createSellRequestId() {
 
 function chooseImageOnce() {
   return new Promise<string | File | null>((resolve, reject) => {
-    uni.chooseImage({
+    chooseUploadImage({
       count: 1,
       sizeType: ['compressed'],
       sourceType: ['album', 'camera'],

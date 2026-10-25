@@ -58,6 +58,7 @@ import type {
   WithdrawalItem
 } from '@/types'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
+import { hasPrivacyConsent } from '@/utils/privacy'
 
 let API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 let WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || '/ws'
@@ -142,35 +143,57 @@ function handleUnauthorized(token?: string) {
   uni.reLaunch({ url: previousUser?.roleCode === 'ADMIN' ? '/pages/admin-login/index' : '/pages/login/index' })
 }
 
-function request<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', data?: Record<string, unknown>) {
+function request<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', data?: Record<string, unknown>, timeout?: number) {
+  if (!hasPrivacyConsent()) return Promise.reject<T>(new Error('Please review and agree to the Privacy Policy before continuing.'))
   const token = getAccessToken()
 
   return new Promise<T>((resolve, reject) => {
-    uni.request({
-      url: `${normalizeApiBase(API_BASE_URL)}${url}`,
-      method,
-      data,
-      header: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      success(response) {
-        const body = response.data as ApiEnvelope<T> | { message?: string } | string
-        if (response.statusCode === 401) {
-          handleUnauthorized(token)
-          reject(new Error(readErrorMessage(body, 'Session expired. Please sign in again.')))
-          return
+    let expired = false
+    let task: UniApp.RequestTask | undefined
+    const deadline = timeout ? setTimeout(() => {
+      expired = true
+      reject(new Error('Connection timed out. Please sign in or try again.'))
+      task?.abort()
+    }, timeout) : undefined
+    const clearDeadline = () => {
+      if (deadline !== undefined) clearTimeout(deadline)
+    }
+    try {
+      task = uni.request({
+        url: `${normalizeApiBase(API_BASE_URL)}${url}`,
+        method,
+        data,
+        ...(timeout ? { timeout } : {}),
+        header: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        success(response) {
+          if (expired) return
+          clearDeadline()
+          if (token && token !== getAccessToken()) { reject(new Error('Session changed.')); return }
+          const body = response.data as ApiEnvelope<T> | { message?: string } | string
+          if (response.statusCode === 401) {
+            handleUnauthorized(token)
+            reject(new Error(readErrorMessage(body, 'Session expired. Please sign in again.')))
+            return
+          }
+          if (response.statusCode && response.statusCode >= 400) {
+            reject(new Error(readErrorMessage(body, 'Request failed')))
+            return
+          }
+          resolve((body as ApiEnvelope<T>).data)
+        },
+        fail(error) {
+          if (expired) return
+          clearDeadline()
+          reject(error)
         }
-        if (response.statusCode && response.statusCode >= 400) {
-          reject(new Error(readErrorMessage(body, 'Request failed')))
-          return
-        }
-        resolve((body as ApiEnvelope<T>).data)
-      },
-      fail(error) {
-        reject(error)
-      }
-    })
+      })
+    } catch (error) {
+      clearDeadline()
+      reject(error)
+    }
   })
 }
 
@@ -544,7 +567,7 @@ export function logoutSession() {
 }
 
 export function fetchCurrentAccount() {
-  return request<SessionUser>('/account/me')
+  return request<SessionUser>('/account/me', 'GET', undefined, 8000)
 }
 
 export function updateAccountAvatar(avatarUrl: string) {
@@ -906,6 +929,7 @@ export function uploadVideo(source: string | File) {
 }
 
 function uploadFile(url: string, source: string | File) {
+  if (!hasPrivacyConsent()) return Promise.reject<UploadAsset>(new Error('Please review and agree to the Privacy Policy before continuing.'))
   const token = getAccessToken()
   const browserFile = typeof File !== 'undefined' && source instanceof File
 
@@ -943,6 +967,10 @@ function uploadFile(url: string, source: string | File) {
       }
     })
   })
+}
+
+export function deleteCurrentAccount(password: string) {
+  return request<void>('/account/delete', 'POST', { password })
 }
 
 function normalizeUploadAsset(asset: UploadAsset) {

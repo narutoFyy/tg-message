@@ -127,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+import { chooseUploadImage } from '@/utils/systemMedia'
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AppNav from '@/components/AppNav.vue'
@@ -222,7 +223,7 @@ function goSettings() { uni.navigateTo({ url: '/pages/settings/index' }) }
 
 function chooseAvatar() {
   if (avatarUploading.value) return
-  uni.chooseImage({
+  chooseUploadImage({
     count: 1,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],

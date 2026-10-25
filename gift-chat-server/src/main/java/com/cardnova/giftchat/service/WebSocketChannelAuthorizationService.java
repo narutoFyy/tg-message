@@ -36,7 +36,7 @@ public class WebSocketChannelAuthorizationService {
         }
         UserEntity user = userRepository.findById(userId)
             .orElseThrow(() -> new UnauthorizedException("Token user not found"));
-        if (!"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
+        if (user.getDeletedAt() != null || !"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
             throw new ForbiddenException("User is not active");
         }
 

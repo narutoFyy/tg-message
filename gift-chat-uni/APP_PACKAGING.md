@@ -20,10 +20,28 @@ Current project-level readiness:
 3. Use the HBuilderX Android cloud packaging or local packaging flow.
 4. Export an APK for direct download distribution.
 
-### Distribution assumption
+### Startup checks
 
-- This phase targets direct APK download and installation.
-- Google Play submission is out of scope for now.
+- Account restoration has an 8-second request deadline. If the network stalls, the login form appears with a connection message while keeping the stored session.
+- Native push initialization is disabled by default. Set `VITE_APP_NATIVE_PUSH_ENABLED=true` only after adding and configuring the native Push module in the APK. Otherwise HTML5+ displays a missing-module dialog at startup.
+- Verify a cold launch with an existing session while offline, as well as a fresh login, before distributing an APK.
+
+### Google Play preparation
+
+- The source release is now 1.0.5 / versionCode105 with target SDK36.
+- Android `excludePermissions` removes package installation, package enumeration, broad storage/media access, and phone-state permissions during cloud packaging. Inspect the final AAB manifest to verify the removal.
+- All image/video upload entry points use `src/utils/systemMedia.ts`. Android uses the system Photo Picker (or document picker on older devices), copies only selected files to private cache, and retains a separate camera action. H5/iOS retain their existing media APIs.
+- Type checking and App/H5 resource builds do not generate a signed AAB. Select Google Play / AAB in HBuilderX Android cloud packaging and keep the original `com.cardbrother.app` signing identity.
+- Verify target36 support, native-library 16 KB compatibility, final permissions, and signed-bundle installation before submission. Public privacy/deletion links, operator details, review credentials, and distribution countries still need completion.
+
+### Privacy consent and account deletion
+
+- `npm run build:app` and `build:h5` first run `scripts/build-legal.mjs`. The shared document source is `src/data/legal.json`; the script generates `src/androidPrivacy.json` and offline HTML documents under `src/static/legal/`.
+- The Android native privacy template must be included in the new cloud package. Its refusal flow exits before starting the app runtime. Verify this on a fresh installation of the final APK/AAB; replacing H5 assets alone does not add the native template or remove Android permissions.
+- H5/iOS use the in-app first-use dialog. Login, registration and admin login require a separate unchecked agreement checkbox. Business API calls, uploads, sockets and push initialization wait for privacy consent.
+- Account deletion is under Settings > Delete account for ordinary users. It requires the current password and an explicit signed-in Bearer token. The backend must include Flyway V45 before this frontend is deployed.
+- Deletion closes the account, scrubs the core profile and saved payee fields, disables its invite code, removes push bindings, and revokes access. Messages, uploaded media and transaction/audit history are retained as disclosed in the confirmation and policy; this is not a purge of every historical record.
+- The policy's operator, contact email and retention schedule remain blank pending business information. Complete those fields and review the retained-data purposes before store submission. Once deployed, the bundled public document path is `/static/legal/privacy.html`; its public availability has not yet been verified.
 
 ## iOS target
 

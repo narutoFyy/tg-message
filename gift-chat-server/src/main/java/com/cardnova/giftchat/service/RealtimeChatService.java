@@ -21,12 +21,15 @@ public class RealtimeChatService {
 
     private final ObjectMapper objectMapper;
     private final RealtimeRedisBridge realtimeRedisBridge;
+    private final com.cardnova.giftchat.repository.UserRepository userRepository;
     private final Map<String, Set<WebSocketSession>> channelSessions = new ConcurrentHashMap<>();
     private final Map<String, Object> sessionSendLocks = new ConcurrentHashMap<>();
 
-    public RealtimeChatService(ObjectMapper objectMapper, RealtimeRedisBridge realtimeRedisBridge) {
+    public RealtimeChatService(ObjectMapper objectMapper, RealtimeRedisBridge realtimeRedisBridge,
+        com.cardnova.giftchat.repository.UserRepository userRepository) {
         this.objectMapper = objectMapper;
         this.realtimeRedisBridge = realtimeRedisBridge;
+        this.userRepository = userRepository;
     }
 
     public void register(String channelKey, WebSocketSession session) {
@@ -384,6 +387,13 @@ public class RealtimeChatService {
                 return;
             }
             try {
+                // Check the shared database before delivery, including Redis
+                // fanout on other nodes after an account has been deleted.
+                String viewerId = String.valueOf(session.getAttributes().getOrDefault("userId", ""));
+                if (!userRepository.existsByIdAndStatusCodeAndDeletedAtIsNull(viewerId, "ACTIVE")) {
+                    closeSession(session);
+                    return;
+                }
                 session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
             } catch (IOException | RuntimeException ignored) {
                 closeSession(session);

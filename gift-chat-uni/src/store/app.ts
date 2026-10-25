@@ -93,6 +93,7 @@ import {
   hideAccountRecord,
   loginWithPassword,
   logoutSession,
+  deleteCurrentAccount,
   registerAccount,
   rejectFriendRequest,
   searchFriends,
@@ -207,6 +208,7 @@ function clearSessionState() {
   setSessionToken(undefined)
   setStoredSessionUser(null)
   uni.removeStorageSync(CHAT_CURSOR_CACHE_KEY)
+  uni.removeStorageSync(SUPPORT_READ_CACHE_KEY)
   setAppUnreadBadge(0)
 }
 
@@ -450,6 +452,7 @@ export function useAppStore() {
   }
 
   async function bootstrap() {
+    const previousToken = state.currentUser?.accessToken
     if (state.currentUser?.roleCode === 'USER' && state.currentUser.countryCode) {
       state.selectedCountryCode = state.currentUser.countryCode
     }
@@ -496,6 +499,8 @@ export function useAppStore() {
         fetchLotteryFulfillments(),
         fetchHiddenRecords()
       ])
+
+      if (state.currentUser?.accessToken !== previousToken) return
 
       const normalizedFriends = friends.map(normalizeFriendProfile)
       const normalizedSupport = support.map(normalizeSupportConversation)
@@ -545,7 +550,9 @@ export function useAppStore() {
   }
 
   async function refreshSupport() {
+    const previousToken = state.currentUser?.accessToken
     const support = await fetchSupportMessages()
+    if (!previousToken || state.currentUser?.accessToken !== previousToken) return []
     const normalizedSupport = support.map(normalizeSupportConversation)
     const previousSupportConversationId = state.supportConversationId
     state.supportConversations = applySupportReadCache(normalizedSupport)
@@ -607,7 +614,9 @@ export function useAppStore() {
     if (!state.currentUser?.accessToken) {
       return state.currentUser
     }
+    const previousToken = state.currentUser.accessToken
     const session = await fetchCurrentAccount()
+    if (state.currentUser?.accessToken !== previousToken) return state.currentUser
     state.currentUser = session
     setSessionToken(session.accessToken)
     setStoredSessionUser(session)
@@ -615,7 +624,9 @@ export function useAppStore() {
   }
 
   async function updateAvatar(avatarUrl: string) {
+    const previousToken = state.currentUser?.accessToken
     const session = await updateAccountAvatarRequest(avatarUrl)
+    if (!previousToken || state.currentUser?.accessToken !== previousToken) return state.currentUser
     state.currentUser = session
     setSessionToken(session.accessToken)
     setStoredSessionUser(session)
@@ -630,6 +641,11 @@ export function useAppStore() {
     } finally {
       clearSessionState()
     }
+  }
+
+  async function deleteAccount(password: string) {
+    await deleteCurrentAccount(password)
+    clearSessionState()
   }
 
   async function addRate(payload: { cardName: string; cardCode?: string | null; region: string; rate: string; localPayoutPerUsd?: number; quotes: Partial<Record<GiftCardFaceCurrency, number>>; imageUrl?: string }) {
@@ -835,6 +851,7 @@ export function useAppStore() {
   }
 
   async function recoverSupportMessages(conversationId = state.supportConversationId) {
+    if (!state.currentUser?.accessToken) return []
     const conversation = state.supportConversations.find((item) => item.conversationId === conversationId)
     const cachedSeq = getChatCursor('support', conversationId)
     const localSeq = latestMessageSeq((conversation?.messages || []).filter((message) => !message.id.startsWith('local-')))
@@ -1402,6 +1419,7 @@ export function useAppStore() {
     refreshCurrentAccount,
     updateAvatar,
     logout,
+    deleteAccount,
     addRate,
     updateRateStatus,
     updateRate,

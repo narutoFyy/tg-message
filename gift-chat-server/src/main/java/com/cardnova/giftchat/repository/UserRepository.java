@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface UserRepository extends JpaRepository<UserEntity, String> {
+    boolean existsByIdAndStatusCodeAndDeletedAtIsNull(String id, String statusCode);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select user from UserEntity user where user.id = :userId")

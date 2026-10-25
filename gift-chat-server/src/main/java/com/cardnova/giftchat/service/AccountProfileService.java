@@ -85,6 +85,9 @@ public class AccountProfileService {
     }
 
     public LoginResponse toSession(UserEntity user) {
+        if (user.getDeletedAt() != null || !"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
+            throw new com.cardnova.giftchat.api.UnauthorizedException("Account is not active");
+        }
         var country = countryCodeService.findCountry(user.getCountryCode()).orElse(null);
         return new LoginResponse(
             jwtService.issueAccessToken(user),

@@ -7,13 +7,32 @@ import {
   syncGlobalSupportNotifications
 } from '@/utils/globalSupportNotifications'
 import { registerNativePushDevice } from '@/utils/push'
+import { privacyAccepted, hasPrivacyConsent, syncNativePrivacyConsent } from '@/utils/privacy'
 
 const store = useAppStore()
 
 onLaunch(() => {
+  syncNativePrivacyConsent()
+  startConsentedServices()
+  for (const name of ['navigateTo', 'redirectTo', 'reLaunch', 'switchTab'] as const) {
+    uni.addInterceptor(name, {
+      invoke(options: { url?: string }) {
+        if (!hasPrivacyConsent() && !isPublicRoute(options.url || '')) {
+          setTimeout(() => uni.reLaunch({ url: '/pages/login/index' }), 0)
+          return false
+        }
+      }
+    })
+  }
+})
+
+function isPublicRoute(url: string) { return url === '/' || /^\/?pages\/(login|register|admin-login|legal)\/index(?:\?|$)/.test(url) }
+function startConsentedServices() {
+  if (!hasPrivacyConsent()) return
   initializeGlobalSupportNotifications()
   registerNativePushDevice().catch(() => {})
-})
+}
+watch(privacyAccepted, (accepted) => { if (accepted) startConsentedServices() })
 
 onShow(() => {
   syncGlobalSupportNotifications()

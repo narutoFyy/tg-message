@@ -1,4 +1,5 @@
 import { registerPushDevice } from '@/utils/api'
+import { hasPrivacyConsent } from '@/utils/privacy'
 import { getStoredSessionUser } from '@/utils/api'
 import { safeRouteForRole, supportRouteForRole } from '@/utils/routeGuard'
 
@@ -25,6 +26,13 @@ declare const plus: {
 } | undefined
 
 export async function registerNativePushDevice() {
+  if (!hasPrivacyConsent()) return { skipped: true }
+  // Native push methods can exist even when the APK has no Push module.
+  // Calling those stubs opens a blocking HTML5+ missing-module dialog.
+  if (import.meta.env.VITE_APP_NATIVE_PUSH_ENABLED !== 'true') {
+    return { skipped: true }
+  }
+
   if (typeof plus === 'undefined' || !plus.push?.getClientInfoAsync) {
     return { skipped: true }
   }

@@ -78,7 +78,7 @@ public class PersistentAccountService {
             UserEntity user = findByIdentifier(normalizedIdentifier, countryCode)
                 .orElseThrow(this::invalidLogin);
 
-            if (!"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
+            if (user.getDeletedAt() != null || !"ACTIVE".equalsIgnoreCase(user.getStatusCode())) {
                 throw invalidLogin();
             }
 

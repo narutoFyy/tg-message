@@ -1,5 +1,7 @@
 import type { ChatRealtimePayload } from '@/types'
+import { hasPrivacyConsent } from '@/utils/privacy'
 import { buildChatSocketAuthMessage, buildChatSocketUrl } from '@/utils/api'
+import { getStoredSessionUser } from '@/utils/api'
 
 type SocketCloseOptions = Parameters<UniApp.SocketTask['close']>[0]
 type ManagedSocket = Pick<UniApp.SocketTask, 'close'>
@@ -19,6 +21,8 @@ export function connectChatSocket(
     onReconnect?: (attempt: number) => void
   } = {}
 ) {
+  const sessionToken = getStoredSessionUser()?.accessToken || ''
+  const sessionIsCurrent = () => hasPrivacyConsent() && !!sessionToken && getStoredSessionUser()?.accessToken === sessionToken
   let closedByUser = false
   let attempt = 0
   let missedHeartbeats = 0
@@ -49,6 +53,7 @@ export function connectChatSocket(
   const connect = () => {
     clearReconnectTimer()
     stopHeartbeat()
+    if (closedByUser || !sessionIsCurrent()) return
     if (useNativeWebSocket()) {
       connectNativeSocket()
       return
@@ -232,7 +237,7 @@ export function connectChatSocket(
   }
 
   const scheduleReconnect = () => {
-    if (closedByUser) return
+    if (closedByUser || !sessionIsCurrent()) return
     if (reconnectTimer) return
     attempt += 1
     const delay = Math.min(1000 * attempt, 5000)

@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.cardnova.giftchat.dto.DeleteAccountRequest;
+import com.cardnova.giftchat.service.AccountDeletionService;
 
 @RestController
 @RequestMapping("/api/account")
@@ -23,20 +25,29 @@ public class AccountController {
     private final AccountProfileService accountProfileService;
     private final RegistrationBonusService registrationBonusService;
     private final UserHiddenRecordService userHiddenRecordService;
+    private final AccountDeletionService accountDeletionService;
 
     public AccountController(
         AccountProfileService accountProfileService,
         RegistrationBonusService registrationBonusService,
-        UserHiddenRecordService userHiddenRecordService
+        UserHiddenRecordService userHiddenRecordService,
+        AccountDeletionService accountDeletionService
     ) {
         this.accountProfileService = accountProfileService;
         this.registrationBonusService = registrationBonusService;
         this.userHiddenRecordService = userHiddenRecordService;
+        this.accountDeletionService = accountDeletionService;
     }
 
     @GetMapping("/me")
     public ApiResponse<LoginResponse> me() {
         return ApiResponse.success(accountProfileService.currentProfile());
+    }
+
+    @PostMapping("/delete")
+    public ApiResponse<Void> deleteAccount(@Valid @RequestBody DeleteAccountRequest request) {
+        accountDeletionService.deleteAccount(request.password());
+        return ApiResponse.success("account_deleted", null);
     }
 
     @PostMapping("/avatar")

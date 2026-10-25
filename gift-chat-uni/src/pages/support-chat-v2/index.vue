@@ -795,6 +795,7 @@
 </template>
 
 <script setup lang="ts">
+import { chooseUploadImage, chooseUploadVideo } from '@/utils/systemMedia'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useAppStore } from '@/store/app'
@@ -2694,7 +2695,7 @@ function chooseImageOnce(kind: ComposerAttachmentKind) {
   return chooseBrowserImageOnce(kind)
   // #endif
   return new Promise<string | null>((resolve, reject) => {
-    uni.chooseImage({
+    chooseUploadImage({
       count: 1,
       success(result) {
         resolve(result.tempFilePaths?.[0] || null)
@@ -2736,7 +2737,7 @@ function chooseBrowserImageOnce(kind: ComposerAttachmentKind) {
 
 function chooseNativeVideoOnce() {
   return new Promise<string | null>((resolve, reject) => {
-    uni.chooseVideo({
+    chooseUploadVideo({
       sourceType: ['album', 'camera'],
       compressed: true,
       maxDuration: 60,
@@ -2833,7 +2834,7 @@ function confirmSupportBroadcast(content: string, selectedTargets: string[]) {
 }
 
 function chooseSupportBroadcastImage() {
-  uni.chooseImage({
+  chooseUploadImage({
     count: 1,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
@@ -2845,7 +2846,7 @@ function chooseSupportBroadcastImage() {
 }
 
 function chooseSupportBroadcastVideo() {
-  uni.chooseVideo({
+  chooseUploadVideo({
     sourceType: ['album', 'camera'],
     compressed: false,
     success(result) {

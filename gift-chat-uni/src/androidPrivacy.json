@@ -1,0 +1,35 @@
+{
+  "version": "2026-10-26.1",
+  "prompt": "template",
+  "title": "Your privacy at Xcard",
+  "message": "Please read our <a href=\"static/legal/terms.html\">Terms of Use</a> and <a href=\"static/legal/privacy.html\">Privacy Policy</a>. We process account details, messages and transaction information to provide the service. Optional camera and microphone access is requested when you use those features. Android photos and videos are selected through the system picker. Tap Agree and continue to use Xcard.",
+  "buttonAccept": "Agree and continue",
+  "buttonRefuse": "Disagree",
+  "hrefLoader": "default",
+  "backToExit": "true",
+  "second": {
+    "title": "Privacy agreement required",
+    "message": "Please review our <a href=\"static/legal/privacy.html\">Privacy Policy</a> before continuing. If you disagree, you can exit Xcard.",
+    "buttonAccept": "Agree and continue",
+    "buttonRefuse": "Exit"
+  },
+  "disagreeMode": {
+    "support": false,
+    "loadNativePlugins": false,
+    "visitorEntry": false,
+    "showAlways": false
+  },
+  "styles": {
+    "backgroundColor": "#ffffff",
+    "borderRadius": "20px",
+    "title": {
+      "color": "#17212b"
+    },
+    "buttonAccept": {
+      "color": "#2368c4"
+    },
+    "buttonRefuse": {
+      "color": "#667483"
+    }
+  }
+}

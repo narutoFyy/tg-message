@@ -68,6 +68,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             return;
         }
         if ("ping".equalsIgnoreCase(message.getPayload())) {
+            try {
+                channelAuthorizationService.requireAccess(userId(session),
+                    stringAttribute(session, "channelType"), stringAttribute(session, "channelId"));
+            } catch (RuntimeException exception) {
+                session.close(CloseStatus.POLICY_VIOLATION);
+                return;
+            }
             session.sendMessage(new TextMessage("pong"));
         }
     }

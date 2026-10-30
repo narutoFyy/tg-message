@@ -28,7 +28,7 @@ Current project-level readiness:
 
 ### Google Play preparation
 
-- The source release is now 1.0.5 / versionCode105 with target SDK36.
+- The source release is now 1.0.6 / versionCode106 with minimum SDK24 (Android 7.0+) and target SDK36. The explicit minimum fixes the Google Play automatic-protection rejection of the earlier minSDK21 bundle; verify both SDK values in every final AAB.
 - Android `excludePermissions` removes package installation, package enumeration, broad storage/media access, and phone-state permissions during cloud packaging. Inspect the final AAB manifest to verify the removal.
 - All image/video upload entry points use `src/utils/systemMedia.ts`. Android uses the system Photo Picker (or document picker on older devices), copies only selected files to private cache, and retains a separate camera action. H5/iOS retain their existing media APIs.
 - Type checking and App/H5 resource builds do not generate a signed AAB. Select Google Play / AAB in HBuilderX Android cloud packaging and keep the original `com.cardbrother.app` signing identity.

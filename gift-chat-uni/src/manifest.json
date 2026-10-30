@@ -2,8 +2,8 @@
     "name" : "Xcard",
     "appid" : "__UNI__98D06D5",
     "description" : "Xcard gift card trading and support app",
-    "versionName" : "1.0.5",
-    "versionCode" : "105",
+    "versionName" : "1.0.6",
+    "versionCode" : "106",
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {
@@ -39,6 +39,7 @@
         "distribute" : {
             /* android打包配置 */
             "android" : {
+                "minSdkVersion" : 24,
                 "targetSdkVersion" : 36,
                 "excludePermissions" : [
                     "<uses-permission android:name=\"android.permission.QUERY_ALL_PACKAGES\"/>",
